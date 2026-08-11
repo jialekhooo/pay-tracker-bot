@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Iterable
 from urllib.parse import quote
 
+from .pay import format_hours
 from .schedule import span
 from .storage import ShiftRecord
 
@@ -38,10 +39,10 @@ def event_title(record: ShiftRecord) -> str:
 
 
 def description(record: ShiftRecord) -> str:
-    parts = [f"{record.hours.normalize()}h", f"{record.currency} {record.pay:,.2f}"]
+    parts = [f"{format_hours(record.hours)}h", f"{record.currency} {record.pay:,.2f}"]
     if record.break_hours > 0:
         parts.append(
-            f"{record.break_hours.normalize()}h "
+            f"{format_hours(record.break_hours)}h "
             f"{'paid' if record.break_paid else 'unpaid'} break"
         )
     return " · ".join(parts) + f" (shift #{record.id})"

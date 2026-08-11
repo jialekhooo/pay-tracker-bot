@@ -8,7 +8,7 @@ from paybot.bot import SECTIONS, _edit_record, commands_text, parse_edit, parse_
 from paybot.calendar_export import google_link, to_ics
 from paybot.feed import feed_body, issue_token
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
-from paybot.pay import RateConfig, calculate_pay
+from paybot.pay import RateConfig, calculate_pay, format_hours
 from paybot.reminders import due, format_offset, parse_offset
 from paybot.schedule import find_clashes
 from paybot.storage import Reminder, ShiftRecord, Storage
@@ -508,3 +508,18 @@ def test_storage_roundtrip(tmp_path):
     assert records[0].break_paid is False
     assert storage.delete_shift(1, shift_id) is True
     assert storage.list_shifts(1) == []
+
+
+@pytest.mark.parametrize(
+    "hours, shown",
+    [
+        (Decimal("30"), "30"),
+        (Decimal("3E+1"), "30"),
+        (Decimal("100"), "100"),
+        (Decimal("11.50"), "11.5"),
+        (Decimal("8"), "8"),
+        (Decimal("0.5"), "0.5"),
+    ],
+)
+def test_hours_never_render_in_scientific_notation(hours, shown):
+    assert format_hours(hours) == shown

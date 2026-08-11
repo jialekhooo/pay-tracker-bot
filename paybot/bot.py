@@ -27,7 +27,7 @@ from telegram.ext import (
 from .calendar_export import event_title, google_link, to_ics
 from .feed import issue_token, serve
 from .parsing import Break, ParseError, Shift, parse_shifts, parse_time
-from .pay import RateConfig, calculate_pay, round_money
+from .pay import RateConfig, calculate_pay, format_hours, round_money
 from .reminders import (
     DEFAULT_SEND_AT,
     DEFAULT_UTC_OFFSET_MINUTES,
@@ -111,7 +111,7 @@ async def rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
         if config.default_break_hours > 0:
             lines.append(
-                f"Default break: {config.default_break_hours.normalize()}h "
+                f"Default break: {format_hours(config.default_break_hours)}h "
                 f"({'paid' if config.default_break_paid else 'unpaid'})"
             )
         await update.message.reply_text("\n".join(lines))
@@ -216,7 +216,7 @@ async def break_default(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         replace(config, default_break_hours=hours, default_break_paid=paid),
     )
     await update.message.reply_text(
-        f"Default break: {hours.normalize()}h ({'paid' if paid else 'unpaid'}). "
+        f"Default break: {format_hours(hours)}h ({'paid' if paid else 'unpaid'}). "
         "Say “no break” in a message to skip it."
     )
 
@@ -267,11 +267,11 @@ def _summarise(
         f"#{shift_id} {shift.day.isoformat()} "
         f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')} "
         f"{shift.event}{' @ ' + shift.location if shift.location else ''} — "
-        f"{hours.normalize()}h @ {_money(rate, currency)}/h = {_money(pay, currency)}"
+        f"{format_hours(hours)}h @ {_money(rate, currency)}/h = {_money(pay, currency)}"
     )
     if shift.rest.hours:
         kind = "paid" if shift.rest.paid else "unpaid"
-        line += f" ({Decimal(str(shift.rest.hours)).normalize()}h {kind} break)"
+        line += f" ({format_hours(Decimal(str(shift.rest.hours)))}h {kind} break)"
     return line
 
 
@@ -430,7 +430,7 @@ def _edit_record(
     return {
         "start_time": start.isoformat(timespec="minutes"),
         "end_time": end.isoformat(timespec="minutes"),
-        "hours": str(hours.normalize()),
+        "hours": format_hours(hours),
         "pay": str(calculate_pay(float(hours), record.event, config, round_money(old_rate))),
     }
 
@@ -508,7 +508,7 @@ def _shift_line(record: ShiftRecord) -> str:
         f"#{record.id} {record.day.isoformat()} "
         f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} "
         f"{record.event}{' @ ' + record.location if record.location else ''} — "
-        f"{record.hours.normalize()}h — {_money(record.pay, record.currency)}"
+        f"{format_hours(record.hours)}h — {_money(record.pay, record.currency)}"
     )
 
 
@@ -538,7 +538,7 @@ async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         pay = sum((r.pay for r in records), Decimal("0"))
         lines.insert(0, _month_label(month))
         lines.append(
-            f"Total: {len(records)} shifts, {hours.normalize()}h, "
+            f"Total: {len(records)} shifts, {format_hours(hours)}h, "
             f"{_money(pay, records[0].currency)}"
         )
     await update.message.reply_text("\n".join(lines))
@@ -556,7 +556,7 @@ async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     lines = [
         f"{_month_label(s.month)} — {s.shifts} shifts, "
-        f"{round_money(s.hours).normalize()}h, {_money(s.pay, s.currency)}"
+        f"{format_hours(s.hours)}h, {_money(s.pay, s.currency)}"
         for s in summaries
     ]
     grand_total = sum((s.pay for s in summaries), Decimal("0"))
@@ -692,7 +692,7 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     grand_total = sum((s.pay for s in summaries), Decimal("0"))
     lines = [_month_label(month), *(_shift_line(r) for r in records)]
     lines.append(
-        f"Total: {len(records)} shifts, {hours.normalize()}h, {_money(pay, currency_code)}"
+        f"Total: {len(records)} shifts, {format_hours(hours)}h, {_money(pay, currency_code)}"
     )
     lines.append(f"All time: {_money(grand_total, currency_code)}")
     await update.message.reply_text("\n".join(lines))
@@ -707,7 +707,7 @@ def _totals_line(storage: Storage, user_id: int, month: str | None, currency: st
         hours = sum((r.hours for r in records), Decimal("0"))
         lines.append(
             f"{_month_label(month)} now: {len(records)} shifts, "
-            f"{hours.normalize()}h, {_money(pay, currency)}"
+            f"{format_hours(hours)}h, {_money(pay, currency)}"
         )
     summaries = storage.month_summaries(user_id)
     grand_total = sum((s.pay for s in summaries), Decimal("0"))

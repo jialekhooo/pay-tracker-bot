@@ -26,6 +26,11 @@ def round_money(amount: Decimal) -> Decimal:
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def format_hours(hours: Decimal) -> str:
+    """Shortest plain form of an hour count — 30, not Decimal's "3E+1"."""
+    return f"{round_money(hours).normalize():f}"
+
+
 def calculate_pay(
     hours: float, event: str, config: RateConfig, rate_override: Decimal | None = None
 ) -> Decimal:
