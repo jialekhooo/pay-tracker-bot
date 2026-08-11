@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS shifts (
 
 CREATE INDEX IF NOT EXISTS idx_shifts_user_day ON shifts (user_id, day);
 
+CREATE TABLE IF NOT EXISTS feeds (
+    user_id INTEGER PRIMARY KEY,
+    token TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS reminders (
     user_id INTEGER PRIMARY KEY,
     chat_id INTEGER NOT NULL,
@@ -268,6 +273,28 @@ class Storage:
             )
             for row in rows
         ]
+
+    def get_feed_token(self, user_id: int) -> str | None:
+        row = self._conn.execute(
+            "SELECT token FROM feeds WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        return None if row is None else row["token"]
+
+    def save_feed_token(self, user_id: int, token: str) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO feeds (user_id, token) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET token = excluded.token
+            """,
+            (user_id, token),
+        )
+        self._conn.commit()
+
+    def user_for_feed_token(self, token: str) -> int | None:
+        row = self._conn.execute(
+            "SELECT user_id FROM feeds WHERE token = ?", (token,)
+        ).fetchone()
+        return None if row is None else int(row["user_id"])
 
     def get_reminder(self, user_id: int) -> Reminder | None:
         row = self._conn.execute(

@@ -6,6 +6,7 @@ import pytest
 
 from paybot.bot import SECTIONS, commands_text, parse_month
 from paybot.calendar_export import google_link, to_ics
+from paybot.feed import feed_body, issue_token
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay
 from paybot.reminders import due, format_offset, parse_offset
@@ -241,6 +242,35 @@ def test_google_link_uses_utc_and_includes_location():
     assert "dates=20260812T100000Z%2F20260812T153000Z" in link
     assert "text=Gig%20%40%20Marina%20Bay%20Sands" in link
     assert "location=Marina%20Bay%20Sands" in link
+
+
+def test_feed_token_is_stable_until_rotated(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    token = issue_token(storage, 1)
+    assert issue_token(storage, 1) == token
+    assert storage.user_for_feed_token(token) == 1
+
+    rotated = issue_token(storage, 1, refresh=True)
+    assert rotated != token
+    assert storage.user_for_feed_token(token) is None
+    assert storage.user_for_feed_token(rotated) == 1
+
+
+def test_feed_body_covers_the_owner_only(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    today = date(2026, 8, 12)
+    storage.add_shift(
+        1, today, time(9, 0), time(17, 0), "Mine",
+        Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD",
+    )
+    storage.add_shift(
+        2, today, time(9, 0), time(17, 0), "Theirs",
+        Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD",
+    )
+    body = feed_body(storage, issue_token(storage, 1), today=today)
+    assert "SUMMARY:Mine" in body
+    assert "Theirs" not in body
+    assert feed_body(storage, "not-a-token", today=today) is None
 
 
 def test_every_command_is_listed_and_unique():

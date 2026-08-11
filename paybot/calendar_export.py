@@ -56,6 +56,9 @@ def to_ics(records: Iterable[ShiftRecord], now: datetime | None = None) -> str:
         f"PRODID:{PRODID}",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
+        "X-WR-CALNAME:Work shifts",
+        "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+        "X-PUBLISHED-TTL:PT1H",
     ]
     for record in records:
         start, end = span(record.day, record.start, record.end)

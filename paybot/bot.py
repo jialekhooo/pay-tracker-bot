@@ -25,6 +25,7 @@ from telegram.ext import (
 )
 
 from .calendar_export import event_title, google_link, to_ics
+from .feed import issue_token, serve
 from .parsing import Break, ParseError, Shift, parse_shifts, parse_time
 from .pay import RateConfig, calculate_pay, round_money
 from .reminders import (
@@ -750,6 +751,37 @@ async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
+async def calendar_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Give the user a personal subscription URL their calendar app keeps in sync."""
+    storage = _storage(context)
+    base_url = context.application.bot_data.get("feed_base_url")
+    if not base_url:
+        await update.message.reply_text(
+            "No calendar feed is running for this bot. Set PAYBOT_FEED_URL (and "
+            "PAYBOT_FEED_PORT) when starting it, then try again — /calendar still "
+            "sends you a one-off .ics file."
+        )
+        return
+
+    refresh = any(a.lower() in {"new", "reset", "rotate"} for a in context.args)
+    token = issue_token(storage, update.effective_user.id, refresh=refresh)
+    url = f"{base_url.rstrip('/')}/{token}.ics"
+    await update.message.reply_text(
+        ("New link — the old one stops working:\n" if refresh else "")
+        + f"`{url}`\n\n"
+        "Subscribe once and every shift you log shows up automatically:\n"
+        "• iPhone: Settings → Calendar → Accounts → Add Account → Other → "
+        "Add Subscribed Calendar → paste the link\n"
+        "• Google Calendar (web): Other calendars → + → From URL → paste\n"
+        "• TimeTree: sync the calendar above into TimeTree "
+        "(Settings → Calendar sync), it reads your phone's calendars\n\n"
+        "Keep the link private — anyone with it can see your shifts "
+        "(`/calendarlink new` replaces it).",
+        parse_mode=ParseMode.MARKDOWN,
+        disable_web_page_preview=True,
+    )
+
+
 @dataclass(frozen=True)
 class Command:
     """One bot command: how it's registered, listed and described."""
@@ -829,6 +861,10 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
                 "Add shifts to your calendar (.ics + links)", calendar_export,
             ),
             Command(
+                ("calendarlink", "subscribe"), "/calendarlink [new]",
+                "A calendar subscription link that stays in sync", calendar_link,
+            ),
+            Command(
                 ("export",), "/export [YYYY-MM]",
                 "Download your shifts as CSV", export,
             ),
@@ -892,9 +928,12 @@ async def _publish_commands(application: Application) -> None:
         logger.exception("Could not publish the command menu")
 
 
-def build_application(token: str, db_path: str) -> Application:
+def build_application(
+    token: str, db_path: str, feed_base_url: str | None = None
+) -> Application:
     application = Application.builder().token(token).post_init(_publish_commands).build()
     application.bot_data["storage"] = Storage(db_path)
+    application.bot_data["feed_base_url"] = feed_base_url
 
     for _, commands_in_section in SECTIONS:
         for command in commands_in_section:
@@ -913,7 +952,12 @@ def main() -> None:
     if not token:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN before starting the bot.")
     db_path = os.environ.get("PAYBOT_DB", "paybot.sqlite3")
-    build_application(token, db_path).run_polling()
+    feed_base_url = os.environ.get("PAYBOT_FEED_URL")
+    application = build_application(token, db_path, feed_base_url)
+    feed_port = os.environ.get("PAYBOT_FEED_PORT")
+    if feed_port:
+        serve(application.bot_data["storage"], int(feed_port))
+    application.run_polling()
 
 
 if __name__ == "__main__":

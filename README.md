@@ -47,6 +47,22 @@ exports one month, `/calendar all` everything, `/calendar #12 #13` specific shif
 Overnight shifts end on the following day, and Google links use the timezone from
 `/reminders`.
 
+### Auto-syncing subscription (TimeTree, Google, Apple)
+
+`/calendarlink` returns a private feed URL your calendar app subscribes to once and
+re-reads on its own, so shifts you log or delete later update themselves. Subscribe
+in Google Calendar (*Other calendars → + → From URL*) or on iPhone (*Settings →
+Calendar → Accounts → Add Subscribed Calendar*); TimeTree then picks the shifts up
+through its calendar sync, since it imports from the phone's calendars rather than
+from an .ics URL. `/calendarlink new` rotates the link if it leaks.
+
+The feed only runs when the bot is started with a reachable address:
+
+```bash
+export PAYBOT_FEED_PORT=8799            # local port the feed listens on
+export PAYBOT_FEED_URL=https://your-host # public base URL of that port
+```
+
 ## Reminders
 
 `/reminders on` sends you a message the evening before (20:00, UTC+8 by default)
@@ -93,6 +109,7 @@ command menu on startup. Unknown commands get a nudge back to `/commands`.
 | `/delete <id> [id ...]` | Delete shifts; the reply shows the recomputed totals |
 | `/clear [month]` | Delete a whole month (or everything) after confirming |
 | `/calendar [month\|all\|#id]` | `.ics` file + Google Calendar links (alias `/ics`) |
+| `/calendarlink [new]` | Subscription URL that stays in sync (alias `/subscribe`) |
 | `/export [month]` | CSV export |
 
 Months can be written as `2026-08`, `aug`, `August 2025`, `8`, `this month`, or
