@@ -193,6 +193,26 @@ def extract_rate(text: str) -> tuple[str, Decimal | None]:
     return text[: match.start()] + " " + text[match.end() :], rate
 
 
+_TRAILING_RATE_RE = re.compile(
+    r"""
+    \s*(?P<currency>\$|\b(?-i:[A-Z]{3})\s*)?
+    (?P<amount>\d+(?:\.\d+)?)
+    \s*(?:/\s*(?:h|hr|hrs|hour|hourly)|per\s+hour)\s*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _rate_starts_at(place: str) -> int:
+    """Where a rate written after a location begins, e.g. the " 15/h" of "MBS 15/h"."""
+    match = _TRAILING_RATE_RE.search(place)
+    if match is None:
+        return len(place)
+    if match.group("currency") and not place[: match.start()].strip():
+        return match.start("amount")  # the "currency" was the place itself, e.g. "MBS 15/h"
+    return match.start()
+
+
 _TRAILING_AT_RE = re.compile(r"\s*(?:\bat\b|@)\s*$", re.IGNORECASE)
 
 _LOCATION_RE = re.compile(r"(?:@|\bat\b)\s*(?P<place>.+)$", re.IGNORECASE)
@@ -249,10 +269,24 @@ def extract_location(text: str) -> tuple[str, str]:
     match = _LOCATION_RE.search(text)
     if not match:
         return text, ""
-    place = match.group("place").strip(" ,;-–—")
-    if not place or _TIME_RANGE_RE.search(place) or _DATE_CANDIDATE_RE.search(place):
+    place = match.group("place")
+    rate_at = _rate_starts_at(place)
+    body, rate_text = place[:rate_at], place[rate_at:]
+    cut = min(
+        (
+            found.start()
+            for found in (_TIME_RANGE_RE.search(body), _DATE_CANDIDATE_RE.search(body))
+            if found is not None
+        ),
+        default=len(body),
+    )
+    if cut == 0 or (cut < len(body) and match.start() == 0):
         return text, ""
-    return text[: match.start()], place
+    tail = body[cut:]
+    body = body[:cut].strip(" ,;-–—")
+    if not body:
+        return text, ""
+    return f"{text[: match.start()]} {tail} {rate_text}", body
 
 
 def parse_shift(
@@ -260,9 +294,9 @@ def parse_shift(
 ) -> Shift:
     """Parse a line holding a date, a time range and an event name, in any order."""
     today = today or date.today()
-    text, rate_override = extract_rate(text)
     text, rest = extract_break(text, default_paid=default_break_paid)
     text, location = extract_location(text)
+    text, rate_override = extract_rate(text)
     tokens = _split_tokens(text)
     day: date | None = None
     start: time | None = None

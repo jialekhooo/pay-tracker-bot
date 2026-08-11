@@ -210,6 +210,26 @@ def test_location_after_at_word_and_without_one():
     assert shift.location == ""
 
 
+@pytest.mark.parametrize(
+    "text, location, rate",
+    [
+        ("Hermes 13/8 9am-8pm @ MBS 15/h", "MBS", Decimal("15")),
+        ("Hermes 13/8 9am-8pm @ MBS SGD 15/h", "MBS", Decimal("15")),
+        ("Hermes 13/8 9am-8pm @ MBS $15 per hour", "MBS", Decimal("15")),
+        ("Hermes @ MBS 13/8 9am-8pm", "MBS", None),
+        ("Hermes @ Level 3 Takashimaya 13/8 9am-8pm 15/h", "Level 3 Takashimaya", Decimal("15")),
+        ("Hermes 13/8 9am-8pm @313 Somerset", "313 Somerset", None),
+        ("Hermes 13/8 9am-8pm @ MBS, Level 2", "MBS, Level 2", None),
+    ],
+)
+def test_location_is_read_wherever_the_at_sign_appears(text, location, rate):
+    shift = parse_shift(text, today=TODAY)
+    assert shift.event == "Hermes"
+    assert shift.location == location
+    assert shift.rate_override == rate
+    assert shift.hours == 11
+
+
 def test_location_is_stored_and_returned(tmp_path):
     storage = Storage(tmp_path / "test.sqlite3")
     shift_id = storage.add_shift(
