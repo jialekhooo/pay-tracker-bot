@@ -1,0 +1,6 @@
+.git
+__pycache__/
+*.pyc
+.paybot-token
+*.sqlite3
+tests/
