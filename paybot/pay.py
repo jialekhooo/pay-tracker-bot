@@ -15,6 +15,8 @@ class RateConfig:
     overtime_after_hours: Decimal | None = None
     overtime_multiplier: Decimal = Decimal("1.5")
     currency: str = "SGD"
+    default_break_hours: Decimal = Decimal("0")
+    default_break_paid: bool = False
 
     def rate_for(self, event: str) -> Decimal:
         return self.event_rates.get(event.strip().lower(), self.default_rate)

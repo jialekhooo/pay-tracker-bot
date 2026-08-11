@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from .parsing import ParseError, parse_shift
+from .parsing import Break, ParseError, parse_shift
 from .pay import calculate_pay, round_money
 from .storage import Storage
 
@@ -35,6 +35,12 @@ Examples:
 `2026-08-12 18:00 23:30 Wedding gig`
 `today 9am to 5pm Roadshow`
 
+Breaks — add them anywhere in the message:
+`today 9am-6pm 1h unpaid break Roadshow` (deducted)
+`today 9am-6pm 1 hour paid break Roadshow` (not deducted)
+`today 9am-6pm 30min break Roadshow` (uses your /break default)
+`today 9am-6pm no break Roadshow`
+
 Commands:
 /rate — show your current rates
 /rate <amount> — set your default hourly rate
@@ -42,6 +48,7 @@ Commands:
 /clearrate <event name> — remove an event rate
 /currency <code> — set the currency label
 /overtime <hours> <multiplier> — e.g. `/overtime 8 1.5` (`/overtime off` to disable)
+/break <hours> paid|unpaid — default break when you don't mention one (`/break off`)
 /list [YYYY-MM] — recent shifts
 /total [YYYY-MM] — total pay (defaults to this month)
 /delete <id> — delete a shift
@@ -85,6 +92,11 @@ async def rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             lines.append(
                 f"Overtime: ×{config.overtime_multiplier} after "
                 f"{config.overtime_after_hours} hours"
+            )
+        if config.default_break_hours > 0:
+            lines.append(
+                f"Default break: {config.default_break_hours.normalize()}h "
+                f"({'paid' if config.default_break_paid else 'unpaid'})"
             )
         await update.message.reply_text("\n".join(lines))
         return
@@ -165,21 +177,53 @@ async def overtime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"Overtime: ×{multiplier} after {hours} hours.")
 
 
+async def break_default(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    config = storage.get_config(user_id)
+    args = context.args
+    if len(args) == 1 and args[0].lower() in {"off", "none", "0"}:
+        storage.save_config(user_id, replace(config, default_break_hours=Decimal("0")))
+        await update.message.reply_text("Default break removed.")
+        return
+    if len(args) != 2 or args[1].lower() not in {"paid", "unpaid"}:
+        await update.message.reply_text("Usage: /break <hours> paid|unpaid, or /break off")
+        return
+    try:
+        hours = _decimal(args[0])
+    except ParseError as exc:
+        await update.message.reply_text(str(exc))
+        return
+    paid = args[1].lower() == "paid"
+    storage.save_config(
+        user_id,
+        replace(config, default_break_hours=hours, default_break_paid=paid),
+    )
+    await update.message.reply_text(
+        f"Default break: {hours.normalize()}h ({'paid' if paid else 'unpaid'}). "
+        "Say “no break” in a message to skip it."
+    )
+
+
 async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     user_id = update.effective_user.id
     text = update.message.text or ""
     if text.startswith("/log"):
         text = text[len("/log") :]
+    config = storage.get_config(user_id)
     try:
-        shift = parse_shift(text)
+        shift = parse_shift(text, default_break_paid=config.default_break_paid)
     except ParseError as exc:
         await update.message.reply_text(
             f"{exc}\n\nSend /help to see the accepted formats.",
         )
         return
 
-    config = storage.get_config(user_id)
+    if not shift.break_specified and config.default_break_hours > 0:
+        shift = shift.with_break(
+            Break(hours=float(config.default_break_hours), paid=config.default_break_paid)
+        )
     hours = Decimal(str(shift.hours))
     pay = calculate_pay(shift.hours, shift.event, config)
     shift_id = storage.add_shift(
@@ -188,15 +232,26 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         start=shift.start,
         end=shift.end,
         event=shift.event,
+        break_hours=Decimal(str(shift.rest.hours)),
+        break_paid=shift.rest.paid,
         hours=hours,
         pay=pay,
         currency=config.currency,
     )
+    break_line = ""
+    if shift.rest.hours:
+        kind = "paid" if shift.rest.paid else "unpaid"
+        break_line = (
+            f"Break: {Decimal(str(shift.rest.hours)).normalize()}h {kind}"
+            f"{'' if shift.rest.paid else ' (deducted)'}\n"
+        )
     await update.message.reply_text(
         f"Logged #{shift_id}: {shift.event}\n"
         f"{shift.day.isoformat()} "
-        f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')} "
-        f"({hours.normalize()}h @ {_money(config.rate_for(shift.event), config.currency)}/h)\n"
+        f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')}\n"
+        f"{break_line}"
+        f"Paid hours: {hours.normalize()}h @ "
+        f"{_money(config.rate_for(shift.event), config.currency)}/h\n"
         f"Pay: {_money(pay, config.currency)}"
     )
 
@@ -256,7 +311,20 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["id", "date", "start", "end", "event", "hours", "pay", "currency"])
+    writer.writerow(
+        [
+            "id",
+            "date",
+            "start",
+            "end",
+            "event",
+            "break_hours",
+            "break_paid",
+            "hours",
+            "pay",
+            "currency",
+        ]
+    )
     for r in records:
         writer.writerow(
             [
@@ -265,6 +333,8 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 r.start.strftime("%H:%M"),
                 r.end.strftime("%H:%M"),
                 r.event,
+                r.break_hours,
+                "paid" if r.break_paid else "unpaid",
                 r.hours,
                 r.pay,
                 r.currency,
@@ -284,6 +354,7 @@ def build_application(token: str, db_path: str) -> Application:
     application.add_handler(CommandHandler("clearrate", clear_rate))
     application.add_handler(CommandHandler("currency", currency))
     application.add_handler(CommandHandler("overtime", overtime))
+    application.add_handler(CommandHandler("break", break_default))
     application.add_handler(CommandHandler("log", log_shift))
     application.add_handler(CommandHandler("list", list_shifts))
     application.add_handler(CommandHandler("total", total))

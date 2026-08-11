@@ -12,6 +12,20 @@ Reply: `Logged #3: Wedding gig — 5.5h @ SGD 25.00/h — Pay: SGD 137.50`
 
 Shifts ending after midnight (e.g. `10pm - 2am`) roll over to the next day.
 
+## Breaks
+
+Mention a break anywhere in the message; unpaid breaks are deducted from paid hours,
+paid breaks are not:
+
+```
+today 9am-6pm 1h unpaid break Roadshow    -> 8h paid
+today 9am-6pm 1 hour paid break Roadshow  -> 9h paid
+today 9am-6pm 30min break Roadshow        -> uses the /break default
+today 9am-6pm no break Roadshow           -> ignores the /break default
+```
+
+`/break 1 unpaid` applies a default break to every shift that doesn't mention one.
+
 ## Commands
 
 | Command | Purpose |
@@ -22,6 +36,7 @@ Shifts ending after midnight (e.g. `10pm - 2am`) roll over to the next day.
 | `/clearrate wedding gig` | Remove an event rate |
 | `/currency SGD` | Currency label |
 | `/overtime 8 1.5` | ×1.5 beyond 8 hours (`/overtime off` to disable) |
+| `/break 1 unpaid` | Default break for shifts that don't mention one (`/break off`) |
 | `/list [YYYY-MM]` | Recent shifts |
 | `/total [YYYY-MM]` | Total hours and pay |
 | `/delete <id>` | Delete a shift |

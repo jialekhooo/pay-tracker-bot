@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS settings (
     default_rate TEXT NOT NULL,
     currency TEXT NOT NULL,
     overtime_after_hours TEXT,
-    overtime_multiplier TEXT NOT NULL DEFAULT '1.5'
+    overtime_multiplier TEXT NOT NULL DEFAULT '1.5',
+    default_break_hours TEXT NOT NULL DEFAULT '0',
+    default_break_paid INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS event_rates (
@@ -36,6 +38,8 @@ CREATE TABLE IF NOT EXISTS shifts (
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
     event TEXT NOT NULL,
+    break_hours TEXT NOT NULL DEFAULT '0',
+    break_paid INTEGER NOT NULL DEFAULT 0,
     hours TEXT NOT NULL,
     pay TEXT NOT NULL,
     currency TEXT NOT NULL,
@@ -53,6 +57,8 @@ class ShiftRecord:
     start: time
     end: time
     event: str
+    break_hours: Decimal
+    break_paid: bool
     hours: Decimal
     pay: Decimal
     currency: str
@@ -65,7 +71,28 @@ class Storage:
         self._conn = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a database was first created."""
+        additions = {
+            "settings": {
+                "default_break_hours": "TEXT NOT NULL DEFAULT '0'",
+                "default_break_paid": "INTEGER NOT NULL DEFAULT 0",
+            },
+            "shifts": {
+                "break_hours": "TEXT NOT NULL DEFAULT '0'",
+                "break_paid": "INTEGER NOT NULL DEFAULT 0",
+            },
+        }
+        for table, columns in additions.items():
+            existing = {
+                row["name"] for row in self._conn.execute(f"PRAGMA table_info({table})")
+            }
+            for column, definition in columns.items():
+                if column not in existing:
+                    self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def close(self) -> None:
         self._conn.close()
@@ -89,19 +116,23 @@ class Storage:
             overtime_after_hours=Decimal(overtime) if overtime is not None else None,
             overtime_multiplier=Decimal(row["overtime_multiplier"]),
             currency=row["currency"],
+            default_break_hours=Decimal(row["default_break_hours"]),
+            default_break_paid=bool(row["default_break_paid"]),
         )
 
     def save_config(self, user_id: int, config: RateConfig) -> None:
         self._conn.execute(
             """
             INSERT INTO settings (user_id, default_rate, currency, overtime_after_hours,
-                                  overtime_multiplier)
-            VALUES (?, ?, ?, ?, ?)
+                                  overtime_multiplier, default_break_hours, default_break_paid)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 default_rate = excluded.default_rate,
                 currency = excluded.currency,
                 overtime_after_hours = excluded.overtime_after_hours,
-                overtime_multiplier = excluded.overtime_multiplier
+                overtime_multiplier = excluded.overtime_multiplier,
+                default_break_hours = excluded.default_break_hours,
+                default_break_paid = excluded.default_break_paid
             """,
             (
                 user_id,
@@ -109,6 +140,8 @@ class Storage:
                 config.currency,
                 None if config.overtime_after_hours is None else str(config.overtime_after_hours),
                 str(config.overtime_multiplier),
+                str(config.default_break_hours),
+                int(config.default_break_paid),
             ),
         )
         self._conn.execute("DELETE FROM event_rates WHERE user_id = ?", (user_id,))
@@ -125,14 +158,17 @@ class Storage:
         start: time,
         end: time,
         event: str,
+        break_hours: Decimal,
+        break_paid: bool,
         hours: Decimal,
         pay: Decimal,
         currency: str,
     ) -> int:
         cursor = self._conn.execute(
             """
-            INSERT INTO shifts (user_id, day, start_time, end_time, event, hours, pay, currency)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO shifts (user_id, day, start_time, end_time, event, break_hours,
+                                break_paid, hours, pay, currency)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -140,6 +176,8 @@ class Storage:
                 start.isoformat(timespec="minutes"),
                 end.isoformat(timespec="minutes"),
                 event,
+                str(break_hours),
+                int(break_paid),
                 str(hours),
                 str(pay),
                 currency,
@@ -177,6 +215,8 @@ def _to_record(row: sqlite3.Row) -> ShiftRecord:
         start=time.fromisoformat(row["start_time"]),
         end=time.fromisoformat(row["end_time"]),
         event=row["event"],
+        break_hours=Decimal(row["break_hours"]),
+        break_paid=bool(row["break_paid"]),
         hours=Decimal(row["hours"]),
         pay=Decimal(row["pay"]),
         currency=row["currency"],

@@ -60,6 +60,43 @@ def test_calculate_pay_applies_overtime():
     assert calculate_pay(10, "Shift", config) == Decimal("110.00")
 
 
+@pytest.mark.parametrize(
+    "text, expected_hours, expected_paid",
+    [
+        ("today 9am-6pm 1h unpaid break Roadshow", 8, False),
+        ("today 9am-6pm 1 hour paid break Roadshow", 9, True),
+        ("today 9am-6pm with 30 min unpaid break Roadshow", 8.5, False),
+        ("today 9am-6pm unpaid 1hr break Roadshow", 8, False),
+        ("today 9am-6pm 1h break unpaid Roadshow", 8, False),
+    ],
+)
+def test_break_detection(text, expected_hours, expected_paid):
+    shift = parse_shift(text, today=TODAY)
+    assert shift.event == "Roadshow"
+    assert shift.hours == expected_hours
+    assert shift.rest.paid is expected_paid
+    assert shift.break_specified is True
+
+
+def test_break_without_marker_uses_default_paid_flag():
+    unpaid = parse_shift("today 9am-6pm 1h break Roadshow", today=TODAY)
+    assert unpaid.hours == 8 and unpaid.rest.paid is False
+    paid = parse_shift("today 9am-6pm 1h break Roadshow", today=TODAY, default_break_paid=True)
+    assert paid.hours == 9 and paid.rest.paid is True
+
+
+def test_no_break_phrase_is_explicit():
+    shift = parse_shift("today 9am-6pm no break Roadshow", today=TODAY)
+    assert shift.hours == 9
+    assert shift.break_specified is True
+
+
+def test_shift_without_break_is_unspecified():
+    shift = parse_shift("today 9am-6pm Roadshow", today=TODAY)
+    assert shift.break_specified is False
+    assert shift.hours == 9
+
+
 def test_storage_roundtrip(tmp_path):
     storage = Storage(tmp_path / "test.sqlite3")
     config = RateConfig(default_rate=Decimal("20"), event_rates={"gig": Decimal("30")})
@@ -68,10 +105,12 @@ def test_storage_roundtrip(tmp_path):
 
     shift_id = storage.add_shift(
         1, date(2026, 8, 12), time(18, 0), time(23, 30), "Gig",
-        Decimal("5.5"), Decimal("165.00"), "SGD",
+        Decimal("1"), False, Decimal("4.5"), Decimal("135.00"), "SGD",
     )
     records = storage.list_shifts(1, month="2026-08")
     assert [r.id for r in records] == [shift_id]
-    assert records[0].pay == Decimal("165.00")
+    assert records[0].pay == Decimal("135.00")
+    assert records[0].break_hours == Decimal("1")
+    assert records[0].break_paid is False
     assert storage.delete_shift(1, shift_id) is True
     assert storage.list_shifts(1) == []
