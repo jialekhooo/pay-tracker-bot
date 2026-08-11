@@ -1,9 +1,11 @@
+from dataclasses import replace
 from datetime import date, datetime, time
 from decimal import Decimal
 
 import pytest
 
 from paybot.bot import SECTIONS, commands_text, parse_month
+from paybot.calendar_export import google_link, to_ics
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay
 from paybot.reminders import due, format_offset, parse_offset
@@ -214,6 +216,31 @@ def test_location_is_stored_and_returned(tmp_path):
         Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD", location="MBS",
     )
     assert storage.get_shift(1, shift_id).location == "MBS"
+
+
+def test_ics_has_one_event_per_shift_with_escaped_text():
+    record = _record(7, date(2026, 8, 12), time(18, 0), time(23, 30), "Wedding, gig")
+    ics = to_ics([record], now=datetime(2026, 8, 11, 9, 0))
+    assert ics.startswith("BEGIN:VCALENDAR\r\n")
+    assert ics.count("BEGIN:VEVENT") == 1
+    assert "DTSTART:20260812T180000" in ics
+    assert "DTEND:20260812T233000" in ics
+    assert "SUMMARY:Wedding\\, gig" in ics
+    assert ics.endswith("END:VCALENDAR\r\n")
+
+
+def test_ics_rolls_an_overnight_shift_into_the_next_day():
+    record = _record(8, date(2026, 8, 12), time(22, 0), time(2, 0))
+    assert "DTEND:20260813T020000" in to_ics([record])
+
+
+def test_google_link_uses_utc_and_includes_location():
+    record = _record(9, date(2026, 8, 12), time(18, 0), time(23, 30))
+    record = replace(record, location="Marina Bay Sands")
+    link = google_link(record, 480)
+    assert "dates=20260812T100000Z%2F20260812T153000Z" in link
+    assert "text=Gig%20%40%20Marina%20Bay%20Sands" in link
+    assert "location=Marina%20Bay%20Sands" in link
 
 
 def test_every_command_is_listed_and_unique():

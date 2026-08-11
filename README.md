@@ -39,6 +39,14 @@ Logging a shift that overlaps one you already stored still logs it, but the repl
 warns which shift it clashes with (overnight shifts are compared properly).
 `/upcoming` lists what you're booked for from today onwards and flags clashes.
 
+## Calendar
+
+`/calendar` sends a `.ics` file of your upcoming shifts (open it to add them to Apple
+or Google Calendar) plus a tap-to-add Google Calendar link per shift. `/calendar aug`
+exports one month, `/calendar all` everything, `/calendar #12 #13` specific shifts.
+Overnight shifts end on the following day, and Google links use the timezone from
+`/reminders`.
+
 ## Reminders
 
 `/reminders on` sends you a message the evening before (20:00, UTC+8 by default)
@@ -84,6 +92,7 @@ command menu on startup. Unknown commands get a nudge back to `/commands`.
 | `/total [month]` | Every shift in the month plus month and all-time totals (this month by default) |
 | `/delete <id> [id ...]` | Delete shifts; the reply shows the recomputed totals |
 | `/clear [month]` | Delete a whole month (or everything) after confirming |
+| `/calendar [month\|all\|#id]` | `.ics` file + Google Calendar links (alias `/ics`) |
 | `/export [month]` | CSV export |
 
 Months can be written as `2026-08`, `aug`, `August 2025`, `8`, `this month`, or

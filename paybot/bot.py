@@ -24,6 +24,7 @@ from telegram.ext import (
     filters,
 )
 
+from .calendar_export import event_title, google_link, to_ics
 from .parsing import Break, ParseError, Shift, parse_shifts, parse_time
 from .pay import RateConfig, calculate_pay, round_money
 from .reminders import (
@@ -694,6 +695,61 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_document(document=data, filename=data.name)
 
 
+def _calendar_records(
+    storage: Storage, user_id: int, args: list[str]
+) -> tuple[list[ShiftRecord], str]:
+    """Shifts for /calendar: specific ids, a month, or everything from today on."""
+    if args and all(arg.startswith("#") and arg[1:].isdigit() for arg in args):
+        records = [storage.get_shift(user_id, int(arg[1:])) for arg in args]
+        return [r for r in records if r is not None], "selected shifts"
+    if args and args[0].lower() == "all":
+        return storage.list_shifts(user_id), "all shifts"
+    month = parse_month(args)
+    if month:
+        return storage.list_shifts(user_id, month=month), _month_label(month)
+    today = date.today()
+    return storage.shifts_between(user_id, today, today + timedelta(days=365)), "upcoming shifts"
+
+
+async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the shifts as a .ics file plus one-tap Google Calendar links."""
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    try:
+        records, scope = _calendar_records(storage, user_id, list(context.args))
+    except ParseError as exc:
+        await update.message.reply_text(str(exc))
+        return
+    if not records:
+        await update.message.reply_text(
+            f"No shifts to add for {scope}. Try /calendar aug, /calendar all, or /calendar #12."
+        )
+        return
+
+    reminder = storage.get_reminder(user_id)
+    offset = reminder.utc_offset_minutes if reminder else DEFAULT_UTC_OFFSET_MINUTES
+    data = io.BytesIO(to_ics(records).encode("utf-8"))
+    data.name = "shifts.ics"
+    lines = [
+        f"{len(records)} shift{'s' if len(records) > 1 else ''} from {scope} — open the "
+        "file to add them to Apple/Google Calendar, or tap a link:"
+    ]
+    for record in records[:10]:
+        lines.append(
+            f"• [{record.day.strftime('%a %d %b')} "
+            f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} "
+            f"{event_title(record)}]({google_link(record, offset)})"
+        )
+    if len(records) > 10:
+        lines.append(f"…and {len(records) - 10} more in the file.")
+    await update.message.reply_document(document=data, filename=data.name)
+    await update.message.reply_text(
+        "\n".join(lines),
+        parse_mode=ParseMode.MARKDOWN,
+        disable_web_page_preview=True,
+    )
+
+
 @dataclass(frozen=True)
 class Command:
     """One bot command: how it's registered, listed and described."""
@@ -767,6 +823,10 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
             Command(
                 ("upcoming", "schedule"), "/upcoming [days]",
                 "What you're booked for (next 14 days)", upcoming,
+            ),
+            Command(
+                ("calendar", "ics"), "/calendar [month|all|#id]",
+                "Add shifts to your calendar (.ics + links)", calendar_export,
             ),
             Command(
                 ("export",), "/export [YYYY-MM]",
