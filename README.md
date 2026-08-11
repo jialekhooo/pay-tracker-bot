@@ -62,8 +62,14 @@ today 9am-6pm no break Roadshow           -> ignores the /break default
 
 ## Commands
 
+`/commands` lists everything in chat, and the same list is published to Telegram's
+command menu on startup. Unknown commands get a nudge back to `/commands`.
+
 | Command | Purpose |
 | --- | --- |
+| `/commands` | List every command (alias `/cmds`) |
+| `/help` | How to log shifts (alias `/start`) |
+| `/log <shift>` | Log a shift (or just send it as a plain message) |
 | `/rate` | Show current rates |
 | `/rate 25` | Set the default hourly rate |
 | `/rate wedding gig 30` | Rate for a specific event name |

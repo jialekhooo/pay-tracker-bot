@@ -8,11 +8,12 @@ import io
 import logging
 import os
 import re
-from dataclasses import replace
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
-from telegram import Update
+from telegram import BotCommand, Update
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import (
@@ -65,22 +66,7 @@ Breaks — add them anywhere in the message:
 `today 9am-6pm 30min break Roadshow` (uses your /break default)
 `today 9am-6pm no break Roadshow`
 
-Commands:
-/rate — show your current rates
-/rate <amount> — set your default hourly rate
-/rate <event name> <amount> — set a rate for one event name
-/clearrate <event name> — remove an event rate
-/currency <code> — set the currency label
-/overtime <hours> <multiplier> — e.g. `/overtime 8 1.5` (`/overtime off` to disable)
-/break <hours> paid|unpaid — default break when you don't mention one (`/break off`)
-/upcoming [days] — shifts you're booked for (default: next 14 days)
-/reminders on|off|20:00 [+8] — a message the evening before each shift
-/list [month] — recent shifts, or every shift in a month
-/month — summary of every month; /month aug shows that month's shifts
-/total [month] — this month's shifts + totals (or another month)
-/delete <id> [id ...] — delete shifts and show the updated totals
-/clear [month] — delete every shift (or a whole month) after confirming
-/export [YYYY-MM] — CSV of your shifts
+Send /commands for everything the bot can do.
 """
 
 
@@ -708,27 +694,154 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_document(document=data, filename=data.name)
 
 
+@dataclass(frozen=True)
+class Command:
+    """One bot command: how it's registered, listed and described."""
+
+    names: tuple[str, ...]
+    usage: str
+    summary: str
+    handler: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]
+
+    @property
+    def name(self) -> str:
+        return self.names[0]
+
+
+def commands_text() -> str:
+    lines = ["*Commands*"]
+    for title, section in SECTIONS:
+        lines.append(f"\n_{title}_")
+        for command in section:
+            aliases = ", ".join(f"/{alias}" for alias in command.names[1:])
+            suffix = f" (also {aliases})" if aliases else ""
+            lines.append(f"`{command.usage}` — {command.summary}{suffix}")
+    lines.append("\nTo log a shift just send it as a message — /help shows the format.")
+    return "\n".join(lines)
+
+
+async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(commands_text(), parse_mode=ParseMode.MARKDOWN)
+
+
+async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    command = update.message.text.split()[0]
+    await update.message.reply_text(
+        f"{command} isn't a command — send /commands to see what I understand."
+    )
+
+
+SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
+    (
+        "Logging",
+        (
+            Command(
+                ("log",), "/log <shift>",
+                "Log a shift (or just send it as a message)", log_shift,
+            ),
+            Command(
+                ("delete", "del"), "/delete <id> [id ...]",
+                "Delete shifts and show the new totals", delete_shift,
+            ),
+            Command(
+                ("clear",), "/clear [month]",
+                "Delete a whole month, or everything", clear_shifts,
+            ),
+        ),
+    ),
+    (
+        "Your shifts",
+        (
+            Command(
+                ("total",), "/total [month]",
+                "A month's shifts plus month and all-time pay", total,
+            ),
+            Command(
+                ("list",), "/list [month]",
+                "Recent shifts, or every shift in a month", list_shifts,
+            ),
+            Command(
+                ("month", "months"), "/month [month]",
+                "Summary per month, or one month's shifts", months,
+            ),
+            Command(
+                ("upcoming", "schedule"), "/upcoming [days]",
+                "What you're booked for (next 14 days)", upcoming,
+            ),
+            Command(
+                ("export",), "/export [YYYY-MM]",
+                "Download your shifts as CSV", export,
+            ),
+        ),
+    ),
+    (
+        "Settings",
+        (
+            Command(
+                ("rate",), "/rate [event] [amount]",
+                "Show rates, or set the default/event rate", rate,
+            ),
+            Command(
+                ("clearrate",), "/clearrate <event>",
+                "Remove an event rate", clear_rate,
+            ),
+            Command(
+                ("currency",), "/currency <code>",
+                "Set the currency label", currency,
+            ),
+            Command(
+                ("overtime",), "/overtime <hours> <multiplier>",
+                "e.g. /overtime 8 1.5 (/overtime off)", overtime,
+            ),
+            Command(
+                ("break",), "/break <hours> paid|unpaid",
+                "Default break when none is mentioned", break_default,
+            ),
+            Command(
+                ("reminders", "reminder"), "/reminders on|off|20:00 [+8]",
+                "Message the evening before a shift", reminders,
+            ),
+        ),
+    ),
+    (
+        "Help",
+        (
+            Command(
+                ("commands", "cmds"), "/commands",
+                "This list of commands", commands,
+            ),
+            Command(
+                ("help", "start"), "/help",
+                "How to log shifts", start,
+            ),
+        ),
+    ),
+)
+
+
+async def _publish_commands(application: Application) -> None:
+    """Show a tidy command menu in Telegram's ⌘ button."""
+    menu = [
+        BotCommand(command.name, command.summary)
+        for _, commands_in_section in SECTIONS
+        for command in commands_in_section
+    ]
+    try:
+        await application.bot.set_my_commands(menu)
+    except TelegramError:
+        logger.exception("Could not publish the command menu")
+
+
 def build_application(token: str, db_path: str) -> Application:
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(token).post_init(_publish_commands).build()
     application.bot_data["storage"] = Storage(db_path)
 
-    application.add_handler(CommandHandler(["start", "help"], start))
-    application.add_handler(CommandHandler("rate", rate))
-    application.add_handler(CommandHandler("clearrate", clear_rate))
-    application.add_handler(CommandHandler("currency", currency))
-    application.add_handler(CommandHandler("overtime", overtime))
-    application.add_handler(CommandHandler("break", break_default))
-    application.add_handler(CommandHandler("log", log_shift))
-    application.add_handler(CommandHandler("list", list_shifts))
-    application.add_handler(CommandHandler(["month", "months"], months))
-    application.add_handler(CommandHandler("total", total))
-    application.add_handler(CommandHandler(["delete", "del"], delete_shift))
-    application.add_handler(CommandHandler("clear", clear_shifts))
-    application.add_handler(CommandHandler(["upcoming", "schedule"], upcoming))
-    application.add_handler(CommandHandler(["reminders", "reminder"], reminders))
-    application.job_queue.run_repeating(send_due_reminders, interval=60, first=10)
-    application.add_handler(CommandHandler("export", export))
+    for _, commands_in_section in SECTIONS:
+        for command in commands_in_section:
+            application.add_handler(CommandHandler(list(command.names), command.handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_shift))
+    application.add_handler(MessageHandler(filters.COMMAND, unknown))
+    application.job_queue.run_repeating(send_due_reminders, interval=60, first=10)
     return application
 
 

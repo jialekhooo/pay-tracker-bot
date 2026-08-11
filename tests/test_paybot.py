@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from paybot.bot import parse_month
+from paybot.bot import SECTIONS, commands_text, parse_month
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay
 from paybot.reminders import due, format_offset, parse_offset
@@ -214,6 +214,20 @@ def test_location_is_stored_and_returned(tmp_path):
         Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD", location="MBS",
     )
     assert storage.get_shift(1, shift_id).location == "MBS"
+
+
+def test_every_command_is_listed_and_unique():
+    listing = commands_text()
+    seen = set()
+    for _, section in SECTIONS:
+        for command in section:
+            assert command.usage.startswith(f"/{command.name}")
+            assert command.usage in listing
+            assert len(command.summary) <= 60  # Telegram's menu limit is 256
+            for alias in command.names:
+                assert alias not in seen
+                seen.add(alias)
+    assert {"commands", "help", "total", "reminders"} <= seen
 
 
 def _reminder(send_at=time(20, 0), offset=480, enabled=True, last_sent_on=None):
