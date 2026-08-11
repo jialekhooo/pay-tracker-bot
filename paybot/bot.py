@@ -24,6 +24,7 @@ from telegram.ext import (
 
 from .parsing import Break, ParseError, Shift, parse_shifts
 from .pay import RateConfig, calculate_pay, round_money
+from .schedule import find_clashes
 from .storage import ShiftRecord, Storage
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ Commands:
 /currency <code> — set the currency label
 /overtime <hours> <multiplier> — e.g. `/overtime 8 1.5` (`/overtime off` to disable)
 /break <hours> paid|unpaid — default break when you don't mention one (`/break off`)
+/upcoming [days] — shifts you're booked for (default: next 14 days)
 /list [month] — recent shifts, or every shift in a month
 /month — summary of every month; /month aug shows that month's shifts
 /total [month] — this month's shifts + totals (or another month)
@@ -290,15 +292,30 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     logged: list[str] = []
     failed: list[str] = []
+    warnings: list[str] = []
     total_pay = Decimal("0")
     for line, result in parsed:
         if isinstance(result, ParseError):
             failed.append(f"• {line} — {result}")
             continue
         shift = _apply_default_break(result, config)
+        clashes = find_clashes(
+            storage.shifts_between(
+                user_id, shift.day - timedelta(days=1), shift.day + timedelta(days=1)
+            ),
+            shift.day,
+            shift.start,
+            shift.end,
+        )
         shift_id, hours, pay, rate = _store_shift(storage, user_id, shift, config)
         total_pay += pay
         logged.append(_summarise(shift, shift_id, hours, pay, rate, config.currency))
+        for clash in clashes:
+            warnings.append(
+                f"⚠️ #{shift_id} {shift.event} clashes with #{clash.id} {clash.event} "
+                f"({clash.day.isoformat()} {clash.start.strftime('%H:%M')}–"
+                f"{clash.end.strftime('%H:%M')})"
+            )
 
     reply: list[str] = []
     if logged:
@@ -306,6 +323,10 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply.extend(logged)
         if len(logged) > 1:
             reply.append(f"Total: {_money(total_pay, config.currency)}")
+    if warnings:
+        reply.append("Double booking:")
+        reply.extend(warnings)
+        reply.append("Use /delete <id> to drop the one you don't want.")
     if failed:
         reply.append("Could not read:")
         reply.extend(failed)
@@ -403,6 +424,37 @@ async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     grand_total = sum((s.pay for s in summaries), Decimal("0"))
     lines.append(f"All time: {_money(grand_total, summaries[0].currency)}")
     lines.append("Send /month 2026-08 (or /month aug) to see that month's shifts.")
+    await update.message.reply_text("\n".join(lines))
+
+
+async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the shifts already booked from today onwards, flagging any clashes."""
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    days = 14
+    if context.args and context.args[0].isdigit():
+        days = max(1, min(int(context.args[0]), 365))
+    today = date.today()
+    records = storage.shifts_between(user_id, today, today + timedelta(days=days - 1))
+    if not records:
+        await update.message.reply_text(f"Nothing booked in the next {days} days.")
+        return
+
+    clashing: set[int] = set()
+    for index, record in enumerate(records):
+        for other in find_clashes(records[index + 1 :], record.day, record.start, record.end):
+            clashing.update({record.id, other.id})
+    lines = [f"Booked in the next {days} days:"]
+    current_day: date | None = None
+    for record in records:
+        if record.day != current_day:
+            current_day = record.day
+            lines.append(record.day.strftime("%a %d %b"))
+        flag = " ⚠️ clash" if record.id in clashing else ""
+        lines.append(
+            f"  #{record.id} {record.start.strftime('%H:%M')}–"
+            f"{record.end.strftime('%H:%M')} {record.event}{flag}"
+        )
     await update.message.reply_text("\n".join(lines))
 
 
@@ -583,6 +635,7 @@ def build_application(token: str, db_path: str) -> Application:
     application.add_handler(CommandHandler("total", total))
     application.add_handler(CommandHandler(["delete", "del"], delete_shift))
     application.add_handler(CommandHandler("clear", clear_shifts))
+    application.add_handler(CommandHandler(["upcoming", "schedule"], upcoming))
     application.add_handler(CommandHandler("export", export))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_shift))
     return application

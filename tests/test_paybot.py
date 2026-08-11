@@ -6,7 +6,8 @@ import pytest
 from paybot.bot import parse_month
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay
-from paybot.storage import Storage
+from paybot.schedule import find_clashes
+from paybot.storage import ShiftRecord, Storage
 
 TODAY = date(2026, 8, 11)
 
@@ -186,6 +187,44 @@ def test_event_name_first_variants():
     )
     assert shift.event == "Hermes Private Sale"
     assert shift.hours == 10.5
+
+
+def _record(shift_id, day, start, end, event="Gig"):
+    return ShiftRecord(
+        id=shift_id, day=day, start=start, end=end, event=event,
+        break_hours=Decimal("0"), break_paid=False, hours=Decimal("8"),
+        pay=Decimal("100"), currency="SGD",
+    )
+
+
+def test_find_clashes_flags_overlapping_shifts():
+    booked = [
+        _record(1, date(2026, 8, 12), time(9, 0), time(17, 0), "Roadshow"),
+        _record(2, date(2026, 8, 13), time(9, 0), time(17, 0), "Wedding"),
+    ]
+    clashes = find_clashes(booked, date(2026, 8, 12), time(16, 0), time(20, 0))
+    assert [c.id for c in clashes] == [1]
+
+    assert find_clashes(booked, date(2026, 8, 12), time(17, 0), time(22, 0)) == []
+    assert find_clashes(booked, date(2026, 8, 14), time(9, 0), time(17, 0)) == []
+
+
+def test_find_clashes_handles_overnight_shifts():
+    booked = [_record(1, date(2026, 8, 12), time(22, 0), time(2, 0), "Night gig")]
+    clashes = find_clashes(booked, date(2026, 8, 13), time(1, 0), time(5, 0))
+    assert [c.id for c in clashes] == [1]
+    assert find_clashes(booked, date(2026, 8, 13), time(3, 0), time(5, 0)) == []
+
+
+def test_shifts_between_returns_range_in_order(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    for day in (10, 12, 20):
+        storage.add_shift(
+            1, date(2026, 8, day), time(9, 0), time(17, 0), "Gig",
+            Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD",
+        )
+    records = storage.shifts_between(1, date(2026, 8, 11), date(2026, 8, 19))
+    assert [r.day.day for r in records] == [12]
 
 
 def test_totals_drop_after_delete(tmp_path):

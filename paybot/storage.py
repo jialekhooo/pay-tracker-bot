@@ -209,6 +209,18 @@ class Storage:
             params.append(limit)
         return [_to_record(row) for row in self._conn.execute(query, params)]
 
+    def shifts_between(self, user_id: int, first: date, last: date) -> list[ShiftRecord]:
+        """Shifts whose date falls in [first, last], earliest first."""
+        rows = self._conn.execute(
+            """
+            SELECT * FROM shifts
+            WHERE user_id = ? AND day BETWEEN ? AND ?
+            ORDER BY day ASC, start_time ASC, id ASC
+            """,
+            (user_id, first.isoformat(), last.isoformat()),
+        )
+        return [_to_record(row) for row in rows]
+
     def month_summaries(self, user_id: int) -> list[MonthSummary]:
         rows = self._conn.execute(
             """
