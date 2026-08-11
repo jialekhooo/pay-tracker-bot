@@ -192,24 +192,74 @@ def extract_rate(text: str) -> tuple[str, Decimal | None]:
     return text[: match.start()] + " " + text[match.end() :], rate
 
 
+_DATE_CANDIDATE_RE = re.compile(
+    r"""
+    \b(?:
+        today|yesterday|tomorrow
+        | \d{4}[-/]\d{1,2}[-/]\d{1,2}
+        | \d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?
+        | \d{1,2}\s+[A-Za-z]{3,9}(?:\s+\d{4})?
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+_TIME_RANGE_RE = re.compile(
+    r"""
+    \b(?P<start>\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)
+    \s*(?:-|–|—|to|till|until|\s)\s*
+    (?P<end>\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _parse_anywhere(text: str, today: date) -> tuple[date, time, time, str]:
+    """Find the date, the time range and the event name wherever they appear."""
+    for date_match in _DATE_CANDIDATE_RE.finditer(text):
+        try:
+            day = parse_date(date_match.group(0), today)
+        except ParseError:
+            continue
+        remainder = text[: date_match.start()] + "\x00" + text[date_match.end() :]
+        for time_match in _TIME_RANGE_RE.finditer(remainder):
+            try:
+                start = parse_time(time_match.group("start"))
+                end = parse_time(time_match.group("end"))
+            except ParseError:
+                continue
+            event = remainder[: time_match.start()] + " " + remainder[time_match.end() :]
+            event = re.sub(r"\s{2,}", " ", event.replace("\x00", " ")).strip(" ,;-–—")
+            if event:
+                return day, start, end, event
+    raise ParseError(
+        "Send it as: <event> <date> <start>-<end> <rate>, "
+        "e.g. `Wedding gig 12/8 6pm-11.30pm 25/h`."
+    )
+
+
 def parse_shift(
     text: str, today: date | None = None, default_break_paid: bool = False
 ) -> Shift:
-    """Parse "<date> <start> <end> <event name>" with forgiving formats."""
+    """Parse a line holding a date, a time range and an event name, in any order."""
     today = today or date.today()
     text, rate_override = extract_rate(text)
     text, rest = extract_break(text, default_paid=default_break_paid)
     tokens = _split_tokens(text)
-    if len(tokens) < 4:
-        raise ParseError(
-            "Send it as: <date> <start> <end> <event>, e.g. `12/8 6pm-11.30pm Wedding gig`."
-        )
-    day = parse_date(tokens[0], today)
-    start = parse_time(tokens[1])
-    end = parse_time(tokens[2])
-    event = " ".join(tokens[3:]).strip(" ,;-")
-    if not event:
-        raise ParseError("Please include an event name.")
+    day: date | None = None
+    start: time | None = None
+    end: time | None = None
+    event = ""
+    if len(tokens) >= 4:
+        try:
+            day = parse_date(tokens[0], today)
+            start = parse_time(tokens[1])
+            end = parse_time(tokens[2])
+            event = " ".join(tokens[3:]).strip(" ,;-")
+        except ParseError:
+            day = None
+    if day is None or start is None or end is None or not event:
+        day, start, end, event = _parse_anywhere(text, today)
     shift = Shift(day=day, start=start, end=end, event=event, rate_override=rate_override)
     return shift if rest is None else shift.with_break(rest)
 

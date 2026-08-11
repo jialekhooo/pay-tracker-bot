@@ -2,11 +2,17 @@
 
 Log a shift in Telegram and the bot calculates the pay and stores it in SQLite.
 
+To log, key in the event name, the date and time, and (optionally) the pay rate —
+in any order:
+
 ```
+Wedding gig 12/8 6pm-11.30pm 25/h
 12/8 6pm-11.30pm Wedding gig
 2026-08-12 18:00 23:30 Wedding gig
-today 9am to 5pm Roadshow
+Roadshow today 9am to 5pm
 ```
+
+Without a rate in the line, the stored rate for that event (or your default) is used.
 
 Reply: `Logged #3: Wedding gig — 5.5h @ SGD 25.00/h — Pay: SGD 137.50`
 

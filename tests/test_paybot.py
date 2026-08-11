@@ -167,6 +167,27 @@ def test_month_summaries(tmp_path):
     ]
 
 
+def test_event_name_first_with_inline_rate():
+    shift = parse_shift("Wedding gig 12/8 6pm-11.30pm 25/h", today=date(2026, 8, 1))
+    assert shift.day == date(2026, 8, 12)
+    assert (shift.start, shift.end) == (time(18, 0), time(23, 30))
+    assert shift.event == "Wedding gig"
+    assert shift.rate_override == Decimal("25")
+    assert shift.hours == 5.5
+
+
+def test_event_name_first_variants():
+    shift = parse_shift("Roadshow today 9am to 5pm", today=date(2026, 8, 1))
+    assert (shift.day, shift.event) == (date(2026, 8, 1), "Roadshow")
+    assert shift.hours == 8
+
+    shift = parse_shift(
+        "Hermes Private Sale 13/8 8.30am - 8pm 1h unpaid break", today=date(2026, 8, 1)
+    )
+    assert shift.event == "Hermes Private Sale"
+    assert shift.hours == 10.5
+
+
 def test_totals_drop_after_delete(tmp_path):
     storage = Storage(tmp_path / "test.sqlite3")
     ids = [
