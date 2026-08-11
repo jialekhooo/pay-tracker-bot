@@ -12,6 +12,20 @@ Reply: `Logged #3: Wedding gig — 5.5h @ SGD 25.00/h — Pay: SGD 137.50`
 
 Shifts ending after midnight (e.g. `10pm - 2am`) roll over to the next day.
 
+## Batches and inline rates
+
+Send one shift per line to log them all in one message; `15/h` (or `$15 per hour`)
+in a line overrides the stored rate for that shift only:
+
+```
+13/8 8.30am - 8pm 15/h Hermes Private Sale
+14/8 9am - 8pm 15/h Hermes Private Sale
+15/8 9am - 9pm 15/h Hermes Private Sale
+```
+
+The reply lists each logged shift plus the batch total; unreadable lines are
+reported without blocking the rest.
+
 ## Breaks
 
 Mention a break anywhere in the message; unpaid breaks are deducted from paid hours,
