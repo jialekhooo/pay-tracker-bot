@@ -9,11 +9,12 @@ import logging
 import os
 import re
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from telegram import Update
 from telegram.constants import ParseMode
+from telegram.error import TelegramError
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -22,8 +23,15 @@ from telegram.ext import (
     filters,
 )
 
-from .parsing import Break, ParseError, Shift, parse_shifts
+from .parsing import Break, ParseError, Shift, parse_shifts, parse_time
 from .pay import RateConfig, calculate_pay, round_money
+from .reminders import (
+    DEFAULT_SEND_AT,
+    DEFAULT_UTC_OFFSET_MINUTES,
+    due_reminders,
+    format_offset,
+    parse_offset,
+)
 from .schedule import find_clashes
 from .storage import ShiftRecord, Storage
 
@@ -66,6 +74,7 @@ Commands:
 /overtime <hours> <multiplier> — e.g. `/overtime 8 1.5` (`/overtime off` to disable)
 /break <hours> paid|unpaid — default break when you don't mention one (`/break off`)
 /upcoming [days] — shifts you're booked for (default: next 14 days)
+/reminders on|off|20:00 [+8] — a message the evening before each shift
 /list [month] — recent shifts, or every shift in a month
 /month — summary of every month; /month aug shows that month's shifts
 /total [month] — this month's shifts + totals (or another month)
@@ -431,6 +440,78 @@ async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
+async def reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Turn the day-before reminder on/off and set when it arrives."""
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    existing = storage.get_reminder(user_id)
+    args = [a.lower() for a in context.args]
+
+    if not args:
+        if existing is None or not existing.enabled:
+            await update.message.reply_text(
+                "Reminders are off. Send /reminders on to get a message the evening "
+                "before each shift (default 20:00, UTC+8), or /reminders 19:30 +8."
+            )
+            return
+        await update.message.reply_text(
+            f"Reminders on at {existing.send_at.strftime('%H:%M')} "
+            f"({format_offset(existing.utc_offset_minutes)}), for the next day's shifts."
+        )
+        return
+
+    send_at = existing.send_at if existing else time.fromisoformat(DEFAULT_SEND_AT)
+    offset = existing.utc_offset_minutes if existing else DEFAULT_UTC_OFFSET_MINUTES
+    enabled = True
+    for arg in args:
+        if arg == "off":
+            enabled = False
+        elif arg == "on":
+            continue
+        elif arg.startswith(("+", "-")):
+            try:
+                offset = parse_offset(arg)
+            except ValueError as exc:
+                await update.message.reply_text(str(exc))
+                return
+        else:
+            try:
+                send_at = parse_time(arg)
+            except ParseError as exc:
+                await update.message.reply_text(str(exc))
+                return
+
+    storage.save_reminder(user_id, update.effective_chat.id, send_at, offset, enabled)
+    if not enabled:
+        await update.message.reply_text("Reminders off.")
+        return
+    await update.message.reply_text(
+        f"Reminders on — I'll message you at {send_at.strftime('%H:%M')} "
+        f"({format_offset(offset)}) with the shifts you have the next day."
+    )
+
+
+async def send_due_reminders(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Job: message each user whose reminder time has arrived."""
+    storage: Storage = context.application.bot_data["storage"]
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    for reminder, day in due_reminders(storage.enabled_reminders(), now_utc):
+        records = storage.shifts_between(reminder.user_id, day, day)
+        storage.mark_reminder_sent(reminder.user_id, day - timedelta(days=1))
+        if not records:
+            continue
+        lines = [f"Tomorrow ({day.strftime('%a %d %b')}) you're working:"]
+        lines.extend(
+            f"  {r.start.strftime('%H:%M')}–{r.end.strftime('%H:%M')} {r.event}"
+            f"{' @ ' + r.location if r.location else ''}"
+            for r in records
+        )
+        try:
+            await context.bot.send_message(reminder.chat_id, "\n".join(lines))
+        except TelegramError:
+            logger.exception("Could not send the reminder to chat %s", reminder.chat_id)
+
+
 async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the shifts already booked from today onwards, flagging any clashes."""
     storage = _storage(context)
@@ -644,6 +725,8 @@ def build_application(token: str, db_path: str) -> Application:
     application.add_handler(CommandHandler(["delete", "del"], delete_shift))
     application.add_handler(CommandHandler("clear", clear_shifts))
     application.add_handler(CommandHandler(["upcoming", "schedule"], upcoming))
+    application.add_handler(CommandHandler(["reminders", "reminder"], reminders))
+    application.job_queue.run_repeating(send_due_reminders, interval=60, first=10)
     application.add_handler(CommandHandler("export", export))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_shift))
     return application

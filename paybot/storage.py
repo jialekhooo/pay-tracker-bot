@@ -48,6 +48,15 @@ CREATE TABLE IF NOT EXISTS shifts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_shifts_user_day ON shifts (user_id, day);
+
+CREATE TABLE IF NOT EXISTS reminders (
+    user_id INTEGER PRIMARY KEY,
+    chat_id INTEGER NOT NULL,
+    send_at TEXT NOT NULL DEFAULT '20:00',
+    utc_offset_minutes INTEGER NOT NULL DEFAULT 480,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_sent_on TEXT
+);
 """
 
 
@@ -64,6 +73,16 @@ class ShiftRecord:
     hours: Decimal
     pay: Decimal
     currency: str
+
+
+@dataclass(frozen=True)
+class Reminder:
+    user_id: int
+    chat_id: int
+    send_at: time
+    utc_offset_minutes: int
+    enabled: bool
+    last_sent_on: date | None
 
 
 @dataclass(frozen=True)
@@ -250,6 +269,51 @@ class Storage:
             for row in rows
         ]
 
+    def get_reminder(self, user_id: int) -> Reminder | None:
+        row = self._conn.execute(
+            "SELECT * FROM reminders WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        return None if row is None else _to_reminder(row)
+
+    def save_reminder(
+        self,
+        user_id: int,
+        chat_id: int,
+        send_at: time,
+        utc_offset_minutes: int,
+        enabled: bool,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO reminders (user_id, chat_id, send_at, utc_offset_minutes, enabled)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                chat_id = excluded.chat_id,
+                send_at = excluded.send_at,
+                utc_offset_minutes = excluded.utc_offset_minutes,
+                enabled = excluded.enabled
+            """,
+            (
+                user_id,
+                chat_id,
+                send_at.isoformat(timespec="minutes"),
+                utc_offset_minutes,
+                int(enabled),
+            ),
+        )
+        self._conn.commit()
+
+    def enabled_reminders(self) -> list[Reminder]:
+        rows = self._conn.execute("SELECT * FROM reminders WHERE enabled = 1")
+        return [_to_reminder(row) for row in rows]
+
+    def mark_reminder_sent(self, user_id: int, day: date) -> None:
+        self._conn.execute(
+            "UPDATE reminders SET last_sent_on = ? WHERE user_id = ?",
+            (day.isoformat(), user_id),
+        )
+        self._conn.commit()
+
     def get_shift(self, user_id: int, shift_id: int) -> ShiftRecord | None:
         row = self._conn.execute(
             "SELECT * FROM shifts WHERE user_id = ? AND id = ?", (user_id, shift_id)
@@ -272,6 +336,19 @@ class Storage:
         cursor = self._conn.execute(query, params)
         self._conn.commit()
         return cursor.rowcount
+
+
+def _to_reminder(row: sqlite3.Row) -> Reminder:
+    return Reminder(
+        user_id=row["user_id"],
+        chat_id=row["chat_id"],
+        send_at=time.fromisoformat(row["send_at"]),
+        utc_offset_minutes=row["utc_offset_minutes"],
+        enabled=bool(row["enabled"]),
+        last_sent_on=(
+            date.fromisoformat(row["last_sent_on"]) if row["last_sent_on"] else None
+        ),
+    )
 
 
 def _to_record(row: sqlite3.Row) -> ShiftRecord:

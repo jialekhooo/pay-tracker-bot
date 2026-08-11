@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time
 from decimal import Decimal
 
 import pytest
@@ -6,8 +6,9 @@ import pytest
 from paybot.bot import parse_month
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay
+from paybot.reminders import due, format_offset, parse_offset
 from paybot.schedule import find_clashes
-from paybot.storage import ShiftRecord, Storage
+from paybot.storage import Reminder, ShiftRecord, Storage
 
 TODAY = date(2026, 8, 11)
 
@@ -213,6 +214,52 @@ def test_location_is_stored_and_returned(tmp_path):
         Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD", location="MBS",
     )
     assert storage.get_shift(1, shift_id).location == "MBS"
+
+
+def _reminder(send_at=time(20, 0), offset=480, enabled=True, last_sent_on=None):
+    return Reminder(
+        user_id=1,
+        chat_id=99,
+        send_at=send_at,
+        utc_offset_minutes=offset,
+        enabled=enabled,
+        last_sent_on=last_sent_on,
+    )
+
+
+def test_reminder_is_due_once_per_day_in_local_time():
+    # 12:30 UTC is 20:30 in UTC+8, past the 20:00 send time.
+    now = datetime(2026, 8, 12, 12, 30)
+    assert due(_reminder(), now) == date(2026, 8, 13)
+    assert due(_reminder(last_sent_on=date(2026, 8, 12)), now) is None
+    assert due(_reminder(enabled=False), now) is None
+    # 10:00 UTC is 18:00 locally — too early.
+    assert due(_reminder(), datetime(2026, 8, 12, 10, 0)) is None
+
+
+def test_parse_and_format_offset():
+    assert parse_offset("+8") == 480
+    assert parse_offset("-5:30") == -330
+    assert parse_offset("5.5") == 330
+    assert format_offset(480) == "UTC+8"
+    assert format_offset(-330) == "UTC-5:30"
+    with pytest.raises(ValueError):
+        parse_offset("+20")
+
+
+def test_reminder_settings_roundtrip(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    assert storage.get_reminder(1) is None
+    storage.save_reminder(1, 99, time(19, 30), 480, True)
+    saved = storage.get_reminder(1)
+    assert (saved.chat_id, saved.send_at, saved.enabled) == (99, time(19, 30), True)
+    assert [r.user_id for r in storage.enabled_reminders()] == [1]
+
+    storage.mark_reminder_sent(1, date(2026, 8, 12))
+    assert storage.get_reminder(1).last_sent_on == date(2026, 8, 12)
+
+    storage.save_reminder(1, 99, time(19, 30), 480, False)
+    assert storage.enabled_reminders() == []
 
 
 def _record(shift_id, day, start, end, event="Gig"):

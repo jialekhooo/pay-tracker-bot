@@ -39,6 +39,13 @@ Logging a shift that overlaps one you already stored still logs it, but the repl
 warns which shift it clashes with (overnight shifts are compared properly).
 `/upcoming` lists what you're booked for from today onwards and flags clashes.
 
+## Reminders
+
+`/reminders on` sends you a message the evening before (20:00, UTC+8 by default)
+listing the shifts you have the next day. `/reminders 19:30 +8` changes the time or
+timezone, `/reminders off` stops them. The bot process must be running for these to
+arrive.
+
 ## Breaks
 
 Mention a break anywhere in the message; unpaid breaks are deducted from paid hours,
@@ -65,6 +72,7 @@ today 9am-6pm no break Roadshow           -> ignores the /break default
 | `/overtime 8 1.5` | ×1.5 beyond 8 hours (`/overtime off` to disable) |
 | `/break 1 unpaid` | Default break for shifts that don't mention one (`/break off`) |
 | `/upcoming [days]` | Shifts you're booked for (next 14 days by default) |
+| `/reminders on\|off\|20:00 [+8]` | Message the evening before each shift |
 | `/list [month]` | Recent shifts, or every shift in a month |
 | `/month` | Summary per month; `/month aug` lists that month's shifts |
 | `/total [month]` | Every shift in the month plus month and all-time totals (this month by default) |
