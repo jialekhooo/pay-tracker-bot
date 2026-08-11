@@ -51,10 +51,14 @@ today 9am-6pm no break Roadshow           -> ignores the /break default
 | `/currency SGD` | Currency label |
 | `/overtime 8 1.5` | ×1.5 beyond 8 hours (`/overtime off` to disable) |
 | `/break 1 unpaid` | Default break for shifts that don't mention one (`/break off`) |
-| `/list [YYYY-MM]` | Recent shifts |
-| `/total [YYYY-MM]` | Total hours and pay |
+| `/list [month]` | Recent shifts, or every shift in a month |
+| `/month` | Summary per month; `/month aug` lists that month's shifts |
+| `/total [month]` | Total hours and pay (all time without a month) |
 | `/delete <id>` | Delete a shift |
-| `/export [YYYY-MM]` | CSV export |
+| `/export [month]` | CSV export |
+
+Months can be written as `2026-08`, `aug`, `August 2025`, `8`, `this month`, or
+`last month`.
 
 ## Setup
 

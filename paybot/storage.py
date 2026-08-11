@@ -64,6 +64,15 @@ class ShiftRecord:
     currency: str
 
 
+@dataclass(frozen=True)
+class MonthSummary:
+    month: str
+    shifts: int
+    hours: Decimal
+    pay: Decimal
+    currency: str
+
+
 class Storage:
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
@@ -199,6 +208,30 @@ class Storage:
             query += " LIMIT ?"
             params.append(limit)
         return [_to_record(row) for row in self._conn.execute(query, params)]
+
+    def month_summaries(self, user_id: int) -> list[MonthSummary]:
+        rows = self._conn.execute(
+            """
+            SELECT substr(day, 1, 7) AS month, COUNT(*) AS shifts,
+                   SUM(CAST(hours AS REAL)) AS hours, SUM(CAST(pay AS REAL)) AS pay,
+                   currency
+            FROM shifts
+            WHERE user_id = ?
+            GROUP BY month
+            ORDER BY month DESC
+            """,
+            (user_id,),
+        )
+        return [
+            MonthSummary(
+                month=row["month"],
+                shifts=row["shifts"],
+                hours=Decimal(str(row["hours"])),
+                pay=Decimal(str(row["pay"])),
+                currency=row["currency"],
+            )
+            for row in rows
+        ]
 
     def delete_shift(self, user_id: int, shift_id: int) -> bool:
         cursor = self._conn.execute(

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from paybot.bot import parse_month
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay
 from paybot.storage import Storage
@@ -128,6 +129,42 @@ def test_parse_multiple_lines_reports_bad_line():
     results = parse_shifts("13/8 8.30am - 8pm Gig\nnonsense line", today=TODAY)
     assert isinstance(results[0][1], Shift)
     assert isinstance(results[1][1], ParseError)
+
+
+@pytest.mark.parametrize(
+    "args, expected",
+    [
+        ([], None),
+        (["2026-08"], "2026-08"),
+        (["aug"], "2026-08"),
+        (["August"], "2026-08"),
+        (["8"], "2026-08"),
+        (["july", "2025"], "2025-07"),
+        (["this", "month"], "2026-08"),
+        (["last", "month"], "2026-07"),
+    ],
+)
+def test_parse_month(args, expected):
+    assert parse_month(args, today=TODAY) == expected
+
+
+def test_parse_month_rejects_nonsense():
+    with pytest.raises(ParseError):
+        parse_month(["banana"], today=TODAY)
+
+
+def test_month_summaries(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    for day, pay in [(date(2026, 8, 1), "100"), (date(2026, 8, 2), "50"), (date(2026, 7, 3), "70")]:
+        storage.add_shift(
+            1, day, time(9, 0), time(17, 0), "Gig",
+            Decimal("0"), False, Decimal("8"), Decimal(pay), "SGD",
+        )
+    summaries = storage.month_summaries(1)
+    assert [(s.month, s.shifts, s.pay) for s in summaries] == [
+        ("2026-08", 2, Decimal("150.0")),
+        ("2026-07", 1, Decimal("70.0")),
+    ]
 
 
 def test_storage_roundtrip(tmp_path):

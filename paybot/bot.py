@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import calendar
 import csv
 import io
 import logging
 import os
+import re
 from dataclasses import replace
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from telegram import Update
@@ -56,8 +59,9 @@ Commands:
 /currency <code> — set the currency label
 /overtime <hours> <multiplier> — e.g. `/overtime 8 1.5` (`/overtime off` to disable)
 /break <hours> paid|unpaid — default break when you don't mention one (`/break off`)
-/list [YYYY-MM] — recent shifts
-/total [YYYY-MM] — total pay (defaults to this month)
+/list [month] — recent shifts, or every shift in a month
+/month — summary of every month; /month aug shows that month's shifts
+/total [month] — total pay (all time when no month given)
 /delete <id> — delete a shift
 /export [YYYY-MM] — CSV of your shifts
 """
@@ -305,26 +309,104 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(reply))
 
 
+_MONTH_NAMES = {
+    name.lower(): index
+    for index, name in enumerate(calendar.month_name[1:], start=1)
+} | {
+    name.lower(): index
+    for index, name in enumerate(calendar.month_abbr[1:], start=1)
+}
+
+
+def parse_month(args: list[str], today: date | None = None) -> str | None:
+    """Normalise `/list aug`, `/list 8`, `/list 2026-08` to a YYYY-MM key."""
+    if not args:
+        return None
+    today = today or date.today()
+    text = " ".join(args).strip().lower()
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        return text
+    if text == "this month":
+        return today.strftime("%Y-%m")
+    if text == "last month":
+        first = today.replace(day=1)
+        return (first - timedelta(days=1)).strftime("%Y-%m")
+    words = text.split()
+    month = _MONTH_NAMES.get(words[0])
+    if month is None and words[0].isdigit() and 1 <= int(words[0]) <= 12:
+        month = int(words[0])
+    if month is None:
+        raise ParseError(f"Could not read a month from {text!r}. Try `2026-08` or `aug`.")
+    year = int(words[1]) if len(words) > 1 and words[1].isdigit() else today.year
+    return f"{year:04d}-{month:02d}"
+
+
+def _month_label(month: str) -> str:
+    year, index = month.split("-")
+    return f"{calendar.month_name[int(index)]} {year}"
+
+
 async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
-    month = context.args[0] if context.args else None
-    records = storage.list_shifts(update.effective_user.id, month=month, limit=20)
+    try:
+        month = parse_month(context.args)
+    except ParseError as exc:
+        await update.message.reply_text(str(exc))
+        return
+    records = storage.list_shifts(
+        update.effective_user.id, month=month, limit=None if month else 20
+    )
     if not records:
-        await update.message.reply_text("No shifts logged yet.")
+        await update.message.reply_text(
+            f"No shifts logged for {_month_label(month)}." if month else "No shifts logged yet."
+        )
         return
     lines = [
         f"#{r.id} {r.day.isoformat()} "
         f"{r.start.strftime('%H:%M')}–{r.end.strftime('%H:%M')} "
-        f"{r.event} — {_money(r.pay, r.currency)}"
+        f"{r.event} — {r.hours.normalize()}h — {_money(r.pay, r.currency)}"
         for r in records
     ]
+    if month:
+        hours = sum((r.hours for r in records), Decimal("0"))
+        pay = sum((r.pay for r in records), Decimal("0"))
+        lines.insert(0, _month_label(month))
+        lines.append(
+            f"Total: {len(records)} shifts, {hours.normalize()}h, "
+            f"{_money(pay, records[0].currency)}"
+        )
+    await update.message.reply_text("\n".join(lines))
+
+
+async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Month-by-month summary, or every shift in one month."""
+    if context.args:
+        await list_shifts(update, context)
+        return
+    storage = _storage(context)
+    summaries = storage.month_summaries(update.effective_user.id)
+    if not summaries:
+        await update.message.reply_text("No shifts logged yet.")
+        return
+    lines = [
+        f"{_month_label(s.month)} — {s.shifts} shifts, "
+        f"{round_money(s.hours).normalize()}h, {_money(s.pay, s.currency)}"
+        for s in summaries
+    ]
+    grand_total = sum((s.pay for s in summaries), Decimal("0"))
+    lines.append(f"All time: {_money(grand_total, summaries[0].currency)}")
+    lines.append("Send /month 2026-08 (or /month aug) to see that month's shifts.")
     await update.message.reply_text("\n".join(lines))
 
 
 async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     user_id = update.effective_user.id
-    month = context.args[0] if context.args else None
+    try:
+        month = parse_month(context.args)
+    except ParseError as exc:
+        await update.message.reply_text(str(exc))
+        return
     records = storage.list_shifts(user_id, month=month)
     if not records:
         await update.message.reply_text("No shifts logged for that period.")
@@ -332,7 +414,7 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     currency_code = records[0].currency
     hours = sum((r.hours for r in records), Decimal("0"))
     pay = sum((r.pay for r in records), Decimal("0"))
-    label = month or "all time"
+    label = _month_label(month) if month else "All time"
     await update.message.reply_text(
         f"{label}: {len(records)} shifts, {hours.normalize()}h, "
         f"total {_money(pay, currency_code)}"
@@ -353,7 +435,11 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
-    month = context.args[0] if context.args else None
+    try:
+        month = parse_month(context.args)
+    except ParseError as exc:
+        await update.message.reply_text(str(exc))
+        return
     records = storage.list_shifts(update.effective_user.id, month=month)
     if not records:
         await update.message.reply_text("Nothing to export.")
@@ -406,6 +492,7 @@ def build_application(token: str, db_path: str) -> Application:
     application.add_handler(CommandHandler("break", break_default))
     application.add_handler(CommandHandler("log", log_shift))
     application.add_handler(CommandHandler("list", list_shifts))
+    application.add_handler(CommandHandler(["month", "months"], months))
     application.add_handler(CommandHandler("total", total))
     application.add_handler(CommandHandler("delete", delete_shift))
     application.add_handler(CommandHandler("export", export))
