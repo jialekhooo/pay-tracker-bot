@@ -31,6 +31,7 @@ class Shift:
     start: time
     end: time
     event: str
+    location: str = ""
     rest: Break = NO_BREAK
     break_specified: bool = False
     rate_override: Decimal | None = None
@@ -171,7 +172,7 @@ def extract_break(text: str, default_paid: bool = False) -> tuple[str, Break | N
 
 _RATE_RE = re.compile(
     r"""
-    (?:\$|[A-Z]{3}\s*)?
+    (?:\$|\b(?-i:[A-Z]{3})\s*)?
     (?P<amount>\d+(?:\.\d+)?)
     \s*(?:/|\s+per\s+)\s*
     (?:h|hr|hrs|hour|hourly)\b
@@ -191,6 +192,10 @@ def extract_rate(text: str) -> tuple[str, Decimal | None]:
         return text, None
     return text[: match.start()] + " " + text[match.end() :], rate
 
+
+_TRAILING_AT_RE = re.compile(r"\s*(?:\bat\b|@)\s*$", re.IGNORECASE)
+
+_LOCATION_RE = re.compile(r"(?:@|\bat\b)\s*(?P<place>.+)$", re.IGNORECASE)
 
 _DATE_CANDIDATE_RE = re.compile(
     r"""
@@ -230,12 +235,24 @@ def _parse_anywhere(text: str, today: date) -> tuple[date, time, time, str]:
                 continue
             event = remainder[: time_match.start()] + " " + remainder[time_match.end() :]
             event = re.sub(r"\s{2,}", " ", event.replace("\x00", " ")).strip(" ,;-–—")
+            event = _TRAILING_AT_RE.sub("", event)
             if event:
                 return day, start, end, event
     raise ParseError(
         "Send it as: <event> <date> <start>-<end> <rate>, "
         "e.g. `Wedding gig 12/8 6pm-11.30pm 25/h`."
     )
+
+
+def extract_location(text: str) -> tuple[str, str]:
+    """Pull a location marked with "@" or "at" (e.g. "@ Marina Bay Sands")."""
+    match = _LOCATION_RE.search(text)
+    if not match:
+        return text, ""
+    place = match.group("place").strip(" ,;-–—")
+    if not place or _TIME_RANGE_RE.search(place) or _DATE_CANDIDATE_RE.search(place):
+        return text, ""
+    return text[: match.start()], place
 
 
 def parse_shift(
@@ -245,6 +262,7 @@ def parse_shift(
     today = today or date.today()
     text, rate_override = extract_rate(text)
     text, rest = extract_break(text, default_paid=default_break_paid)
+    text, location = extract_location(text)
     tokens = _split_tokens(text)
     day: date | None = None
     start: time | None = None
@@ -255,12 +273,19 @@ def parse_shift(
             day = parse_date(tokens[0], today)
             start = parse_time(tokens[1])
             end = parse_time(tokens[2])
-            event = " ".join(tokens[3:]).strip(" ,;-")
+            event = _TRAILING_AT_RE.sub("", " ".join(tokens[3:]).strip(" ,;-"))
         except ParseError:
             day = None
     if day is None or start is None or end is None or not event:
         day, start, end, event = _parse_anywhere(text, today)
-    shift = Shift(day=day, start=start, end=end, event=event, rate_override=rate_override)
+    shift = Shift(
+        day=day,
+        start=start,
+        end=end,
+        event=event,
+        location=location,
+        rate_override=rate_override,
+    )
     return shift if rest is None else shift.with_break(rest)
 
 

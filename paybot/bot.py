@@ -31,11 +31,13 @@ logger = logging.getLogger(__name__)
 
 HELP_TEXT = """*Pay tracker*
 
-To log, simply key in *event name*, *date + time*, and *pay rate*:
+To log, simply key in *event name*, *date + time*, *location* and *pay rate*:
 ```
-Wedding gig 12/8 6pm-11.30pm 25/h
+Wedding gig 12/8 6pm-11.30pm 25/h @ Marina Bay Sands
 ```
 → 5.5h × SGD 25 = SGD 137.50
+
+Location is optional — write it after `@` or `at`.
 
 The order doesn't matter and the rate is optional (your saved rate is used):
 `12/8 6pm-11.30pm Wedding gig`
@@ -238,6 +240,7 @@ def _store_shift(
         start=shift.start,
         end=shift.end,
         event=shift.event,
+        location=shift.location,
         break_hours=Decimal(str(shift.rest.hours)),
         break_paid=shift.rest.paid,
         hours=hours,
@@ -266,8 +269,8 @@ def _summarise(
     line = (
         f"#{shift_id} {shift.day.isoformat()} "
         f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')} "
-        f"{shift.event} — {hours.normalize()}h @ {_money(rate, currency)}/h = "
-        f"{_money(pay, currency)}"
+        f"{shift.event}{' @ ' + shift.location if shift.location else ''} — "
+        f"{hours.normalize()}h @ {_money(rate, currency)}/h = {_money(pay, currency)}"
     )
     if shift.rest.hours:
         kind = "paid" if shift.rest.paid else "unpaid"
@@ -370,7 +373,8 @@ def _shift_line(record: ShiftRecord) -> str:
     return (
         f"#{record.id} {record.day.isoformat()} "
         f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} "
-        f"{record.event} — {record.hours.normalize()}h — {_money(record.pay, record.currency)}"
+        f"{record.event}{' @ ' + record.location if record.location else ''} — "
+        f"{record.hours.normalize()}h — {_money(record.pay, record.currency)}"
     )
 
 
@@ -453,7 +457,8 @@ async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         flag = " ⚠️ clash" if record.id in clashing else ""
         lines.append(
             f"  #{record.id} {record.start.strftime('%H:%M')}–"
-            f"{record.end.strftime('%H:%M')} {record.event}{flag}"
+            f"{record.end.strftime('%H:%M')} {record.event}"
+            f"{' @ ' + record.location if record.location else ''}{flag}"
         )
     await update.message.reply_text("\n".join(lines))
 
@@ -523,7 +528,8 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             continue
         months_touched.add(record.day.strftime("%Y-%m"))
         deleted.append(
-            f"#{shift_id} {record.day.isoformat()} {record.event} "
+            f"#{shift_id} {record.day.isoformat()} {record.event}"
+            f"{' @ ' + record.location if record.location else ''} "
             f"(−{_money(record.pay, record.currency)})"
         )
 
@@ -592,6 +598,7 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "start",
             "end",
             "event",
+            "location",
             "break_hours",
             "break_paid",
             "hours",
@@ -607,6 +614,7 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 r.start.strftime("%H:%M"),
                 r.end.strftime("%H:%M"),
                 r.event,
+                r.location,
                 r.break_hours,
                 "paid" if r.break_paid else "unpaid",
                 r.hours,

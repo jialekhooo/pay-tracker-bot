@@ -189,9 +189,35 @@ def test_event_name_first_variants():
     assert shift.hours == 10.5
 
 
+def test_location_after_at_sign():
+    shift = parse_shift(
+        "Wedding gig 12/8 6pm-11.30pm 25/h @ Marina Bay Sands", today=TODAY
+    )
+    assert shift.event == "Wedding gig"
+    assert shift.location == "Marina Bay Sands"
+    assert shift.rate_override == Decimal("25")
+
+
+def test_location_after_at_word_and_without_one():
+    shift = parse_shift("13/8 9am-6pm Roadshow at ION Orchard", today=TODAY)
+    assert (shift.event, shift.location) == ("Roadshow", "ION Orchard")
+
+    shift = parse_shift("13/8 9am-6pm Roadshow", today=TODAY)
+    assert shift.location == ""
+
+
+def test_location_is_stored_and_returned(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    shift_id = storage.add_shift(
+        1, date(2026, 8, 12), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD", location="MBS",
+    )
+    assert storage.get_shift(1, shift_id).location == "MBS"
+
+
 def _record(shift_id, day, start, end, event="Gig"):
     return ShiftRecord(
-        id=shift_id, day=day, start=start, end=end, event=event,
+        id=shift_id, day=day, start=start, end=end, event=event, location="",
         break_hours=Decimal("0"), break_paid=False, hours=Decimal("8"),
         pay=Decimal("100"), currency="SGD",
     )

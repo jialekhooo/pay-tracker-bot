@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS shifts (
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
     event TEXT NOT NULL,
+    location TEXT NOT NULL DEFAULT '',
     break_hours TEXT NOT NULL DEFAULT '0',
     break_paid INTEGER NOT NULL DEFAULT 0,
     hours TEXT NOT NULL,
@@ -57,6 +58,7 @@ class ShiftRecord:
     start: time
     end: time
     event: str
+    location: str
     break_hours: Decimal
     break_paid: bool
     hours: Decimal
@@ -91,6 +93,7 @@ class Storage:
                 "default_break_paid": "INTEGER NOT NULL DEFAULT 0",
             },
             "shifts": {
+                "location": "TEXT NOT NULL DEFAULT ''",
                 "break_hours": "TEXT NOT NULL DEFAULT '0'",
                 "break_paid": "INTEGER NOT NULL DEFAULT 0",
             },
@@ -172,12 +175,13 @@ class Storage:
         hours: Decimal,
         pay: Decimal,
         currency: str,
+        location: str = "",
     ) -> int:
         cursor = self._conn.execute(
             """
-            INSERT INTO shifts (user_id, day, start_time, end_time, event, break_hours,
-                                break_paid, hours, pay, currency)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO shifts (user_id, day, start_time, end_time, event, location,
+                                break_hours, break_paid, hours, pay, currency)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -185,6 +189,7 @@ class Storage:
                 start.isoformat(timespec="minutes"),
                 end.isoformat(timespec="minutes"),
                 event,
+                location,
                 str(break_hours),
                 int(break_paid),
                 str(hours),
@@ -276,6 +281,7 @@ def _to_record(row: sqlite3.Row) -> ShiftRecord:
         start=time.fromisoformat(row["start_time"]),
         end=time.fromisoformat(row["end_time"]),
         event=row["event"],
+        location=row["location"] or "",
         break_hours=Decimal(row["break_hours"]),
         break_paid=bool(row["break_paid"]),
         hours=Decimal(row["hours"]),
