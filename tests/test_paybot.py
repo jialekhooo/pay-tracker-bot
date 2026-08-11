@@ -167,6 +167,37 @@ def test_month_summaries(tmp_path):
     ]
 
 
+def test_totals_drop_after_delete(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    ids = [
+        storage.add_shift(
+            1, date(2026, 8, day), time(9, 0), time(17, 0), "Gig",
+            Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD",
+        )
+        for day in (1, 2, 3)
+    ]
+    assert storage.month_summaries(1)[0].pay == Decimal("300.0")
+
+    assert storage.delete_shift(1, ids[0]) is True
+    assert storage.month_summaries(1)[0].pay == Decimal("200.0")
+    assert len(storage.list_shifts(1, month="2026-08")) == 2
+
+    assert storage.delete_shifts(1, month="2026-08") == 2
+    assert storage.month_summaries(1) == []
+    assert storage.list_shifts(1) == []
+
+
+def test_get_shift_returns_none_for_other_users(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    shift_id = storage.add_shift(
+        1, date(2026, 8, 1), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD",
+    )
+    assert storage.get_shift(1, shift_id) is not None
+    assert storage.get_shift(2, shift_id) is None
+    assert storage.delete_shift(2, shift_id) is False
+
+
 def test_storage_roundtrip(tmp_path):
     storage = Storage(tmp_path / "test.sqlite3")
     config = RateConfig(default_rate=Decimal("20"), event_rates={"gig": Decimal("30")})

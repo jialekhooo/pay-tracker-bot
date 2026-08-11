@@ -233,12 +233,28 @@ class Storage:
             for row in rows
         ]
 
+    def get_shift(self, user_id: int, shift_id: int) -> ShiftRecord | None:
+        row = self._conn.execute(
+            "SELECT * FROM shifts WHERE user_id = ? AND id = ?", (user_id, shift_id)
+        ).fetchone()
+        return None if row is None else _to_record(row)
+
     def delete_shift(self, user_id: int, shift_id: int) -> bool:
         cursor = self._conn.execute(
             "DELETE FROM shifts WHERE user_id = ? AND id = ?", (user_id, shift_id)
         )
         self._conn.commit()
         return cursor.rowcount > 0
+
+    def delete_shifts(self, user_id: int, month: str | None = None) -> int:
+        query = "DELETE FROM shifts WHERE user_id = ?"
+        params: list[object] = [user_id]
+        if month:
+            query += " AND substr(day, 1, 7) = ?"
+            params.append(month)
+        cursor = self._conn.execute(query, params)
+        self._conn.commit()
+        return cursor.rowcount
 
 
 def _to_record(row: sqlite3.Row) -> ShiftRecord:

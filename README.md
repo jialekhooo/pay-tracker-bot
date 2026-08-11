@@ -54,7 +54,8 @@ today 9am-6pm no break Roadshow           -> ignores the /break default
 | `/list [month]` | Recent shifts, or every shift in a month |
 | `/month` | Summary per month; `/month aug` lists that month's shifts |
 | `/total [month]` | Total hours and pay (all time without a month) |
-| `/delete <id>` | Delete a shift |
+| `/delete <id> [id ...]` | Delete shifts; the reply shows the recomputed totals |
+| `/clear [month]` | Delete a whole month (or everything) after confirming |
 | `/export [month]` | CSV export |
 
 Months can be written as `2026-08`, `aug`, `August 2025`, `8`, `this month`, or

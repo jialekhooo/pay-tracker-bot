@@ -62,7 +62,8 @@ Commands:
 /list [month] — recent shifts, or every shift in a month
 /month — summary of every month; /month aug shows that month's shifts
 /total [month] — total pay (all time when no month given)
-/delete <id> — delete a shift
+/delete <id> [id ...] — delete shifts and show the updated totals
+/clear [month] — delete every shift (or a whole month) after confirming
 /export [YYYY-MM] — CSV of your shifts
 """
 
@@ -421,16 +422,89 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+def _totals_line(storage: Storage, user_id: int, month: str | None, currency: str) -> str:
+    """Recomputed totals so the user sees numbers drop after a delete."""
+    lines = []
+    if month:
+        records = storage.list_shifts(user_id, month=month)
+        pay = sum((r.pay for r in records), Decimal("0"))
+        hours = sum((r.hours for r in records), Decimal("0"))
+        lines.append(
+            f"{_month_label(month)} now: {len(records)} shifts, "
+            f"{hours.normalize()}h, {_money(pay, currency)}"
+        )
+    summaries = storage.month_summaries(user_id)
+    grand_total = sum((s.pay for s in summaries), Decimal("0"))
+    lines.append(f"All time now: {_money(grand_total, currency)}")
+    return "\n".join(lines)
+
+
 async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
-    if not context.args or not context.args[0].lstrip("#").isdigit():
-        await update.message.reply_text("Usage: /delete <id>")
+    user_id = update.effective_user.id
+    config = storage.get_config(user_id)
+    ids = [arg.lstrip("#") for arg in context.args]
+    if not ids or not all(i.isdigit() for i in ids):
+        await update.message.reply_text("Usage: /delete <id> [id ...], or /clear <month>")
         return
-    shift_id = int(context.args[0].lstrip("#"))
-    if storage.delete_shift(update.effective_user.id, shift_id):
-        await update.message.reply_text(f"Deleted shift #{shift_id}.")
-    else:
-        await update.message.reply_text(f"No shift #{shift_id} found.")
+
+    deleted: list[str] = []
+    missing: list[str] = []
+    months_touched: set[str] = set()
+    for shift_id in (int(i) for i in ids):
+        record = storage.get_shift(user_id, shift_id)
+        if record is None or not storage.delete_shift(user_id, shift_id):
+            missing.append(f"#{shift_id}")
+            continue
+        months_touched.add(record.day.strftime("%Y-%m"))
+        deleted.append(
+            f"#{shift_id} {record.day.isoformat()} {record.event} "
+            f"(−{_money(record.pay, record.currency)})"
+        )
+
+    reply: list[str] = []
+    if deleted:
+        reply.append(f"Deleted {len(deleted)} shift{'s' if len(deleted) > 1 else ''}:")
+        reply.extend(deleted)
+        month = months_touched.pop() if len(months_touched) == 1 else None
+        reply.append(_totals_line(storage, user_id, month, config.currency))
+    if missing:
+        reply.append(f"Not found: {', '.join(missing)}")
+    await update.message.reply_text("\n".join(reply))
+
+
+async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delete every shift, or every shift in one month, after a confirmation."""
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    config = storage.get_config(user_id)
+    args = [a for a in context.args if a.lower() != "confirm"]
+    confirmed = any(a.lower() == "confirm" for a in context.args)
+    try:
+        month = parse_month(args)
+    except ParseError as exc:
+        await update.message.reply_text(str(exc))
+        return
+
+    scope = _month_label(month) if month else "all months"
+    pending = storage.list_shifts(user_id, month=month)
+    if not pending:
+        await update.message.reply_text(f"Nothing logged for {scope}.")
+        return
+    if not confirmed:
+        pay = sum((r.pay for r in pending), Decimal("0"))
+        await update.message.reply_text(
+            f"This deletes {len(pending)} shifts ({_money(pay, config.currency)}) "
+            f"from {scope}.\nSend `/clear {' '.join(args) + ' ' if args else ''}confirm` "
+            "to go ahead."
+        )
+        return
+
+    removed = storage.delete_shifts(user_id, month=month)
+    await update.message.reply_text(
+        f"Deleted {removed} shifts from {scope}.\n"
+        f"{_totals_line(storage, user_id, month, config.currency)}"
+    )
 
 
 async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -494,7 +568,8 @@ def build_application(token: str, db_path: str) -> Application:
     application.add_handler(CommandHandler("list", list_shifts))
     application.add_handler(CommandHandler(["month", "months"], months))
     application.add_handler(CommandHandler("total", total))
-    application.add_handler(CommandHandler("delete", delete_shift))
+    application.add_handler(CommandHandler(["delete", "del"], delete_shift))
+    application.add_handler(CommandHandler("clear", clear_shifts))
     application.add_handler(CommandHandler("export", export))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_shift))
     return application
