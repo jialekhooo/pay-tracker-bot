@@ -63,6 +63,9 @@ export PAYBOT_FEED_PORT=8799            # local port the feed listens on
 export PAYBOT_FEED_URL=https://your-host # public base URL of that port
 ```
 
+Google Calendar refuses URLs carrying basic-auth credentials, so host the feed
+somewhere with a plain `https://host/<token>.ics` address (see below).
+
 ## Reminders
 
 `/reminders on` sends you a message the evening before (20:00, UTC+8 by default)
@@ -130,6 +133,21 @@ python -m paybot.bot
 The bot uses long polling, so it works from any machine with outbound internet —
 no public URL needed. Keep the process running (e.g. `systemd`, `tmux`, or a
 small VPS) for the bot to stay responsive.
+
+### Hosting bot + calendar feed together
+
+`paybot.web` runs the bot and serves the subscription feed in one process, which
+is what any host (Fly.io, Render, Railway, a VPS) needs:
+
+```bash
+export TELEGRAM_BOT_TOKEN="123456:ABC..."
+export PAYBOT_FEED_URL="https://your-app.example.com"   # public address of this service
+uvicorn paybot.web:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+The included `Dockerfile` does exactly that and keeps the database on a `/data`
+volume, so shifts survive redeploys. `GET /healthz` is a health check and
+`GET /<token>.ics` is the per-user feed.
 
 ## Tests
 
