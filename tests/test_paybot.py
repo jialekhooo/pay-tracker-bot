@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from paybot.bot import SECTIONS, commands_text, parse_month
+from paybot.bot import _ADD_LOCATION_RE, SECTIONS, commands_text, parse_month
 from paybot.calendar_export import google_link, to_ics
 from paybot.feed import feed_body, issue_token
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
@@ -271,6 +271,38 @@ def test_feed_body_covers_the_owner_only(tmp_path):
     assert "SUMMARY:Mine" in body
     assert "Theirs" not in body
     assert feed_body(storage, "not-a-token", today=today) is None
+
+
+def test_set_location_for_event_backfills_matching_shifts(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    for day, event in (
+        (date(2026, 8, 13), "Hermes Private Sale"),
+        (date(2026, 8, 14), "hermes private sale"),
+        (date(2026, 8, 15), "Wedding gig"),
+    ):
+        storage.add_shift(
+            1, day, time(9, 0), time(17, 0), event,
+            Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD",
+        )
+
+    assert storage.set_location_for_event(1, "Hermes Private Sale", "MBS") == 2
+    located = {r.event: r.location for r in storage.list_shifts(1)}
+    assert located["Hermes Private Sale"] == "MBS"
+    assert located["hermes private sale"] == "MBS"
+    assert located["Wedding gig"] == ""
+    assert storage.set_location_for_event(1, "Gala dinner", "MBS") == 0
+
+
+def test_add_location_command_reads_event_and_place():
+    match = _ADD_LOCATION_RE.match("location Hermes Private Sale @ MBS")
+    assert match.group("event") == "Hermes Private Sale"
+    assert match.group("location") == "MBS"
+
+    spelled_out = _ADD_LOCATION_RE.match("location Wedding gig at Marina Bay Sands")
+    assert spelled_out.group("event") == "Wedding gig"
+    assert spelled_out.group("location") == "Marina Bay Sands"
+
+    assert _ADD_LOCATION_RE.match("location Hermes Private Sale") is None
 
 
 def test_every_command_is_listed_and_unique():

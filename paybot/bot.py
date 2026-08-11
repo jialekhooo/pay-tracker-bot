@@ -334,6 +334,39 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(reply))
 
 
+_ADD_LOCATION_RE = re.compile(
+    r"^(?:location|loc|place)\s+(?P<event>.+?)\s*(?:@|\bat\b)\s*(?P<location>.+)$",
+    re.IGNORECASE,
+)
+
+
+async def add_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Backfill a detail on shifts you already logged, e.g. their location."""
+    match = _ADD_LOCATION_RE.match(" ".join(context.args))
+    if match is None:
+        await update.message.reply_text(
+            "Use `/add location <event name> @ <place>` — e.g.\n"
+            "`/add location Hermes Private Sale @ MBS`\n"
+            "It sets that location on every shift of that event.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+    event = match.group("event").strip()
+    location = match.group("location").strip()
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    changed = storage.set_location_for_event(user_id, event, location)
+    if not changed:
+        await update.message.reply_text(
+            f"No shifts named {event!r} — check the name with /list."
+        )
+        return
+    records = [r for r in storage.list_shifts(user_id) if r.location == location][:10]
+    lines = [f"{changed} shift{'s' if changed != 1 else ''} now at {location}:"]
+    lines.extend(_shift_line(r) for r in records)
+    await update.message.reply_text("\n".join(lines))
+
+
 _MONTH_NAMES = {
     name.lower(): index
     for index, name in enumerate(calendar.month_name[1:], start=1)
@@ -826,6 +859,10 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
             Command(
                 ("log",), "/log <shift>",
                 "Log a shift (or just send it as a message)", log_shift,
+            ),
+            Command(
+                ("add",), "/add location <event> @ <place>",
+                "Add a location to every shift of an event", add_detail,
             ),
             Command(
                 ("delete", "del"), "/delete <id> [id ...]",

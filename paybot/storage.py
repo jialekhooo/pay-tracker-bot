@@ -347,6 +347,18 @@ class Storage:
         ).fetchone()
         return None if row is None else _to_record(row)
 
+    def set_location_for_event(self, user_id: int, event: str, location: str) -> int:
+        """Give every shift of that event a location; returns how many changed."""
+        cursor = self._conn.execute(
+            """
+            UPDATE shifts SET location = ?
+            WHERE user_id = ? AND (lower(event) = lower(?) OR lower(event) LIKE lower(?))
+            """,
+            (location, user_id, event, f"%{event}%"),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
     def delete_shift(self, user_id: int, shift_id: int) -> bool:
         cursor = self._conn.execute(
             "DELETE FROM shifts WHERE user_id = ? AND id = ?", (user_id, shift_id)
