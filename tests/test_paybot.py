@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from paybot.parsing import ParseError, parse_shift
+from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay
 from paybot.storage import Storage
 
@@ -95,6 +95,39 @@ def test_shift_without_break_is_unspecified():
     shift = parse_shift("today 9am-6pm Roadshow", today=TODAY)
     assert shift.break_specified is False
     assert shift.hours == 9
+
+
+def test_inline_rate_override():
+    shift = parse_shift("13/8 8.30am - 8pm 15/h Hermes Private Sale", today=TODAY)
+    assert shift.day == date(2026, 8, 13)
+    assert shift.start == time(8, 30)
+    assert shift.end == time(20, 0)
+    assert shift.event == "Hermes Private Sale"
+    assert shift.rate_override == Decimal("15")
+    config = RateConfig(default_rate=Decimal("10"), event_rates={})
+    assert calculate_pay(shift.hours, shift.event, config, shift.rate_override) == Decimal(
+        "172.50"
+    )
+
+
+def test_parse_multiple_lines():
+    text = """13/8 8.30am - 8pm 15/h Hermes Private Sale
+14/8 9am - 8pm 15/h Hermes Private Sale
+15/8 9am - 9pm 15/h Hermes Private Sale
+16/8 7.45am - 8pm 15/h Hermes Private Sale"""
+    results = parse_shifts(text, today=TODAY)
+    assert len(results) == 4
+    shifts = [shift for _, shift in results]
+    assert all(isinstance(s, Shift) for s in shifts)
+    assert [s.day.day for s in shifts] == [13, 14, 15, 16]
+    assert [s.hours for s in shifts] == [11.5, 11, 12, 12.25]
+    assert {s.event for s in shifts} == {"Hermes Private Sale"}
+
+
+def test_parse_multiple_lines_reports_bad_line():
+    results = parse_shifts("13/8 8.30am - 8pm Gig\nnonsense line", today=TODAY)
+    assert isinstance(results[0][1], Shift)
+    assert isinstance(results[1][1], ParseError)
 
 
 def test_storage_roundtrip(tmp_path):

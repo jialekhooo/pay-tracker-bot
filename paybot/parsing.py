@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal, InvalidOperation
 
 
 class ParseError(ValueError):
@@ -32,6 +33,7 @@ class Shift:
     event: str
     rest: Break = NO_BREAK
     break_specified: bool = False
+    rate_override: Decimal | None = None
 
     @property
     def gross_hours(self) -> float:
@@ -167,11 +169,35 @@ def extract_break(text: str, default_paid: bool = False) -> tuple[str, Break | N
     return text[: match.start()] + " " + text[match.end() :], rest
 
 
+_RATE_RE = re.compile(
+    r"""
+    (?:\$|[A-Z]{3}\s*)?
+    (?P<amount>\d+(?:\.\d+)?)
+    \s*(?:/|\s+per\s+)\s*
+    (?:h|hr|hrs|hour|hourly)\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def extract_rate(text: str) -> tuple[str, Decimal | None]:
+    """Pull an inline hourly rate (e.g. "15/h", "$20 per hour") out of the message."""
+    match = _RATE_RE.search(text)
+    if not match:
+        return text, None
+    try:
+        rate = Decimal(match.group("amount"))
+    except InvalidOperation:
+        return text, None
+    return text[: match.start()] + " " + text[match.end() :], rate
+
+
 def parse_shift(
     text: str, today: date | None = None, default_break_paid: bool = False
 ) -> Shift:
     """Parse "<date> <start> <end> <event name>" with forgiving formats."""
     today = today or date.today()
+    text, rate_override = extract_rate(text)
     text, rest = extract_break(text, default_paid=default_break_paid)
     tokens = _split_tokens(text)
     if len(tokens) < 4:
@@ -184,5 +210,21 @@ def parse_shift(
     event = " ".join(tokens[3:]).strip(" ,;-")
     if not event:
         raise ParseError("Please include an event name.")
-    shift = Shift(day=day, start=start, end=end, event=event)
+    shift = Shift(day=day, start=start, end=end, event=event, rate_override=rate_override)
     return shift if rest is None else shift.with_break(rest)
+
+
+def parse_shifts(
+    text: str, today: date | None = None, default_break_paid: bool = False
+) -> list[tuple[str, Shift | ParseError]]:
+    """Parse one shift per non-empty line, keeping per-line errors."""
+    results: list[tuple[str, Shift | ParseError]] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip().lstrip("-\u2022*").strip()
+        if not line:
+            continue
+        try:
+            results.append((line, parse_shift(line, today, default_break_paid)))
+        except ParseError as exc:
+            results.append((line, exc))
+    return results

@@ -26,10 +26,12 @@ def round_money(amount: Decimal) -> Decimal:
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def calculate_pay(hours: float, event: str, config: RateConfig) -> Decimal:
+def calculate_pay(
+    hours: float, event: str, config: RateConfig, rate_override: Decimal | None = None
+) -> Decimal:
     """Pay for a shift, applying an overtime multiplier beyond a threshold."""
     worked = Decimal(str(hours))
-    rate = config.rate_for(event)
+    rate = config.rate_for(event) if rate_override is None else rate_override
     threshold = config.overtime_after_hours
     if threshold is None or worked <= threshold:
         return round_money(worked * rate)

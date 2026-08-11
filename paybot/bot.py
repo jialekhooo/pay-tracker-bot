@@ -19,8 +19,8 @@ from telegram.ext import (
     filters,
 )
 
-from .parsing import Break, ParseError, parse_shift
-from .pay import calculate_pay, round_money
+from .parsing import Break, ParseError, Shift, parse_shifts
+from .pay import RateConfig, calculate_pay, round_money
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,13 @@ Examples:
 `12/8 6pm-11.30pm Wedding gig`
 `2026-08-12 18:00 23:30 Wedding gig`
 `today 9am to 5pm Roadshow`
+
+Send several lines at once to log a batch, and add `15/h` in a line to
+override the rate for that shift:
+```
+13/8 8.30am - 8pm 15/h Hermes Private Sale
+14/8 9am - 8pm 15/h Hermes Private Sale
+```
 
 Breaks — add them anywhere in the message:
 `today 9am-6pm 1h unpaid break Roadshow` (deducted)
@@ -205,27 +212,16 @@ async def break_default(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    storage = _storage(context)
-    user_id = update.effective_user.id
-    text = update.message.text or ""
-    if text.startswith("/log"):
-        text = text[len("/log") :]
-    config = storage.get_config(user_id)
-    try:
-        shift = parse_shift(text, default_break_paid=config.default_break_paid)
-    except ParseError as exc:
-        await update.message.reply_text(
-            f"{exc}\n\nSend /help to see the accepted formats.",
-        )
-        return
-
-    if not shift.break_specified and config.default_break_hours > 0:
-        shift = shift.with_break(
-            Break(hours=float(config.default_break_hours), paid=config.default_break_paid)
-        )
+def _store_shift(
+    storage: Storage, user_id: int, shift: Shift, config: RateConfig
+) -> tuple[int, Decimal, Decimal, Decimal]:
     hours = Decimal(str(shift.hours))
-    pay = calculate_pay(shift.hours, shift.event, config)
+    rate = (
+        shift.rate_override
+        if shift.rate_override is not None
+        else config.rate_for(shift.event)
+    )
+    pay = calculate_pay(shift.hours, shift.event, config, shift.rate_override)
     shift_id = storage.add_shift(
         user_id=user_id,
         day=shift.day,
@@ -238,22 +234,75 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pay=pay,
         currency=config.currency,
     )
-    break_line = ""
+    return shift_id, hours, pay, rate
+
+
+def _apply_default_break(shift: Shift, config: RateConfig) -> Shift:
+    if shift.break_specified or config.default_break_hours <= 0:
+        return shift
+    return shift.with_break(
+        Break(hours=float(config.default_break_hours), paid=config.default_break_paid)
+    )
+
+
+def _summarise(
+    shift: Shift,
+    shift_id: int,
+    hours: Decimal,
+    pay: Decimal,
+    rate: Decimal,
+    currency: str,
+) -> str:
+    line = (
+        f"#{shift_id} {shift.day.isoformat()} "
+        f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')} "
+        f"{shift.event} — {hours.normalize()}h @ {_money(rate, currency)}/h = "
+        f"{_money(pay, currency)}"
+    )
     if shift.rest.hours:
         kind = "paid" if shift.rest.paid else "unpaid"
-        break_line = (
-            f"Break: {Decimal(str(shift.rest.hours)).normalize()}h {kind}"
-            f"{'' if shift.rest.paid else ' (deducted)'}\n"
+        line += f" ({Decimal(str(shift.rest.hours)).normalize()}h {kind} break)"
+    return line
+
+
+async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    text = update.message.text or ""
+    if text.startswith("/log"):
+        text = text[len("/log") :]
+    config = storage.get_config(user_id)
+
+    parsed = parse_shifts(text, default_break_paid=config.default_break_paid)
+    if not parsed:
+        await update.message.reply_text(
+            "Send a shift, e.g. 13/8 8.30am-8pm 15/h Hermes Private Sale"
         )
-    await update.message.reply_text(
-        f"Logged #{shift_id}: {shift.event}\n"
-        f"{shift.day.isoformat()} "
-        f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')}\n"
-        f"{break_line}"
-        f"Paid hours: {hours.normalize()}h @ "
-        f"{_money(config.rate_for(shift.event), config.currency)}/h\n"
-        f"Pay: {_money(pay, config.currency)}"
-    )
+        return
+
+    logged: list[str] = []
+    failed: list[str] = []
+    total_pay = Decimal("0")
+    for line, result in parsed:
+        if isinstance(result, ParseError):
+            failed.append(f"• {line} — {result}")
+            continue
+        shift = _apply_default_break(result, config)
+        shift_id, hours, pay, rate = _store_shift(storage, user_id, shift, config)
+        total_pay += pay
+        logged.append(_summarise(shift, shift_id, hours, pay, rate, config.currency))
+
+    reply: list[str] = []
+    if logged:
+        reply.append(f"Logged {len(logged)} shift{'s' if len(logged) > 1 else ''}:")
+        reply.extend(logged)
+        if len(logged) > 1:
+            reply.append(f"Total: {_money(total_pay, config.currency)}")
+    if failed:
+        reply.append("Could not read:")
+        reply.extend(failed)
+        reply.append("Send /help to see the accepted formats.")
+    await update.message.reply_text("\n".join(reply))
 
 
 async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
