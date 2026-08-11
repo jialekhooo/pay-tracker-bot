@@ -24,7 +24,7 @@ from telegram.ext import (
 
 from .parsing import Break, ParseError, Shift, parse_shifts
 from .pay import RateConfig, calculate_pay, round_money
-from .storage import Storage
+from .storage import ShiftRecord, Storage
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ Commands:
 /break <hours> paid|unpaid — default break when you don't mention one (`/break off`)
 /list [month] — recent shifts, or every shift in a month
 /month — summary of every month; /month aug shows that month's shifts
-/total [month] — total pay (all time when no month given)
+/total [month] — this month's shifts + totals (or another month)
 /delete <id> [id ...] — delete shifts and show the updated totals
 /clear [month] — delete every shift (or a whole month) after confirming
 /export [YYYY-MM] — CSV of your shifts
@@ -342,6 +342,14 @@ def parse_month(args: list[str], today: date | None = None) -> str | None:
     return f"{year:04d}-{month:02d}"
 
 
+def _shift_line(record: ShiftRecord) -> str:
+    return (
+        f"#{record.id} {record.day.isoformat()} "
+        f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} "
+        f"{record.event} — {record.hours.normalize()}h — {_money(record.pay, record.currency)}"
+    )
+
+
 def _month_label(month: str) -> str:
     year, index = month.split("-")
     return f"{calendar.month_name[int(index)]} {year}"
@@ -362,12 +370,7 @@ async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             f"No shifts logged for {_month_label(month)}." if month else "No shifts logged yet."
         )
         return
-    lines = [
-        f"#{r.id} {r.day.isoformat()} "
-        f"{r.start.strftime('%H:%M')}–{r.end.strftime('%H:%M')} "
-        f"{r.event} — {r.hours.normalize()}h — {_money(r.pay, r.currency)}"
-        for r in records
-    ]
+    lines = [_shift_line(r) for r in records]
     if month:
         hours = sum((r.hours for r in records), Decimal("0"))
         pay = sum((r.pay for r in records), Decimal("0"))
@@ -408,18 +411,25 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except ParseError as exc:
         await update.message.reply_text(str(exc))
         return
+    month = month or date.today().strftime("%Y-%m")
     records = storage.list_shifts(user_id, month=month)
     if not records:
-        await update.message.reply_text("No shifts logged for that period.")
+        await update.message.reply_text(
+            f"No shifts logged for {_month_label(month)}.\n"
+            f"{_totals_line(storage, user_id, None, storage.get_config(user_id).currency)}"
+        )
         return
     currency_code = records[0].currency
     hours = sum((r.hours for r in records), Decimal("0"))
     pay = sum((r.pay for r in records), Decimal("0"))
-    label = _month_label(month) if month else "All time"
-    await update.message.reply_text(
-        f"{label}: {len(records)} shifts, {hours.normalize()}h, "
-        f"total {_money(pay, currency_code)}"
+    summaries = storage.month_summaries(user_id)
+    grand_total = sum((s.pay for s in summaries), Decimal("0"))
+    lines = [_month_label(month), *(_shift_line(r) for r in records)]
+    lines.append(
+        f"Total: {len(records)} shifts, {hours.normalize()}h, {_money(pay, currency_code)}"
     )
+    lines.append(f"All time: {_money(grand_total, currency_code)}")
+    await update.message.reply_text("\n".join(lines))
 
 
 def _totals_line(storage: Storage, user_id: int, month: str | None, currency: str) -> str:

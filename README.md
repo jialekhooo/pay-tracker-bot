@@ -53,7 +53,7 @@ today 9am-6pm no break Roadshow           -> ignores the /break default
 | `/break 1 unpaid` | Default break for shifts that don't mention one (`/break off`) |
 | `/list [month]` | Recent shifts, or every shift in a month |
 | `/month` | Summary per month; `/month aug` lists that month's shifts |
-| `/total [month]` | Total hours and pay (all time without a month) |
+| `/total [month]` | Every shift in the month plus month and all-time totals (this month by default) |
 | `/delete <id> [id ...]` | Delete shifts; the reply shows the recomputed totals |
 | `/clear [month]` | Delete a whole month (or everything) after confirming |
 | `/export [month]` | CSV export |
