@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from paybot.bot import _ADD_LOCATION_RE, SECTIONS, commands_text, parse_month
+from paybot.bot import SECTIONS, _edit_record, commands_text, parse_edit, parse_month
 from paybot.calendar_export import google_link, to_ics
 from paybot.feed import feed_body, issue_token
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
@@ -273,7 +273,7 @@ def test_feed_body_covers_the_owner_only(tmp_path):
     assert feed_body(storage, "not-a-token", today=today) is None
 
 
-def test_set_location_for_event_backfills_matching_shifts(tmp_path):
+def _sale_storage(tmp_path):
     storage = Storage(tmp_path / "test.sqlite3")
     for day, event in (
         (date(2026, 8, 13), "Hermes Private Sale"),
@@ -282,27 +282,64 @@ def test_set_location_for_event_backfills_matching_shifts(tmp_path):
     ):
         storage.add_shift(
             1, day, time(9, 0), time(17, 0), event,
-            Decimal("0"), False, Decimal("8"), Decimal("100"), "SGD",
+            Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
         )
-
-    assert storage.set_location_for_event(1, "Hermes Private Sale", "MBS") == 2
-    located = {r.event: r.location for r in storage.list_shifts(1)}
-    assert located["Hermes Private Sale"] == "MBS"
-    assert located["hermes private sale"] == "MBS"
-    assert located["Wedding gig"] == ""
-    assert storage.set_location_for_event(1, "Gala dinner", "MBS") == 0
+    return storage
 
 
-def test_add_location_command_reads_event_and_place():
-    match = _ADD_LOCATION_RE.match("location Hermes Private Sale @ MBS")
-    assert match.group("event") == "Hermes Private Sale"
-    assert match.group("location") == "MBS"
+def test_find_shifts_matches_event_name_ignoring_case(tmp_path):
+    storage = _sale_storage(tmp_path)
+    assert len(storage.find_shifts(1, "Hermes Private Sale")) == 2
+    assert len(storage.find_shifts(1, "hermes")) == 2
+    assert storage.find_shifts(1, "Gala dinner") == []
+    assert storage.find_shifts(2, "Hermes Private Sale") == []
 
-    spelled_out = _ADD_LOCATION_RE.match("location Wedding gig at Marina Bay Sands")
-    assert spelled_out.group("event") == "Wedding gig"
-    assert spelled_out.group("location") == "Marina Bay Sands"
 
-    assert _ADD_LOCATION_RE.match("location Hermes Private Sale") is None
+def test_update_shift_writes_only_named_columns(tmp_path):
+    storage = _sale_storage(tmp_path)
+    shift = storage.list_shifts(1)[0]
+    assert storage.update_shift(1, shift.id, location="MBS") is True
+    assert storage.get_shift(1, shift.id).location == "MBS"
+    assert storage.update_shift(2, shift.id, location="Theirs") is False
+    with pytest.raises(ValueError):
+        storage.update_shift(1, shift.id, currency="USD")
+
+
+def test_parse_edit_reads_field_target_and_value():
+    assert parse_edit("location Hermes Private Sale @ MBS") == (
+        "location", "Hermes Private Sale", "MBS",
+    )
+    assert parse_edit("location Wedding gig at Marina Bay Sands") == (
+        "location", "Wedding gig", "Marina Bay Sands",
+    )
+    assert parse_edit("rate Hermes Private Sale 18") == (
+        "rate", "Hermes Private Sale", "18",
+    )
+    assert parse_edit("rate #12 to $20/h") == ("rate", "#12", "20")
+    assert parse_edit("name Hermes Private Sale = Hermes PS") == (
+        "name", "Hermes Private Sale", "Hermes PS",
+    )
+    assert parse_edit("time Hermes Private Sale 9am-8pm") == (
+        "time", "Hermes Private Sale", "9am-8pm",
+    )
+    assert parse_edit("location Hermes Private Sale") is None
+    assert parse_edit("colour Hermes Private Sale = red") is None
+
+
+def test_edit_record_recalculates_pay_for_rate_and_time(tmp_path):
+    storage = _sale_storage(tmp_path)
+    config = storage.get_config(1)
+    record = storage.find_shifts(1, "Wedding gig")[0]
+
+    assert _edit_record(record, "location", "MBS", config) == {"location": "MBS"}
+    assert _edit_record(record, "name", "Gala", config) == {"event": "Gala"}
+    assert _edit_record(record, "rate", "20", config)["pay"] == "160.00"
+
+    retimed = _edit_record(record, "time", "9am-8pm", config)
+    assert retimed["start_time"] == "09:00"
+    assert retimed["end_time"] == "20:00"
+    assert retimed["hours"] == "11"
+    assert retimed["pay"] == "165.00"
 
 
 def test_every_command_is_listed_and_unique():

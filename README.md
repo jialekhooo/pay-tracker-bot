@@ -14,8 +14,18 @@ Roadshow today 9am to 5pm
 
 Without a rate in the line, the stored rate for that event (or your default) is used.
 A location is anything after `@` or `at`; it shows up in listings and the CSV export.
-To add one to shifts you already logged, send
-`/add location Hermes Private Sale @ MBS` — every shift of that event gets it.
+To fix up shifts you already logged, use `/add <field> <event or #id> <value>`:
+
+```
+/add location Hermes Private Sale @ MBS
+/add rate Hermes Private Sale 18
+/add name Hermes Private Sale = Hermes PS
+/add time Hermes Private Sale 9am-8pm
+/add time #12 9am-8pm          # just that one shift
+```
+
+Event names match ignoring case, and a fragment (`hermes`) matches too. Changing
+the rate or the times recalculates that shift's pay, keeping its break.
 
 Reply: `Logged #3: Wedding gig — 5.5h @ SGD 25.00/h — Pay: SGD 137.50`
 
@@ -99,7 +109,7 @@ command menu on startup. Unknown commands get a nudge back to `/commands`.
 | `/commands` | List every command (alias `/cmds`) |
 | `/help` | How to log shifts (alias `/start`) |
 | `/log <shift>` | Log a shift (or just send it as a plain message) |
-| `/add location <event> @ <place>` | Set that location on every shift of the event |
+| `/add <field> <event> <value>` | Backfill location/rate/name/time (alias `/set`) |
 | `/rate` | Show current rates |
 | `/rate 25` | Set the default hourly rate |
 | `/rate wedding gig 30` | Rate for a specific event name |

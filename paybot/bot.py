@@ -35,7 +35,7 @@ from .reminders import (
     format_offset,
     parse_offset,
 )
-from .schedule import find_clashes
+from .schedule import find_clashes, span
 from .storage import ShiftRecord, Storage
 
 logger = logging.getLogger(__name__)
@@ -334,36 +334,140 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(reply))
 
 
-_ADD_LOCATION_RE = re.compile(
-    r"^(?:location|loc|place)\s+(?P<event>.+?)\s*(?:@|\bat\b)\s*(?P<location>.+)$",
-    re.IGNORECASE,
+_FIELDS = {
+    "location": "location",
+    "loc": "location",
+    "place": "location",
+    "venue": "location",
+    "rate": "rate",
+    "pay": "rate",
+    "name": "name",
+    "event": "name",
+    "title": "name",
+    "time": "time",
+    "times": "time",
+    "hours": "time",
+}
+
+_EDIT_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "location": (
+        re.compile(r"^(?P<target>.+?)\s*(?:@|=)\s*(?P<value>.+)$"),
+        re.compile(r"^(?P<target>.+?)\s*\bat\b\s*(?P<value>.+)$", re.IGNORECASE),
+    ),
+    "rate": (
+        re.compile(
+            r"^(?P<target>.+?)\s*(?:=|\bto\b)?\s*(?:\$|\b(?-i:[A-Z]{3})\s*)?"
+            r"(?P<value>\d+(?:\.\d+)?)\s*(?:/\s*h(?:r|our)?|per\s+hour)?$",
+            re.IGNORECASE,
+        ),
+    ),
+    "name": (
+        re.compile(r"^(?P<target>.+?)\s*(?:=|->)\s*(?P<value>.+)$"),
+        re.compile(r"^(?P<target>.+?)\s*\bto\b\s*(?P<value>.+)$", re.IGNORECASE),
+    ),
+    "time": (
+        re.compile(
+            r"^(?P<target>.+?)\s*(?:=|\bto\b)?\s*(?P<value>\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?"
+            r"\s*(?:-|–|—|to|till|until)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)$",
+            re.IGNORECASE,
+        ),
+    ),
+}
+
+_TARGET_ID_RE = re.compile(r"^#?(?P<id>\d+)$")
+
+EDIT_USAGE = (
+    "Backfill details on shifts you already logged:\n"
+    "`/add location Hermes Private Sale @ MBS`\n"
+    "`/add rate Hermes Private Sale 18`\n"
+    "`/add name Hermes Private Sale = Hermes PS`\n"
+    "`/add time Hermes Private Sale 9am-8pm`\n"
+    "Use a shift number to change just one: `/add time #12 9am-8pm`."
 )
 
 
+def parse_edit(text: str) -> tuple[str, str, str] | None:
+    """Read `<field> <event or #id> <value>` into (field, target, value)."""
+    head, _, rest = text.strip().partition(" ")
+    field = _FIELDS.get(head.lower())
+    if field is None or not rest.strip():
+        return None
+    for pattern in _EDIT_PATTERNS[field]:
+        match = pattern.match(rest.strip())
+        if match is None:
+            continue
+        target = match.group("target").strip(" ,;=-")
+        value = match.group("value").strip()
+        if target and value:
+            return field, target, value
+    return None
+
+
+def _rehours(record: ShiftRecord, start: time, end: time) -> Decimal:
+    """Paid hours for a new time range, keeping the shift's unpaid break."""
+    begins, ends = span(record.day, start, end)
+    worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
+    if not record.break_paid:
+        worked -= record.break_hours
+    return max(worked, Decimal("0"))
+
+
+def _edit_record(
+    record: ShiftRecord, field: str, value: str, config: RateConfig
+) -> dict[str, object]:
+    """Columns to write for one shift, recalculating pay when it changes."""
+    if field == "location":
+        return {"location": value}
+    if field == "name":
+        return {"event": value}
+    if field == "rate":
+        rate = Decimal(value)
+        return {"pay": str(calculate_pay(float(record.hours), record.event, config, rate))}
+    parts = re.split(r"\s*(?:-|–|—|to|till|until)\s*", value, maxsplit=1)
+    start, end = parse_time(parts[0]), parse_time(parts[1])
+    hours = _rehours(record, start, end)
+    old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
+    return {
+        "start_time": start.isoformat(timespec="minutes"),
+        "end_time": end.isoformat(timespec="minutes"),
+        "hours": str(hours.normalize()),
+        "pay": str(calculate_pay(float(hours), record.event, config, round_money(old_rate))),
+    }
+
+
 async def add_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Backfill a detail on shifts you already logged, e.g. their location."""
-    match = _ADD_LOCATION_RE.match(" ".join(context.args))
-    if match is None:
-        await update.message.reply_text(
-            "Use `/add location <event name> @ <place>` — e.g.\n"
-            "`/add location Hermes Private Sale @ MBS`\n"
-            "It sets that location on every shift of that event.",
-            parse_mode=ParseMode.MARKDOWN,
-        )
+    """Backfill a detail — location, rate, name or time — on shifts already logged."""
+    parsed = parse_edit(" ".join(context.args))
+    if parsed is None:
+        await update.message.reply_text(EDIT_USAGE, parse_mode=ParseMode.MARKDOWN)
         return
-    event = match.group("event").strip()
-    location = match.group("location").strip()
+    field, target, value = parsed
     storage = _storage(context)
     user_id = update.effective_user.id
-    changed = storage.set_location_for_event(user_id, event, location)
-    if not changed:
-        await update.message.reply_text(
-            f"No shifts named {event!r} — check the name with /list."
-        )
+    by_id = _TARGET_ID_RE.match(target)
+    if by_id:
+        record = storage.get_shift(user_id, int(by_id.group("id")))
+        records = [record] if record else []
+    else:
+        records = storage.find_shifts(user_id, target)
+    if not records:
+        await update.message.reply_text(f"No shifts matching {target!r} — check /list.")
         return
-    records = [r for r in storage.list_shifts(user_id) if r.location == location][:10]
-    lines = [f"{changed} shift{'s' if changed != 1 else ''} now at {location}:"]
-    lines.extend(_shift_line(r) for r in records)
+
+    config = storage.get_config(user_id)
+    try:
+        changes = [(r, _edit_record(r, field, value, config)) for r in records]
+    except (ParseError, InvalidOperation) as exc:
+        await update.message.reply_text(f"Could not read {value!r}: {exc}")
+        return
+    for record, fields in changes:
+        storage.update_shift(user_id, record.id, **fields)
+
+    updated = [storage.get_shift(user_id, r.id) for r, _ in changes]
+    lines = [f"Updated {len(updated)} shift{'s' if len(updated) != 1 else ''}:"]
+    lines.extend(_shift_line(r) for r in updated[:10] if r)
+    if len(updated) > 10:
+        lines.append(f"…and {len(updated) - 10} more.")
     await update.message.reply_text("\n".join(lines))
 
 
@@ -861,8 +965,8 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
                 "Log a shift (or just send it as a message)", log_shift,
             ),
             Command(
-                ("add",), "/add location <event> @ <place>",
-                "Add a location to every shift of an event", add_detail,
+                ("add", "set", "edit"), "/add location|rate|name|time <event> <value>",
+                "Backfill a detail on every shift of an event", add_detail,
             ),
             Command(
                 ("delete", "del"), "/delete <id> [id ...]",

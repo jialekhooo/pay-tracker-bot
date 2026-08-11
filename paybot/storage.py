@@ -347,17 +347,31 @@ class Storage:
         ).fetchone()
         return None if row is None else _to_record(row)
 
-    def set_location_for_event(self, user_id: int, event: str, location: str) -> int:
-        """Give every shift of that event a location; returns how many changed."""
-        cursor = self._conn.execute(
+    def find_shifts(self, user_id: int, event: str) -> list[ShiftRecord]:
+        """Shifts whose event name matches, exactly or as a fragment, ignoring case."""
+        rows = self._conn.execute(
             """
-            UPDATE shifts SET location = ?
+            SELECT * FROM shifts
             WHERE user_id = ? AND (lower(event) = lower(?) OR lower(event) LIKE lower(?))
+            ORDER BY day ASC, start_time ASC, id ASC
             """,
-            (location, user_id, event, f"%{event}%"),
+            (user_id, event, f"%{event}%"),
+        )
+        return [_to_record(row) for row in rows]
+
+    def update_shift(self, user_id: int, shift_id: int, **fields: object) -> bool:
+        """Overwrite the given columns of one shift."""
+        allowed = {"day", "start_time", "end_time", "event", "location", "hours", "pay"}
+        unknown = set(fields) - allowed
+        if unknown:
+            raise ValueError(f"Cannot update {', '.join(sorted(unknown))}")
+        assignments = ", ".join(f"{column} = ?" for column in fields)
+        cursor = self._conn.execute(
+            f"UPDATE shifts SET {assignments} WHERE user_id = ? AND id = ?",
+            (*fields.values(), user_id, shift_id),
         )
         self._conn.commit()
-        return cursor.rowcount
+        return cursor.rowcount > 0
 
     def delete_shift(self, user_id: int, shift_id: int) -> bool:
         cursor = self._conn.execute(
