@@ -33,6 +33,7 @@ from .reminders import (
     DEFAULT_UTC_OFFSET_MINUTES,
     due_reminders,
     format_offset,
+    local_today,
     parse_offset,
 )
 from .schedule import find_clashes, span
@@ -75,6 +76,16 @@ Send /commands for everything the bot can do.
 
 def _storage(context: ContextTypes.DEFAULT_TYPE) -> Storage:
     return context.application.bot_data["storage"]
+
+
+def _offset(storage: Storage, user_id: int) -> int:
+    """The user's timezone offset in minutes, defaulting to UTC+8."""
+    reminder = storage.get_reminder(user_id)
+    return reminder.utc_offset_minutes if reminder else DEFAULT_UTC_OFFSET_MINUTES
+
+
+def _today(storage: Storage, user_id: int) -> date:
+    return local_today(_offset(storage, user_id))
 
 
 def _money(amount: Decimal, currency: str) -> str:
@@ -284,7 +295,9 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = text[len("/log") :]
     config = storage.get_config(user_id)
 
-    parsed = parse_shifts(text, default_break_paid=config.default_break_paid)
+    parsed = parse_shifts(
+        text, today=_today(storage, user_id), default_break_paid=config.default_break_paid
+    )
     if not parsed:
         await update.message.reply_text(
             "Send a shift, e.g. 13/8 8.30am-8pm 15/h Hermes Private Sale"
@@ -521,7 +534,7 @@ def _month_label(month: str) -> str:
 async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     try:
-        month = parse_month(context.args)
+        month = parse_month(context.args, today=_today(storage, update.effective_user.id))
     except ParseError as exc:
         await update.message.reply_text(str(exc))
         return
@@ -645,7 +658,7 @@ async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     days = 14
     if context.args and context.args[0].isdigit():
         days = max(1, min(int(context.args[0]), 365))
-    today = date.today()
+    today = _today(storage, user_id)
     records = storage.shifts_between(user_id, today, today + timedelta(days=days - 1))
     if not records:
         await update.message.reply_text(f"Nothing booked in the next {days} days.")
@@ -673,12 +686,13 @@ async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     user_id = update.effective_user.id
+    today = _today(storage, user_id)
     try:
-        month = parse_month(context.args)
+        month = parse_month(context.args, today=today)
     except ParseError as exc:
         await update.message.reply_text(str(exc))
         return
-    month = month or date.today().strftime("%Y-%m")
+    month = month or today.strftime("%Y-%m")
     records = storage.list_shifts(user_id, month=month)
     if not records:
         await update.message.reply_text(
@@ -759,7 +773,7 @@ async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     args = [a for a in context.args if a.lower() != "confirm"]
     confirmed = any(a.lower() == "confirm" for a in context.args)
     try:
-        month = parse_month(args)
+        month = parse_month(args, today=_today(storage, user_id))
     except ParseError as exc:
         await update.message.reply_text(str(exc))
         return
@@ -788,7 +802,7 @@ async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     try:
-        month = parse_month(context.args)
+        month = parse_month(context.args, today=_today(storage, update.effective_user.id))
     except ParseError as exc:
         await update.message.reply_text(str(exc))
         return
@@ -843,10 +857,10 @@ def _calendar_records(
         return [r for r in records if r is not None], "selected shifts"
     if args and args[0].lower() == "all":
         return storage.list_shifts(user_id), "all shifts"
-    month = parse_month(args)
+    today = _today(storage, user_id)
+    month = parse_month(args, today=today)
     if month:
         return storage.list_shifts(user_id, month=month), _month_label(month)
-    today = date.today()
     return storage.shifts_between(user_id, today, today + timedelta(days=365)), "upcoming shifts"
 
 
@@ -865,8 +879,7 @@ async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
-    reminder = storage.get_reminder(user_id)
-    offset = reminder.utc_offset_minutes if reminder else DEFAULT_UTC_OFFSET_MINUTES
+    offset = _offset(storage, user_id)
     data = io.BytesIO(to_ics(records).encode("utf-8"))
     data.name = "shifts.ics"
     lines = [

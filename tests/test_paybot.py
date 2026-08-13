@@ -9,7 +9,7 @@ from paybot.calendar_export import google_link, to_ics
 from paybot.feed import feed_body, issue_token
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
 from paybot.pay import RateConfig, calculate_pay, format_hours
-from paybot.reminders import due, format_offset, parse_offset
+from paybot.reminders import due, format_offset, local_today, parse_offset
 from paybot.schedule import find_clashes
 from paybot.storage import Reminder, ShiftRecord, Storage
 
@@ -539,3 +539,15 @@ def test_four_digit_times_are_read_as_24_hour_clock(text, start, end, hours):
     assert shift.event == "SuperReturn"
     assert (shift.start, shift.end) == (start, end)
     assert shift.hours == hours
+
+
+@pytest.mark.parametrize(
+    "now_utc, expected",
+    [
+        (datetime(2026, 8, 13, 16, 30), date(2026, 8, 14)),  # already the 14th in SGT
+        (datetime(2026, 8, 13, 10, 0), date(2026, 8, 13)),
+        (datetime(2026, 8, 13, 23, 59), date(2026, 8, 14)),
+    ],
+)
+def test_today_follows_the_users_timezone(now_utc, expected):
+    assert local_today(480, now_utc) == expected
