@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from html import escape
 
 from telegram import BotCommand, Update
 from telegram.constants import ParseMode
@@ -773,48 +774,68 @@ def _hourly(record: ShiftRecord) -> Decimal:
     return record.pay / record.hours if record.hours else Decimal("0")
 
 
-def _breakdown_line(item: Worked, now: datetime, currency: str) -> str:
-    """One shift spelled out, so the arithmetic behind the total is visible."""
-    record = item.record
-    when = (
-        f"#{record.id} {record.day.strftime('%a %d %b')} "
-        f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} {record.event}"
-    )
-    rate = f"{_money(_hourly(record), currency)}/h"
-    if item.state == "done":
-        return f"  {when}: {format_hours(record.hours)}h × {rate} = {_money(item.pay, currency)}"
-    if item.state == "running":
-        return (
-            f"  {when}: running — {format_hours(item.hours)}h of "
-            f"{format_hours(record.hours)}h up to {now.strftime('%H:%M')} × {rate} = "
-            f"{_money(item.pay, currency)} of {_money(record.pay, currency)}"
+def _amount(value: Decimal) -> str:
+    return f"{round_money(value):,.2f}"
+
+
+def _breakdown_table(shifts: list[Worked]) -> list[str]:
+    """One aligned row per shift: when, what, and the hours × rate that made the pay."""
+    rows: list[tuple[str, str, str, str, str, str]] = []
+    for item in shifts:
+        record = item.record
+        hours = format_hours(record.hours)
+        if item.state == "running":
+            hours = f"{format_hours(item.hours)}/{hours}"
+        earned = record.pay if item.state == "upcoming" else item.pay
+        rows.append(
+            (
+                record.day.strftime("%a %d %b"),
+                record.event[:16],
+                f"{hours}h",
+                _amount(_hourly(record)),
+                _amount(earned),
+                {"done": "", "running": "  now", "upcoming": "  soon"}[item.state],
+            )
         )
-    return (
-        f"  {when}: not started — {format_hours(record.hours)}h × {rate} = "
-        f"{_money(record.pay, currency)} to come"
-    )
+    widths = [max(len(row[column]) for row in rows) for column in range(5)]
+    return [
+        f"{day:<{widths[0]}}  {event:<{widths[1]}}  {hours:>{widths[2]}}"
+        f" \u00d7 {rate:>{widths[3]}} = {pay:>{widths[4]}}{tag}"
+        for day, event, hours, rate, pay, tag in rows
+    ]
 
 
 def _earnings_block(
     label: str, records: list[ShiftRecord], now: datetime, currency: str
 ) -> list[str]:
+    """A section of the /earnings reply, as Telegram HTML."""
     if not records:
-        return [f"{label}: nothing logged."]
+        return [f"<b>{escape(label)}</b>", "nothing logged", ""]
     tally = earned_by(records, now)
     counted = tally.finished + (1 if tally.in_progress else 0)
+    table = "\n".join(escape(line) for line in _breakdown_table(tally.shifts))
     lines = [
-        f"{label}: {_money(tally.pay, currency)} so far "
-        f"({counted} shift{'' if counted == 1 else 's'}, {format_hours(tally.hours)}h)"
+        f"<b>{escape(label)}</b>",
+        f"<pre>{table}</pre>",
+        f"Earned  <b>{_money(tally.pay, currency)}</b>  "
+        f"\u00b7 {format_hours(tally.hours)}h \u00b7 "
+        f"{counted} shift{'' if counted == 1 else 's'}",
     ]
-    lines += [_breakdown_line(item, now, currency) for item in tally.shifts]
     if tally.booked_pay > 0:
         remaining = tally.booked + (1 if tally.in_progress else 0)
         lines.append(
-            f"  still to come: {_money(tally.booked_pay, currency)} "
-            f"({remaining} shift{'' if remaining == 1 else 's'}) → "
+            f"To come {_money(tally.booked_pay, currency)}  "
+            f"\u00b7 {remaining} shift{'' if remaining == 1 else 's'} \u2192 "
             f"{_money(tally.pay + tally.booked_pay, currency)} projected"
         )
+    lines.append("")
     return lines
+
+
+async def _send_earnings(update: Update, header: str, blocks: list[str]) -> None:
+    await update.message.reply_text(
+        "\n".join([header, "", *blocks]).strip(), parse_mode=ParseMode.HTML
+    )
 
 
 async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -826,32 +847,36 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     currency = storage.get_config(user_id).currency
     scope = " ".join(context.args).strip().lower()
     monday = today - timedelta(days=today.weekday())
+    header = f"\U0001f4b0 <b>Earnings</b> \u00b7 as of {now.strftime('%a %d %b, %H:%M')}"
 
     if scope in ("today", "day"):
         records = storage.shifts_between(user_id, today, today)
-        lines = [f"Earnings as of {now.strftime('%a %d %b %H:%M')}"]
-        lines += _earnings_block(f"Today ({today.strftime('%a %d %b')})", records, now, currency)
-        await update.message.reply_text("\n".join(lines))
+        label = f"Today \u00b7 {today.strftime('%a %d %b')}"
+        await _send_earnings(update, header, _earnings_block(label, records, now, currency))
         return
 
     if scope in ("", "week", "this week", "month", "this month"):
-        week = storage.shifts_between(user_id, monday, monday + timedelta(days=6))
-        month = storage.list_shifts(user_id, month=today.strftime("%Y-%m"))
-        lines = [f"Earnings as of {now.strftime('%a %d %b %H:%M')}"]
+        blocks: list[str] = []
         if scope in ("", "week", "this week"):
-            lines += _earnings_block(
-                f"This week (from {monday.strftime('%d %b')})", week, now, currency
+            sunday = monday + timedelta(days=6)
+            week = storage.shifts_between(user_id, monday, sunday)
+            label = (
+                f"This week \u00b7 {monday.strftime('%d %b')}\u2013{sunday.strftime('%d %b')}"
             )
+            blocks += _earnings_block(label, week, now, currency)
         if scope in ("", "month", "this month"):
-            lines += _earnings_block(_month_label(today.strftime("%Y-%m")), month, now, currency)
-        await update.message.reply_text("\n".join(lines))
+            month_shifts = storage.list_shifts(user_id, month=today.strftime("%Y-%m"))
+            blocks += _earnings_block(
+                _month_label(today.strftime("%Y-%m")), month_shifts, now, currency
+            )
+        await _send_earnings(update, header, blocks)
         return
 
     if scope == "last week":
         start = monday - timedelta(days=7)
         records = storage.shifts_between(user_id, start, start + timedelta(days=6))
-        label = f"Week of {start.strftime('%d %b')}"
-        await update.message.reply_text("\n".join(_earnings_block(label, records, now, currency)))
+        label = f"Last week \u00b7 {start.strftime('%d %b')}"
+        await _send_earnings(update, header, _earnings_block(label, records, now, currency))
         return
 
     try:
@@ -860,8 +885,8 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(str(exc))
         return
     records = storage.list_shifts(user_id, month=month)
-    await update.message.reply_text(
-        "\n".join(_earnings_block(_month_label(month), records, now, currency))
+    await _send_earnings(
+        update, header, _earnings_block(_month_label(month), records, now, currency)
     )
 
 

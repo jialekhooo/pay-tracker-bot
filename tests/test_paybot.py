@@ -6,12 +6,14 @@ import pytest
 
 from paybot.bot import (
     SECTIONS,
+    _breakdown_table,
     _earnings_block,
     _edit_record,
     commands_text,
     earned_by,
     parse_edit,
     parse_month,
+    worked_by,
 )
 from paybot.calendar_export import google_link, to_ics
 from paybot.feed import feed_body, issue_token
@@ -22,6 +24,7 @@ from paybot.schedule import find_clashes
 from paybot.storage import Reminder, ShiftRecord, Storage
 
 TODAY = date(2026, 8, 11)
+NOON = datetime(2026, 8, 13, 12, 0)
 
 
 def test_parse_iso_format():
@@ -561,39 +564,38 @@ def test_today_follows_the_users_timezone(now_utc, expected):
     assert local_today(480, now_utc) == expected
 
 
-def test_earnings_counts_finished_shifts_and_the_one_running_now():
-    today = date(2026, 8, 13)
+def test_earnings_table_shows_the_arithmetic_for_each_shift():
+    shifts = [
+        worked_by(_record(1, date(2026, 8, 11), time(9, 0), time(17, 0)), NOON),
+        worked_by(_record(2, date(2026, 8, 13), time(9, 0), time(17, 0)), NOON),
+        worked_by(_record(3, date(2026, 8, 20), time(9, 0), time(17, 0)), NOON),
+    ]
+    assert _breakdown_table(shifts) == [
+        "Tue 11 Aug  Gig    8h \u00d7 12.50 = 100.00",
+        "Thu 13 Aug  Gig  3/8h \u00d7 12.50 =  37.50  now",
+        "Thu 20 Aug  Gig    8h \u00d7 12.50 = 100.00  soon",
+    ]
+
+
+def test_earnings_block_totals_what_is_earned_and_what_is_still_to_come():
     records = [
         _record(1, date(2026, 8, 11), time(9, 0), time(17, 0)),
-        _record(2, today, time(9, 0), time(17, 0)),
+        _record(2, date(2026, 8, 13), time(9, 0), time(17, 0)),
         _record(3, date(2026, 8, 20), time(9, 0), time(17, 0)),
     ]
-    lines = _earnings_block("August 2026", records, datetime(2026, 8, 13, 13, 0), "SGD")
-    assert lines[0] == "August 2026: SGD 150.00 so far (2 shifts, 12h)"
-    assert lines[1] == "  #1 Tue 11 Aug 09:00–17:00 Gig: 8h × SGD 12.50/h = SGD 100.00"
-    assert lines[2] == (
-        "  #2 Thu 13 Aug 09:00–17:00 Gig: running — 4h of 8h up to 13:00 "
-        "× SGD 12.50/h = SGD 50.00 of SGD 100.00"
-    )
+    lines = _earnings_block("August 2026", records, NOON, "SGD")
+    assert lines[0] == "<b>August 2026</b>"
+    assert lines[1].startswith("<pre>Tue 11 Aug") and lines[1].endswith("</pre>")
+    assert lines[2] == "Earned  <b>SGD 137.50</b>  \u00b7 11h \u00b7 2 shifts"
     assert lines[3] == (
-        "  #3 Thu 20 Aug 09:00–17:00 Gig: not started — 8h × SGD 12.50/h "
-        "= SGD 100.00 to come"
+        "To come SGD 162.50  \u00b7 2 shifts \u2192 SGD 300.00 projected"
     )
-    assert lines[4] == "  still to come: SGD 150.00 (2 shifts) → SGD 300.00 projected"
 
 
-def test_earnings_ignores_a_shift_that_has_not_started():
-    records = [_record(1, date(2026, 8, 13), time(18, 0), time(23, 0))]
-    lines = _earnings_block("Today", records, datetime(2026, 8, 13, 13, 0), "SGD")
-    assert lines[0] == "Today: SGD 0.00 so far (0 shifts, 0h)"
-    assert lines[-1] == "  still to come: SGD 100.00 (1 shift) → SGD 100.00 projected"
-
-
-def test_earnings_counts_a_shift_that_has_ended_today():
-    records = [_record(1, date(2026, 8, 13), time(9, 0), time(17, 0))]
-    assert _earnings_block("Today", records, datetime(2026, 8, 13, 17, 0), "SGD") == [
-        "Today: SGD 100.00 so far (1 shift, 8h)",
-        "  #1 Thu 13 Aug 09:00–17:00 Gig: 8h × SGD 12.50/h = SGD 100.00",
+def test_earnings_block_without_shifts():
+    assert _earnings_block("This week", [], NOON, "SGD")[:2] == [
+        "<b>This week</b>",
+        "nothing logged",
     ]
 
 
@@ -603,8 +605,3 @@ def test_earnings_counts_an_overnight_shift_pro_rata_after_midnight():
     assert tally.in_progress is records[0]
     assert tally.pay == Decimal("50")
 
-
-def test_earnings_block_without_shifts():
-    assert _earnings_block("This week", [], datetime(2026, 8, 13, 13, 0), "SGD") == [
-        "This week: nothing logged."
-    ]
