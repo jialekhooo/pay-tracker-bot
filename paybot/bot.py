@@ -33,6 +33,7 @@ from .reminders import (
     DEFAULT_UTC_OFFSET_MINUTES,
     due_reminders,
     format_offset,
+    local_clock,
     local_today,
     parse_offset,
 )
@@ -713,32 +714,65 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
-def _split_by_today(
-    records: list[ShiftRecord], today: date
-) -> tuple[list[ShiftRecord], list[ShiftRecord]]:
-    """Worked shifts (today included) and shifts still to come."""
-    worked = [r for r in records if r.day <= today]
-    return worked, [r for r in records if r.day > today]
+@dataclass(frozen=True)
+class Earned:
+    """Pay counted up to a moment in time, splitting off what is still to come."""
+
+    pay: Decimal
+    hours: Decimal
+    finished: int
+    in_progress: ShiftRecord | None
+    booked_pay: Decimal
+    booked: int
+
+
+def earned_by(records: list[ShiftRecord], now: datetime) -> Earned:
+    """Count finished shifts in full and the one running now pro-rata."""
+    pay = hours = booked_pay = Decimal("0")
+    finished = booked = 0
+    running: ShiftRecord | None = None
+    for record in records:
+        start, end = span(record.day, record.start, record.end)
+        if end <= now:
+            pay += record.pay
+            hours += record.hours
+            finished += 1
+        elif start < now:
+            elapsed = Decimal(str((now - start).total_seconds()))
+            total = Decimal(str((end - start).total_seconds()))
+            done = elapsed / total
+            pay += record.pay * done
+            hours += record.hours * done
+            booked_pay += record.pay * (1 - done)
+            running = record
+        else:
+            booked_pay += record.pay
+            booked += 1
+    return Earned(pay, hours, finished, running, booked_pay, booked)
 
 
 def _earnings_block(
-    label: str, records: list[ShiftRecord], today: date, currency: str
+    label: str, records: list[ShiftRecord], now: datetime, currency: str
 ) -> list[str]:
-    worked, booked = _split_by_today(records, today)
     if not records:
         return [f"{label}: nothing logged."]
-    earned = sum((r.pay for r in worked), Decimal("0"))
-    hours = sum((r.hours for r in worked), Decimal("0"))
+    tally = earned_by(records, now)
+    counted = tally.finished + (1 if tally.in_progress else 0)
     lines = [
-        f"{label}: {_money(earned, currency)} so far "
-        f"({len(worked)} shift{'' if len(worked) == 1 else 's'}, {format_hours(hours)}h)"
+        f"{label}: {_money(tally.pay, currency)} so far "
+        f"({counted} shift{'' if counted == 1 else 's'}, {format_hours(tally.hours)}h)"
     ]
-    if booked:
-        to_come = sum((r.pay for r in booked), Decimal("0"))
+    if tally.in_progress:
         lines.append(
-            f"  still booked: {_money(to_come, currency)} "
-            f"({len(booked)} shift{'' if len(booked) == 1 else 's'}) → "
-            f"{_money(earned + to_come, currency)} projected"
+            f"  #{tally.in_progress.id} {tally.in_progress.event} is running — "
+            f"counted up to {now.strftime('%H:%M')}"
+        )
+    if tally.booked_pay > 0:
+        remaining = tally.booked + (1 if tally.in_progress else 0)
+        lines.append(
+            f"  still to come: {_money(tally.booked_pay, currency)} "
+            f"({remaining} shift{'' if remaining == 1 else 's'}) → "
+            f"{_money(tally.pay + tally.booked_pay, currency)} projected"
         )
     return lines
 
@@ -747,7 +781,8 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """How much has been earned so far this week and this month."""
     storage = _storage(context)
     user_id = update.effective_user.id
-    today = _today(storage, user_id)
+    now = local_clock(_offset(storage, user_id))
+    today = now.date()
     currency = storage.get_config(user_id).currency
     scope = " ".join(context.args).strip().lower()
     monday = today - timedelta(days=today.weekday())
@@ -755,13 +790,13 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if scope in ("", "week", "this week", "month", "this month"):
         week = storage.shifts_between(user_id, monday, monday + timedelta(days=6))
         month = storage.list_shifts(user_id, month=today.strftime("%Y-%m"))
-        lines = [f"Earnings as of {today.strftime('%a %d %b')}"]
+        lines = [f"Earnings as of {now.strftime('%a %d %b %H:%M')}"]
         if scope in ("", "week", "this week"):
             lines += _earnings_block(
-                f"This week (from {monday.strftime('%d %b')})", week, today, currency
+                f"This week (from {monday.strftime('%d %b')})", week, now, currency
             )
         if scope in ("", "month", "this month"):
-            lines += _earnings_block(_month_label(today.strftime("%Y-%m")), month, today, currency)
+            lines += _earnings_block(_month_label(today.strftime("%Y-%m")), month, now, currency)
         await update.message.reply_text("\n".join(lines))
         return
 
@@ -769,9 +804,7 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         start = monday - timedelta(days=7)
         records = storage.shifts_between(user_id, start, start + timedelta(days=6))
         label = f"Week of {start.strftime('%d %b')}"
-        await update.message.reply_text(
-            "\n".join(_earnings_block(label, records, today, currency))
-        )
+        await update.message.reply_text("\n".join(_earnings_block(label, records, now, currency)))
         return
 
     try:
@@ -781,7 +814,7 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     records = storage.list_shifts(user_id, month=month)
     await update.message.reply_text(
-        "\n".join(_earnings_block(_month_label(month), records, today, currency))
+        "\n".join(_earnings_block(_month_label(month), records, now, currency))
     )
 
 

@@ -15,10 +15,15 @@ def local_now(reminder: Reminder, now_utc: datetime) -> datetime:
     return now_utc + timedelta(minutes=reminder.utc_offset_minutes)
 
 
-def local_today(utc_offset_minutes: int, now_utc: datetime | None = None) -> date:
-    """The current date in the user's timezone — the server clock runs on UTC."""
+def local_clock(utc_offset_minutes: int, now_utc: datetime | None = None) -> datetime:
+    """The current time in the user's timezone — the server clock runs on UTC."""
     now = now_utc or datetime.now(timezone.utc).replace(tzinfo=None)
-    return (now + timedelta(minutes=utc_offset_minutes)).date()
+    return now + timedelta(minutes=utc_offset_minutes)
+
+
+def local_today(utc_offset_minutes: int, now_utc: datetime | None = None) -> date:
+    """The current date in the user's timezone."""
+    return local_clock(utc_offset_minutes, now_utc).date()
 
 
 def due(reminder: Reminder, now_utc: datetime) -> date | None:

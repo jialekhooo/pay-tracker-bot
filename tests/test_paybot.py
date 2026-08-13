@@ -560,19 +560,34 @@ def test_today_follows_the_users_timezone(now_utc, expected):
     assert local_today(480, now_utc) == expected
 
 
-def test_earnings_block_counts_worked_shifts_and_projects_booked_ones():
+def test_earnings_counts_finished_shifts_and_the_one_running_now():
     today = date(2026, 8, 13)
     records = [
         _record(1, date(2026, 8, 11), time(9, 0), time(17, 0)),
         _record(2, today, time(9, 0), time(17, 0)),
         _record(3, date(2026, 8, 20), time(9, 0), time(17, 0)),
     ]
-    lines = _earnings_block("August 2026", records, today, "SGD")
-    assert lines[0] == "August 2026: SGD 200.00 so far (2 shifts, 16h)"
-    assert lines[1] == "  still booked: SGD 100.00 (1 shift) → SGD 300.00 projected"
+    lines = _earnings_block("August 2026", records, datetime(2026, 8, 13, 13, 0), "SGD")
+    assert lines[0] == "August 2026: SGD 150.00 so far (2 shifts, 12h)"
+    assert lines[1] == "  #2 Gig is running — counted up to 13:00"
+    assert lines[2] == "  still to come: SGD 150.00 (2 shifts) → SGD 300.00 projected"
+
+
+def test_earnings_ignores_a_shift_that_has_not_started():
+    records = [_record(1, date(2026, 8, 13), time(18, 0), time(23, 0))]
+    lines = _earnings_block("Today", records, datetime(2026, 8, 13, 13, 0), "SGD")
+    assert lines[0] == "Today: SGD 0.00 so far (0 shifts, 0h)"
+    assert lines[1] == "  still to come: SGD 100.00 (1 shift) → SGD 100.00 projected"
+
+
+def test_earnings_counts_a_shift_that_has_ended_today():
+    records = [_record(1, date(2026, 8, 13), time(9, 0), time(17, 0))]
+    assert _earnings_block("Today", records, datetime(2026, 8, 13, 17, 0), "SGD") == [
+        "Today: SGD 100.00 so far (1 shift, 8h)"
+    ]
 
 
 def test_earnings_block_without_shifts():
-    assert _earnings_block("This week", [], date(2026, 8, 13), "SGD") == [
+    assert _earnings_block("This week", [], datetime(2026, 8, 13, 13, 0), "SGD") == [
         "This week: nothing logged."
     ]
