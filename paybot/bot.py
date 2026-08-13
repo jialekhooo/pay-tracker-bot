@@ -115,23 +115,39 @@ def _block(lines: list[str]) -> str:
     return "<pre>" + "\n".join(escape(line) for line in lines) + "</pre>"
 
 
+def _hourly(record: ShiftRecord) -> Decimal:
+    return record.pay / record.hours if record.hours else Decimal("0")
+
+
 def _where(event: str, location: str) -> str:
     return f"{event} @ {location}" if location else event
 
 
-def _shift_row(record: ShiftRecord) -> tuple[str, ...]:
-    return (
-        f"#{record.id}",
-        record.day.strftime("%a %d %b"),
-        f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')}",
-        _where(record.event, record.location),
-        f"{format_hours(record.hours)}h",
-        _amount(record.pay),
-    )
+def _entries(heads: list[tuple[str, ...]], details: list[str], right: set[int]) -> list[str]:
+    """Two lines per shift: the name gets a line of its own so nothing is cut off."""
+    lines: list[str] = []
+    for head, detail in zip(_aligned(heads, right), details):
+        lines.append(head)
+        lines.append(f"    {detail}")
+    return lines
 
 
 def _shift_table(records: list[ShiftRecord]) -> str:
-    return _block(_aligned([_shift_row(r) for r in records], right={4, 5}))
+    heads = [
+        (
+            f"#{record.id}",
+            record.day.strftime("%a %d %b"),
+            f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')}",
+            _where(record.event, record.location),
+        )
+        for record in records
+    ]
+    details = [
+        f"{format_hours(record.hours)}h × {_amount(_hourly(record))} "
+        f"= {_amount(record.pay)}"
+        for record in records
+    ]
+    return _block(_entries(heads, details, right=set()))
 
 
 async def _send_html(update: Update, lines: list[str]) -> None:
@@ -319,21 +335,19 @@ def _summarise(
     hours: Decimal,
     pay: Decimal,
     rate: Decimal,
-) -> tuple[str, ...]:
-    """One logged shift as table columns: when, what, and the sum behind the pay."""
+) -> tuple[tuple[str, ...], str]:
+    """One logged shift as a heading row and the sum behind its pay."""
     what = _where(shift.event, shift.location)
     if shift.rest.hours:
         kind = "paid" if shift.rest.paid else "unpaid"
         what += f" ({format_hours(Decimal(str(shift.rest.hours)))}h {kind} break)"
-    return (
+    head = (
         f"#{shift_id}",
         shift.day.strftime("%a %d %b"),
         f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')}",
         what,
-        f"{format_hours(hours)}h",
-        f"× {_amount(rate)}",
-        f"= {_amount(pay)}",
     )
+    return head, f"{format_hours(hours)}h × {_amount(rate)} = {_amount(pay)}"
 
 
 async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -353,7 +367,7 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    logged: list[tuple[str, ...]] = []
+    logged: list[tuple[tuple[str, ...], str]] = []
     failed: list[str] = []
     warnings: list[str] = []
     total_pay = Decimal("0")
@@ -383,7 +397,9 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply: list[str] = []
     if logged:
         reply.append(f"✅ <b>Logged {len(logged)} shift{'s' if len(logged) > 1 else ''}</b>")
-        reply.append(_block(_aligned(logged, right={4, 5, 6})))
+        reply.append(
+            _block(_entries([head for head, _ in logged], [d for _, d in logged], right=set()))
+        )
         if len(logged) > 1:
             reply.append(f"Total  <b>{_money(total_pay, config.currency)}</b>")
     if warnings:
@@ -836,35 +852,28 @@ def earned_by(records: list[ShiftRecord], now: datetime) -> Earned:
     return Earned(pay, hours, finished, running, booked_pay, booked, worked)
 
 
-def _hourly(record: ShiftRecord) -> Decimal:
-    return record.pay / record.hours if record.hours else Decimal("0")
-
-
 def _breakdown_table(shifts: list[Worked]) -> list[str]:
-    """One aligned row per shift: when, what, and the hours × rate that made the pay."""
-    rows: list[tuple[str, str, str, str, str, str]] = []
+    """Two lines per shift: when and what, then the hours × rate that made the pay."""
+    heads: list[tuple[str, ...]] = []
+    details: list[str] = []
+    tags = {"done": "", "running": "  ← running now", "upcoming": "  ← to come"}
     for item in shifts:
         record = item.record
         hours = format_hours(record.hours)
         if item.state == "running":
-            hours = f"{format_hours(item.hours)}/{hours}"
+            hours = f"{format_hours(item.hours)} of {hours}"
         earned = record.pay if item.state == "upcoming" else item.pay
-        rows.append(
+        heads.append(
             (
                 record.day.strftime("%a %d %b"),
-                record.event[:16],
-                f"{hours}h",
-                _amount(_hourly(record)),
-                _amount(earned),
-                {"done": "", "running": "  now", "upcoming": "  soon"}[item.state],
+                f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')}",
+                _where(record.event, record.location),
             )
         )
-    widths = [max(len(row[column]) for row in rows) for column in range(5)]
-    return [
-        f"{day:<{widths[0]}}  {event:<{widths[1]}}  {hours:>{widths[2]}}"
-        f" \u00d7 {rate:>{widths[3]}} = {pay:>{widths[4]}}{tag}"
-        for day, event, hours, rate, pay, tag in rows
-    ]
+        details.append(
+            f"{hours}h × {_amount(_hourly(record))} = {_amount(earned)}{tags[item.state]}"
+        )
+    return _entries(heads, details, right=set())
 
 
 def _earnings_block(

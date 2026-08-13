@@ -565,16 +565,19 @@ def test_today_follows_the_users_timezone(now_utc, expected):
     assert local_today(480, now_utc) == expected
 
 
-def test_earnings_table_shows_the_arithmetic_for_each_shift():
+def test_earnings_table_spells_out_each_shift_over_two_lines():
     shifts = [
         worked_by(_record(1, date(2026, 8, 11), time(9, 0), time(17, 0)), NOON),
         worked_by(_record(2, date(2026, 8, 13), time(9, 0), time(17, 0)), NOON),
         worked_by(_record(3, date(2026, 8, 20), time(9, 0), time(17, 0)), NOON),
     ]
     assert _breakdown_table(shifts) == [
-        "Tue 11 Aug  Gig    8h \u00d7 12.50 = 100.00",
-        "Thu 13 Aug  Gig  3/8h \u00d7 12.50 =  37.50  now",
-        "Thu 20 Aug  Gig    8h \u00d7 12.50 = 100.00  soon",
+        "Tue 11 Aug  09:00–17:00  Gig",
+        "    8h × 12.50 = 100.00",
+        "Thu 13 Aug  09:00–17:00  Gig",
+        "    3 of 8h × 12.50 = 37.50  ← running now",
+        "Thu 20 Aug  09:00–17:00  Gig",
+        "    8h × 12.50 = 100.00  ← to come",
     ]
 
 
@@ -608,12 +611,14 @@ def test_earnings_counts_an_overnight_shift_pro_rata_after_midnight():
 
 
 
-def test_shift_table_lines_up_the_columns():
+def test_shift_table_keeps_full_event_names_on_their_own_line():
     records = [
         _record(1, date(2026, 8, 11), time(9, 0), time(17, 0)),
-        _record(12, date(2026, 8, 13), time(9, 0), time(17, 0), event="SuperReturn"),
+        _record(12, date(2026, 8, 13), time(9, 0), time(17, 0), event="Hermes Private Sale"),
     ]
     assert _shift_table(records) == (
-        "<pre>#1   Tue 11 Aug  09:00–17:00  Gig          8h  100.00\n"
-        "#12  Thu 13 Aug  09:00–17:00  SuperReturn  8h  100.00</pre>"
+        "<pre>#1   Tue 11 Aug  09:00–17:00  Gig\n"
+        "    8h × 12.50 = 100.00\n"
+        "#12  Thu 13 Aug  09:00–17:00  Hermes Private Sale\n"
+        "    8h × 12.50 = 100.00</pre>"
     )
