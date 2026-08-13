@@ -9,6 +9,7 @@ from paybot.bot import (
     _breakdown_table,
     _earnings_block,
     _edit_record,
+    _shift_table,
     commands_text,
     earned_by,
     parse_edit,
@@ -605,3 +606,14 @@ def test_earnings_counts_an_overnight_shift_pro_rata_after_midnight():
     assert tally.in_progress is records[0]
     assert tally.pay == Decimal("50")
 
+
+
+def test_shift_table_lines_up_the_columns():
+    records = [
+        _record(1, date(2026, 8, 11), time(9, 0), time(17, 0)),
+        _record(12, date(2026, 8, 13), time(9, 0), time(17, 0), event="SuperReturn"),
+    ]
+    assert _shift_table(records) == (
+        "<pre>#1   Tue 11 Aug  09:00–17:00  Gig          8h  100.00\n"
+        "#12  Thu 13 Aug  09:00–17:00  SuperReturn  8h  100.00</pre>"
+    )

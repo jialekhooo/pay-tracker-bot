@@ -94,6 +94,50 @@ def _money(amount: Decimal, currency: str) -> str:
     return f"{currency} {round_money(amount):,.2f}"
 
 
+def _amount(value: Decimal) -> str:
+    return f"{round_money(value):,.2f}"
+
+
+def _aligned(rows: list[tuple[str, ...]], right: set[int]) -> list[str]:
+    """Pad the columns so a monospace block lines up."""
+    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
+    return [
+        "  ".join(
+            cell.rjust(widths[column]) if column in right else cell.ljust(widths[column])
+            for column, cell in enumerate(row)
+        ).rstrip()
+        for row in rows
+    ]
+
+
+def _block(lines: list[str]) -> str:
+    """A monospace Telegram block — the only way columns stay aligned in chat."""
+    return "<pre>" + "\n".join(escape(line) for line in lines) + "</pre>"
+
+
+def _where(event: str, location: str) -> str:
+    return f"{event} @ {location}" if location else event
+
+
+def _shift_row(record: ShiftRecord) -> tuple[str, ...]:
+    return (
+        f"#{record.id}",
+        record.day.strftime("%a %d %b"),
+        f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')}",
+        _where(record.event, record.location),
+        f"{format_hours(record.hours)}h",
+        _amount(record.pay),
+    )
+
+
+def _shift_table(records: list[ShiftRecord]) -> str:
+    return _block(_aligned([_shift_row(r) for r in records], right={4, 5}))
+
+
+async def _send_html(update: Update, lines: list[str]) -> None:
+    await update.message.reply_text("\n".join(lines).strip(), parse_mode=ParseMode.HTML)
+
+
 def _decimal(raw: str) -> Decimal:
     try:
         value = Decimal(raw.replace(",", ""))
@@ -275,18 +319,21 @@ def _summarise(
     hours: Decimal,
     pay: Decimal,
     rate: Decimal,
-    currency: str,
-) -> str:
-    line = (
-        f"#{shift_id} {shift.day.isoformat()} "
-        f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')} "
-        f"{shift.event}{' @ ' + shift.location if shift.location else ''} — "
-        f"{format_hours(hours)}h @ {_money(rate, currency)}/h = {_money(pay, currency)}"
-    )
+) -> tuple[str, ...]:
+    """One logged shift as table columns: when, what, and the sum behind the pay."""
+    what = _where(shift.event, shift.location)
     if shift.rest.hours:
         kind = "paid" if shift.rest.paid else "unpaid"
-        line += f" ({format_hours(Decimal(str(shift.rest.hours)))}h {kind} break)"
-    return line
+        what += f" ({format_hours(Decimal(str(shift.rest.hours)))}h {kind} break)"
+    return (
+        f"#{shift_id}",
+        shift.day.strftime("%a %d %b"),
+        f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')}",
+        what,
+        f"{format_hours(hours)}h",
+        f"× {_amount(rate)}",
+        f"= {_amount(pay)}",
+    )
 
 
 async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -306,7 +353,7 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    logged: list[str] = []
+    logged: list[tuple[str, ...]] = []
     failed: list[str] = []
     warnings: list[str] = []
     total_pay = Decimal("0")
@@ -325,29 +372,29 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         shift_id, hours, pay, rate = _store_shift(storage, user_id, shift, config)
         total_pay += pay
-        logged.append(_summarise(shift, shift_id, hours, pay, rate, config.currency))
+        logged.append(_summarise(shift, shift_id, hours, pay, rate))
         for clash in clashes:
             warnings.append(
-                f"⚠️ #{shift_id} {shift.event} clashes with #{clash.id} {clash.event} "
-                f"({clash.day.isoformat()} {clash.start.strftime('%H:%M')}–"
+                f"• #{shift_id} {shift.event} clashes with #{clash.id} {clash.event} "
+                f"({clash.day.strftime('%a %d %b')} {clash.start.strftime('%H:%M')}–"
                 f"{clash.end.strftime('%H:%M')})"
             )
 
     reply: list[str] = []
     if logged:
-        reply.append(f"Logged {len(logged)} shift{'s' if len(logged) > 1 else ''}:")
-        reply.extend(logged)
+        reply.append(f"✅ <b>Logged {len(logged)} shift{'s' if len(logged) > 1 else ''}</b>")
+        reply.append(_block(_aligned(logged, right={4, 5, 6})))
         if len(logged) > 1:
-            reply.append(f"Total: {_money(total_pay, config.currency)}")
+            reply.append(f"Total  <b>{_money(total_pay, config.currency)}</b>")
     if warnings:
-        reply.append("Double booking:")
-        reply.extend(warnings)
-        reply.append("Use /delete <id> to drop the one you don't want.")
+        reply.append("\n⚠️ <b>Double booking</b>")
+        reply.extend(escape(line) for line in warnings)
+        reply.append("Use /delete &lt;id&gt; to drop the one you don't want.")
     if failed:
-        reply.append("Could not read:")
-        reply.extend(failed)
+        reply.append("\n❌ <b>Could not read</b>")
+        reply.extend(escape(line) for line in failed)
         reply.append("Send /help to see the accepted formats.")
-    await update.message.reply_text("\n".join(reply))
+    await _send_html(update, reply)
 
 
 _FIELDS = {
@@ -479,12 +526,12 @@ async def add_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     for record, fields in changes:
         storage.update_shift(user_id, record.id, **fields)
 
-    updated = [storage.get_shift(user_id, r.id) for r, _ in changes]
-    lines = [f"Updated {len(updated)} shift{'s' if len(updated) != 1 else ''}:"]
-    lines.extend(_shift_line(r) for r in updated[:10] if r)
+    updated = [r for r in (storage.get_shift(user_id, c.id) for c, _ in changes) if r]
+    lines = [f"✅ <b>Updated {len(updated)} shift{'s' if len(updated) != 1 else ''}</b>"]
+    lines.append(_shift_table(updated[:10]))
     if len(updated) > 10:
         lines.append(f"…and {len(updated) - 10} more.")
-    await update.message.reply_text("\n".join(lines))
+    await _send_html(update, lines)
 
 
 _MONTH_NAMES = {
@@ -519,15 +566,6 @@ def parse_month(args: list[str], today: date | None = None) -> str | None:
     return f"{year:04d}-{month:02d}"
 
 
-def _shift_line(record: ShiftRecord) -> str:
-    return (
-        f"#{record.id} {record.day.isoformat()} "
-        f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} "
-        f"{record.event}{' @ ' + record.location if record.location else ''} — "
-        f"{format_hours(record.hours)}h — {_money(record.pay, record.currency)}"
-    )
-
-
 def _month_label(month: str) -> str:
     year, index = month.split("-")
     return f"{calendar.month_name[int(index)]} {year}"
@@ -548,16 +586,16 @@ async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             f"No shifts logged for {_month_label(month)}." if month else "No shifts logged yet."
         )
         return
-    lines = [_shift_line(r) for r in records]
+    label = _month_label(month) if month else "Latest shifts"
+    lines = [f"📅 <b>{escape(label)}</b>", _shift_table(records)]
     if month:
         hours = sum((r.hours for r in records), Decimal("0"))
         pay = sum((r.pay for r in records), Decimal("0"))
-        lines.insert(0, _month_label(month))
         lines.append(
-            f"Total: {len(records)} shifts, {format_hours(hours)}h, "
-            f"{_money(pay, records[0].currency)}"
+            f"Total  <b>{_money(pay, records[0].currency)}</b>  "
+            f"· {format_hours(hours)}h · {len(records)} shifts"
         )
-    await update.message.reply_text("\n".join(lines))
+    await _send_html(update, lines)
 
 
 async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -570,15 +608,25 @@ async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not summaries:
         await update.message.reply_text("No shifts logged yet.")
         return
-    lines = [
-        f"{_month_label(s.month)} — {s.shifts} shifts, "
-        f"{format_hours(s.hours)}h, {_money(s.pay, s.currency)}"
+    rows = [
+        (
+            _month_label(s.month),
+            f"{s.shifts} shift{'' if s.shifts == 1 else 's'}",
+            f"{format_hours(s.hours)}h",
+            _amount(s.pay),
+        )
         for s in summaries
     ]
     grand_total = sum((s.pay for s in summaries), Decimal("0"))
-    lines.append(f"All time: {_money(grand_total, summaries[0].currency)}")
-    lines.append("Send /month 2026-08 (or /month aug) to see that month's shifts.")
-    await update.message.reply_text("\n".join(lines))
+    await _send_html(
+        update,
+        [
+            "📆 <b>By month</b>",
+            _block(_aligned(rows, right={1, 2, 3})),
+            f"All time  <b>{_money(grand_total, summaries[0].currency)}</b>",
+            "Send /month aug to see that month's shifts.",
+        ],
+    )
 
 
 async def reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -641,14 +689,21 @@ async def send_due_reminders(context: ContextTypes.DEFAULT_TYPE) -> None:
         storage.mark_reminder_sent(reminder.user_id, day - timedelta(days=1))
         if not records:
             continue
-        lines = [f"Tomorrow ({day.strftime('%a %d %b')}) you're working:"]
-        lines.extend(
-            f"  {r.start.strftime('%H:%M')}–{r.end.strftime('%H:%M')} {r.event}"
-            f"{' @ ' + r.location if r.location else ''}"
+        rows = [
+            (
+                f"{r.start.strftime('%H:%M')}–{r.end.strftime('%H:%M')}",
+                _where(r.event, r.location),
+            )
             for r in records
-        )
+        ]
+        lines = [
+            f"⏰ <b>Tomorrow · {day.strftime('%a %d %b')}</b>",
+            _block(_aligned(rows, right=set())),
+        ]
         try:
-            await context.bot.send_message(reminder.chat_id, "\n".join(lines))
+            await context.bot.send_message(
+                reminder.chat_id, "\n".join(lines), parse_mode=ParseMode.HTML
+            )
         except TelegramError:
             logger.exception("Could not send the reminder to chat %s", reminder.chat_id)
 
@@ -670,19 +725,23 @@ async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     for index, record in enumerate(records):
         for other in find_clashes(records[index + 1 :], record.day, record.start, record.end):
             clashing.update({record.id, other.id})
-    lines = [f"Booked in the next {days} days:"]
-    current_day: date | None = None
-    for record in records:
-        if record.day != current_day:
-            current_day = record.day
-            lines.append(record.day.strftime("%a %d %b"))
-        flag = " ⚠️ clash" if record.id in clashing else ""
-        lines.append(
-            f"  #{record.id} {record.start.strftime('%H:%M')}–"
-            f"{record.end.strftime('%H:%M')} {record.event}"
-            f"{' @ ' + record.location if record.location else ''}{flag}"
+    rows = [
+        (
+            f"#{record.id}",
+            record.day.strftime("%a %d %b"),
+            f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')}",
+            _where(record.event, record.location),
+            "clash" if record.id in clashing else "",
         )
-    await update.message.reply_text("\n".join(lines))
+        for record in records
+    ]
+    await _send_html(
+        update,
+        [
+            f"🗓 <b>Booked · next {days} days</b>",
+            _block(_aligned(rows, right=set())),
+        ],
+    )
 
 
 async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -697,9 +756,12 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     month = month or today.strftime("%Y-%m")
     records = storage.list_shifts(user_id, month=month)
     if not records:
-        await update.message.reply_text(
-            f"No shifts logged for {_month_label(month)}.\n"
-            f"{_totals_line(storage, user_id, None, storage.get_config(user_id).currency)}"
+        await _send_html(
+            update,
+            [
+                f"No shifts logged for {escape(_month_label(month))}.",
+                _totals_line(storage, user_id, None, storage.get_config(user_id).currency),
+            ],
         )
         return
     currency_code = records[0].currency
@@ -707,12 +769,16 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     pay = sum((r.pay for r in records), Decimal("0"))
     summaries = storage.month_summaries(user_id)
     grand_total = sum((s.pay for s in summaries), Decimal("0"))
-    lines = [_month_label(month), *(_shift_line(r) for r in records)]
-    lines.append(
-        f"Total: {len(records)} shifts, {format_hours(hours)}h, {_money(pay, currency_code)}"
+    await _send_html(
+        update,
+        [
+            f"📅 <b>{escape(_month_label(month))}</b>",
+            _shift_table(records),
+            f"Total  <b>{_money(pay, currency_code)}</b>  "
+            f"· {format_hours(hours)}h · {len(records)} shifts",
+            f"All time  {_money(grand_total, currency_code)}",
+        ],
     )
-    lines.append(f"All time: {_money(grand_total, currency_code)}")
-    await update.message.reply_text("\n".join(lines))
 
 
 @dataclass(frozen=True)
@@ -772,10 +838,6 @@ def earned_by(records: list[ShiftRecord], now: datetime) -> Earned:
 
 def _hourly(record: ShiftRecord) -> Decimal:
     return record.pay / record.hours if record.hours else Decimal("0")
-
-
-def _amount(value: Decimal) -> str:
-    return f"{round_money(value):,.2f}"
 
 
 def _breakdown_table(shifts: list[Worked]) -> list[str]:
@@ -898,12 +960,12 @@ def _totals_line(storage: Storage, user_id: int, month: str | None, currency: st
         pay = sum((r.pay for r in records), Decimal("0"))
         hours = sum((r.hours for r in records), Decimal("0"))
         lines.append(
-            f"{_month_label(month)} now: {len(records)} shifts, "
-            f"{format_hours(hours)}h, {_money(pay, currency)}"
+            f"{_month_label(month)} now  <b>{_money(pay, currency)}</b>  "
+            f"· {format_hours(hours)}h · {len(records)} shifts"
         )
     summaries = storage.month_summaries(user_id)
     grand_total = sum((s.pay for s in summaries), Decimal("0"))
-    lines.append(f"All time now: {_money(grand_total, currency)}")
+    lines.append(f"All time now  {_money(grand_total, currency)}")
     return "\n".join(lines)
 
 
@@ -916,7 +978,7 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Usage: /delete <id> [id ...], or /clear <month>")
         return
 
-    deleted: list[str] = []
+    deleted: list[tuple[str, ...]] = []
     missing: list[str] = []
     months_touched: set[str] = set()
     for shift_id in (int(i) for i in ids):
@@ -926,20 +988,25 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             continue
         months_touched.add(record.day.strftime("%Y-%m"))
         deleted.append(
-            f"#{shift_id} {record.day.isoformat()} {record.event}"
-            f"{' @ ' + record.location if record.location else ''} "
-            f"(−{_money(record.pay, record.currency)})"
+            (
+                f"#{shift_id}",
+                record.day.strftime("%a %d %b"),
+                _where(record.event, record.location),
+                f"−{_amount(record.pay)}",
+            )
         )
 
     reply: list[str] = []
     if deleted:
-        reply.append(f"Deleted {len(deleted)} shift{'s' if len(deleted) > 1 else ''}:")
-        reply.extend(deleted)
+        reply.append(
+            f"🗑 <b>Deleted {len(deleted)} shift{'s' if len(deleted) > 1 else ''}</b>"
+        )
+        reply.append(_block(_aligned(deleted, right={3})))
         month = months_touched.pop() if len(months_touched) == 1 else None
         reply.append(_totals_line(storage, user_id, month, config.currency))
     if missing:
-        reply.append(f"Not found: {', '.join(missing)}")
-    await update.message.reply_text("\n".join(reply))
+        reply.append(f"Not found: {escape(', '.join(missing))}")
+    await _send_html(update, reply)
 
 
 async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -970,9 +1037,12 @@ async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     removed = storage.delete_shifts(user_id, month=month)
-    await update.message.reply_text(
-        f"Deleted {removed} shifts from {scope}.\n"
-        f"{_totals_line(storage, user_id, month, config.currency)}"
+    await _send_html(
+        update,
+        [
+            f"🗑 <b>Deleted {removed} shifts from {escape(scope)}</b>",
+            _totals_line(storage, user_id, month, config.currency),
+        ],
     )
 
 
