@@ -715,6 +715,16 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 @dataclass(frozen=True)
+class Worked:
+    """One shift measured against the clock: what it has paid out so far."""
+
+    record: ShiftRecord
+    hours: Decimal
+    pay: Decimal
+    state: str  # "done", "running" or "upcoming"
+
+
+@dataclass(frozen=True)
 class Earned:
     """Pay counted up to a moment in time, splitting off what is still to come."""
 
@@ -724,6 +734,20 @@ class Earned:
     in_progress: ShiftRecord | None
     booked_pay: Decimal
     booked: int
+    shifts: list[Worked]
+
+
+def worked_by(record: ShiftRecord, now: datetime) -> Worked:
+    """A finished shift pays in full, a running one pro-rata, a future one nothing yet."""
+    start, end = span(record.day, record.start, record.end)
+    if end <= now:
+        return Worked(record, record.hours, record.pay, "done")
+    if start >= now:
+        return Worked(record, Decimal("0"), Decimal("0"), "upcoming")
+    elapsed = Decimal(str((now - start).total_seconds()))
+    total = Decimal(str((end - start).total_seconds()))
+    done = elapsed / total
+    return Worked(record, record.hours * done, record.pay * done, "running")
 
 
 def earned_by(records: list[ShiftRecord], now: datetime) -> Earned:
@@ -731,24 +755,44 @@ def earned_by(records: list[ShiftRecord], now: datetime) -> Earned:
     pay = hours = booked_pay = Decimal("0")
     finished = booked = 0
     running: ShiftRecord | None = None
-    for record in records:
-        start, end = span(record.day, record.start, record.end)
-        if end <= now:
-            pay += record.pay
-            hours += record.hours
+    worked = [worked_by(record, now) for record in records]
+    for item in worked:
+        pay += item.pay
+        hours += item.hours
+        booked_pay += item.record.pay - item.pay
+        if item.state == "done":
             finished += 1
-        elif start < now:
-            elapsed = Decimal(str((now - start).total_seconds()))
-            total = Decimal(str((end - start).total_seconds()))
-            done = elapsed / total
-            pay += record.pay * done
-            hours += record.hours * done
-            booked_pay += record.pay * (1 - done)
-            running = record
+        elif item.state == "running":
+            running = item.record
         else:
-            booked_pay += record.pay
             booked += 1
-    return Earned(pay, hours, finished, running, booked_pay, booked)
+    return Earned(pay, hours, finished, running, booked_pay, booked, worked)
+
+
+def _hourly(record: ShiftRecord) -> Decimal:
+    return record.pay / record.hours if record.hours else Decimal("0")
+
+
+def _breakdown_line(item: Worked, now: datetime, currency: str) -> str:
+    """One shift spelled out, so the arithmetic behind the total is visible."""
+    record = item.record
+    when = (
+        f"#{record.id} {record.day.strftime('%a %d %b')} "
+        f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} {record.event}"
+    )
+    rate = f"{_money(_hourly(record), currency)}/h"
+    if item.state == "done":
+        return f"  {when}: {format_hours(record.hours)}h × {rate} = {_money(item.pay, currency)}"
+    if item.state == "running":
+        return (
+            f"  {when}: running — {format_hours(item.hours)}h of "
+            f"{format_hours(record.hours)}h up to {now.strftime('%H:%M')} × {rate} = "
+            f"{_money(item.pay, currency)} of {_money(record.pay, currency)}"
+        )
+    return (
+        f"  {when}: not started — {format_hours(record.hours)}h × {rate} = "
+        f"{_money(record.pay, currency)} to come"
+    )
 
 
 def _earnings_block(
@@ -762,11 +806,7 @@ def _earnings_block(
         f"{label}: {_money(tally.pay, currency)} so far "
         f"({counted} shift{'' if counted == 1 else 's'}, {format_hours(tally.hours)}h)"
     ]
-    if tally.in_progress:
-        lines.append(
-            f"  #{tally.in_progress.id} {tally.in_progress.event} is running — "
-            f"counted up to {now.strftime('%H:%M')}"
-        )
+    lines += [_breakdown_line(item, now, currency) for item in tally.shifts]
     if tally.booked_pay > 0:
         remaining = tally.booked + (1 if tally.in_progress else 0)
         lines.append(
@@ -786,6 +826,13 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     currency = storage.get_config(user_id).currency
     scope = " ".join(context.args).strip().lower()
     monday = today - timedelta(days=today.weekday())
+
+    if scope in ("today", "day"):
+        records = storage.shifts_between(user_id, today, today)
+        lines = [f"Earnings as of {now.strftime('%a %d %b %H:%M')}"]
+        lines += _earnings_block(f"Today ({today.strftime('%a %d %b')})", records, now, currency)
+        await update.message.reply_text("\n".join(lines))
+        return
 
     if scope in ("", "week", "this week", "month", "this month"):
         week = storage.shifts_between(user_id, monday, monday + timedelta(days=6))
@@ -1101,8 +1148,8 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
         "Your shifts",
         (
             Command(
-                ("earnings", "earned"), "/earnings [week|month|aug]",
-                "Pay earned so far this week and month", earnings,
+                ("earnings", "earned"), "/earnings [today|week|month|aug]",
+                "Pay earned so far, with a per-shift breakdown", earnings,
             ),
             Command(
                 ("total",), "/total [month]",

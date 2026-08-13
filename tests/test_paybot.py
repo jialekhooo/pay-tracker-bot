@@ -9,6 +9,7 @@ from paybot.bot import (
     _earnings_block,
     _edit_record,
     commands_text,
+    earned_by,
     parse_edit,
     parse_month,
 )
@@ -569,22 +570,38 @@ def test_earnings_counts_finished_shifts_and_the_one_running_now():
     ]
     lines = _earnings_block("August 2026", records, datetime(2026, 8, 13, 13, 0), "SGD")
     assert lines[0] == "August 2026: SGD 150.00 so far (2 shifts, 12h)"
-    assert lines[1] == "  #2 Gig is running — counted up to 13:00"
-    assert lines[2] == "  still to come: SGD 150.00 (2 shifts) → SGD 300.00 projected"
+    assert lines[1] == "  #1 Tue 11 Aug 09:00–17:00 Gig: 8h × SGD 12.50/h = SGD 100.00"
+    assert lines[2] == (
+        "  #2 Thu 13 Aug 09:00–17:00 Gig: running — 4h of 8h up to 13:00 "
+        "× SGD 12.50/h = SGD 50.00 of SGD 100.00"
+    )
+    assert lines[3] == (
+        "  #3 Thu 20 Aug 09:00–17:00 Gig: not started — 8h × SGD 12.50/h "
+        "= SGD 100.00 to come"
+    )
+    assert lines[4] == "  still to come: SGD 150.00 (2 shifts) → SGD 300.00 projected"
 
 
 def test_earnings_ignores_a_shift_that_has_not_started():
     records = [_record(1, date(2026, 8, 13), time(18, 0), time(23, 0))]
     lines = _earnings_block("Today", records, datetime(2026, 8, 13, 13, 0), "SGD")
     assert lines[0] == "Today: SGD 0.00 so far (0 shifts, 0h)"
-    assert lines[1] == "  still to come: SGD 100.00 (1 shift) → SGD 100.00 projected"
+    assert lines[-1] == "  still to come: SGD 100.00 (1 shift) → SGD 100.00 projected"
 
 
 def test_earnings_counts_a_shift_that_has_ended_today():
     records = [_record(1, date(2026, 8, 13), time(9, 0), time(17, 0))]
     assert _earnings_block("Today", records, datetime(2026, 8, 13, 17, 0), "SGD") == [
-        "Today: SGD 100.00 so far (1 shift, 8h)"
+        "Today: SGD 100.00 so far (1 shift, 8h)",
+        "  #1 Thu 13 Aug 09:00–17:00 Gig: 8h × SGD 12.50/h = SGD 100.00",
     ]
+
+
+def test_earnings_counts_an_overnight_shift_pro_rata_after_midnight():
+    records = [_record(1, date(2026, 8, 12), time(22, 0), time(6, 0))]
+    tally = earned_by(records, datetime(2026, 8, 13, 2, 0))
+    assert tally.in_progress is records[0]
+    assert tally.pay == Decimal("50")
 
 
 def test_earnings_block_without_shifts():

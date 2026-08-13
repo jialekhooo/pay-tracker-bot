@@ -123,7 +123,7 @@ command menu on startup. Unknown commands get a nudge back to `/commands`.
 | `/list [month]` | Recent shifts, or every shift in a month |
 | `/month` | Summary per month; `/month aug` lists that month's shifts |
 | `/total [month]` | Every shift in the month plus month and all-time totals (this month by default) |
-| `/earnings [week\|month\|aug]` | Pay earned so far this week and month (a shift running now counts pro-rata), plus what is still booked |
+| `/earnings [today\|week\|month\|aug]` | Pay earned so far with a per-shift breakdown (a shift running now counts pro-rata), plus what is still booked |
 | `/delete <id> [id ...]` | Delete shifts; the reply shows the recomputed totals |
 | `/clear [month]` | Delete a whole month (or everything) after confirming |
 | `/calendar [month\|all\|#id]` | `.ics` file + Google Calendar links (alias `/ics`) |
