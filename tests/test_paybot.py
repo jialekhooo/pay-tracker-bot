@@ -523,3 +523,19 @@ def test_storage_roundtrip(tmp_path):
 )
 def test_hours_never_render_in_scientific_notation(hours, shown):
     assert format_hours(hours) == shown
+
+
+@pytest.mark.parametrize(
+    "text, start, end, hours",
+    [
+        ("28/9 0700 - 1900 SuperReturn @ MBS 20/h", time(7, 0), time(19, 0), 12.0),
+        ("28/9 0700-1900 SuperReturn", time(7, 0), time(19, 0), 12.0),
+        ("SuperReturn 28/9 0830 to 1400", time(8, 30), time(14, 0), 5.5),
+        ("28/9 2200 - 0200 SuperReturn", time(22, 0), time(2, 0), 4.0),
+    ],
+)
+def test_four_digit_times_are_read_as_24_hour_clock(text, start, end, hours):
+    shift = parse_shift(text, today=TODAY)
+    assert shift.event == "SuperReturn"
+    assert (shift.start, shift.end) == (start, end)
+    assert shift.hours == hours

@@ -73,6 +73,12 @@ _TIME_RE = re.compile(
     re.IGNORECASE,
 )
 
+_MILITARY_TIME = r"(?:[01]\d|2[0-3])[0-5]\d"
+
+_MILITARY_TIME_RE = re.compile(
+    r"^(?P<hour>\d{2})(?P<minute>\d{2})\s*(?:h|hrs|hours)?$", re.IGNORECASE
+)
+
 _RANGE_SEPARATORS = ("-", "–", "—", "to", "till", "until")
 
 
@@ -96,6 +102,14 @@ def parse_date(token: str, today: date) -> date:
 
 
 def parse_time(token: str) -> time:
+    military = _MILITARY_TIME_RE.match(token.strip())
+    if military:
+        hour, minute = int(military.group("hour")), int(military.group("minute"))
+        if hour == 24 and minute == 0:
+            hour = 0
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ParseError(f"{token!r} is not a valid time.")
+        return time(hour, minute)
     match = _TIME_RE.match(token.strip())
     if not match:
         raise ParseError(f"Could not read a time from {token!r}.")
@@ -230,10 +244,10 @@ _DATE_CANDIDATE_RE = re.compile(
 )
 
 _TIME_RANGE_RE = re.compile(
-    r"""
-    \b(?P<start>\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)
+    rf"""
+    \b(?P<start>{_MILITARY_TIME}|\d{{1,2}}(?:[:.]\d{{2}})?\s*(?:am|pm)?)
     \s*(?:-|–|—|to|till|until|\s)\s*
-    (?P<end>\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)\b
+    (?P<end>{_MILITARY_TIME}|\d{{1,2}}(?:[:.]\d{{2}})?\s*(?:am|pm)?)\b
     """,
     re.IGNORECASE | re.VERBOSE,
 )

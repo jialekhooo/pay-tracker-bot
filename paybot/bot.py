@@ -54,6 +54,7 @@ The order doesn't matter and the rate is optional (your saved rate is used):
 `12/8 6pm-11.30pm Wedding gig`
 `2026-08-12 18:00 23:30 Wedding gig 25/h`
 `Roadshow today 9am to 5pm`
+`28/9 0700 - 1900 SuperReturn @ MBS 20/h`
 
 Send several lines at once to log a batch, and add `15/h` in a line to
 override the rate for that shift:

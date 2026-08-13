@@ -10,6 +10,7 @@ Wedding gig 12/8 6pm-11.30pm 25/h @ Marina Bay Sands
 12/8 6pm-11.30pm Wedding gig
 2026-08-12 18:00 23:30 Wedding gig
 Roadshow today 9am to 5pm
+28/9 0700 - 1900 SuperReturn @ MBS 20/h
 ```
 
 Without a rate in the line, the stored rate for that event (or your default) is used.
