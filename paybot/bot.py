@@ -713,6 +713,78 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
+def _split_by_today(
+    records: list[ShiftRecord], today: date
+) -> tuple[list[ShiftRecord], list[ShiftRecord]]:
+    """Worked shifts (today included) and shifts still to come."""
+    worked = [r for r in records if r.day <= today]
+    return worked, [r for r in records if r.day > today]
+
+
+def _earnings_block(
+    label: str, records: list[ShiftRecord], today: date, currency: str
+) -> list[str]:
+    worked, booked = _split_by_today(records, today)
+    if not records:
+        return [f"{label}: nothing logged."]
+    earned = sum((r.pay for r in worked), Decimal("0"))
+    hours = sum((r.hours for r in worked), Decimal("0"))
+    lines = [
+        f"{label}: {_money(earned, currency)} so far "
+        f"({len(worked)} shift{'' if len(worked) == 1 else 's'}, {format_hours(hours)}h)"
+    ]
+    if booked:
+        to_come = sum((r.pay for r in booked), Decimal("0"))
+        lines.append(
+            f"  still booked: {_money(to_come, currency)} "
+            f"({len(booked)} shift{'' if len(booked) == 1 else 's'}) → "
+            f"{_money(earned + to_come, currency)} projected"
+        )
+    return lines
+
+
+async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """How much has been earned so far this week and this month."""
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    today = _today(storage, user_id)
+    currency = storage.get_config(user_id).currency
+    scope = " ".join(context.args).strip().lower()
+    monday = today - timedelta(days=today.weekday())
+
+    if scope in ("", "week", "this week", "month", "this month"):
+        week = storage.shifts_between(user_id, monday, monday + timedelta(days=6))
+        month = storage.list_shifts(user_id, month=today.strftime("%Y-%m"))
+        lines = [f"Earnings as of {today.strftime('%a %d %b')}"]
+        if scope in ("", "week", "this week"):
+            lines += _earnings_block(
+                f"This week (from {monday.strftime('%d %b')})", week, today, currency
+            )
+        if scope in ("", "month", "this month"):
+            lines += _earnings_block(_month_label(today.strftime("%Y-%m")), month, today, currency)
+        await update.message.reply_text("\n".join(lines))
+        return
+
+    if scope == "last week":
+        start = monday - timedelta(days=7)
+        records = storage.shifts_between(user_id, start, start + timedelta(days=6))
+        label = f"Week of {start.strftime('%d %b')}"
+        await update.message.reply_text(
+            "\n".join(_earnings_block(label, records, today, currency))
+        )
+        return
+
+    try:
+        month = parse_month(context.args, today=today)
+    except ParseError as exc:
+        await update.message.reply_text(str(exc))
+        return
+    records = storage.list_shifts(user_id, month=month)
+    await update.message.reply_text(
+        "\n".join(_earnings_block(_month_label(month), records, today, currency))
+    )
+
+
 def _totals_line(storage: Storage, user_id: int, month: str | None, currency: str) -> str:
     """Recomputed totals so the user sees numbers drop after a delete."""
     lines = []
@@ -995,6 +1067,10 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
     (
         "Your shifts",
         (
+            Command(
+                ("earnings", "earned"), "/earnings [week|month|aug]",
+                "Pay earned so far this week and month", earnings,
+            ),
             Command(
                 ("total",), "/total [month]",
                 "A month's shifts plus month and all-time pay", total,

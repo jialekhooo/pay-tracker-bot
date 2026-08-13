@@ -4,7 +4,14 @@ from decimal import Decimal
 
 import pytest
 
-from paybot.bot import SECTIONS, _edit_record, commands_text, parse_edit, parse_month
+from paybot.bot import (
+    SECTIONS,
+    _earnings_block,
+    _edit_record,
+    commands_text,
+    parse_edit,
+    parse_month,
+)
 from paybot.calendar_export import google_link, to_ics
 from paybot.feed import feed_body, issue_token
 from paybot.parsing import ParseError, Shift, parse_shift, parse_shifts
@@ -551,3 +558,21 @@ def test_four_digit_times_are_read_as_24_hour_clock(text, start, end, hours):
 )
 def test_today_follows_the_users_timezone(now_utc, expected):
     assert local_today(480, now_utc) == expected
+
+
+def test_earnings_block_counts_worked_shifts_and_projects_booked_ones():
+    today = date(2026, 8, 13)
+    records = [
+        _record(1, date(2026, 8, 11), time(9, 0), time(17, 0)),
+        _record(2, today, time(9, 0), time(17, 0)),
+        _record(3, date(2026, 8, 20), time(9, 0), time(17, 0)),
+    ]
+    lines = _earnings_block("August 2026", records, today, "SGD")
+    assert lines[0] == "August 2026: SGD 200.00 so far (2 shifts, 16h)"
+    assert lines[1] == "  still booked: SGD 100.00 (1 shift) → SGD 300.00 projected"
+
+
+def test_earnings_block_without_shifts():
+    assert _earnings_block("This week", [], date(2026, 8, 13), "SGD") == [
+        "This week: nothing logged."
+    ]
