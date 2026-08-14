@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS event_rates (
 
 CREATE TABLE IF NOT EXISTS shifts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ref INTEGER,
     user_id INTEGER NOT NULL,
     day TEXT NOT NULL,
     start_time TEXT NOT NULL,
@@ -120,6 +121,7 @@ class Storage:
                 "location": "TEXT NOT NULL DEFAULT ''",
                 "break_hours": "TEXT NOT NULL DEFAULT '0'",
                 "break_paid": "INTEGER NOT NULL DEFAULT 0",
+                "ref": "INTEGER",
             },
         }
         for table, columns in additions.items():
@@ -129,6 +131,19 @@ class Storage:
             for column, definition in columns.items():
                 if column not in existing:
                     self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        self._number_shifts()
+
+    def _number_shifts(self) -> None:
+        """Give every shift a number of its own per user, so each user starts at #1."""
+        self._conn.execute(
+            """
+            UPDATE shifts SET ref = (
+                SELECT COUNT(*) FROM shifts AS earlier
+                WHERE earlier.user_id = shifts.user_id AND earlier.id <= shifts.id
+            )
+            WHERE ref IS NULL
+            """
+        )
 
     def close(self) -> None:
         self._conn.close()
@@ -201,13 +216,19 @@ class Storage:
         currency: str,
         location: str = "",
     ) -> int:
-        cursor = self._conn.execute(
+        ref = int(
+            self._conn.execute(
+                "SELECT COALESCE(MAX(ref), 0) + 1 FROM shifts WHERE user_id = ?", (user_id,)
+            ).fetchone()[0]
+        )
+        self._conn.execute(
             """
-            INSERT INTO shifts (user_id, day, start_time, end_time, event, location,
+            INSERT INTO shifts (ref, user_id, day, start_time, end_time, event, location,
                                 break_hours, break_paid, hours, pay, currency)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                ref,
                 user_id,
                 day.isoformat(),
                 start.isoformat(timespec="minutes"),
@@ -222,7 +243,7 @@ class Storage:
             ),
         )
         self._conn.commit()
-        return int(cursor.lastrowid)
+        return ref
 
     def list_shifts(
         self, user_id: int, month: str | None = None, limit: int | None = None
@@ -232,7 +253,7 @@ class Storage:
         if month:
             query += " AND substr(day, 1, 7) = ?"
             params.append(month)
-        query += " ORDER BY day DESC, start_time DESC, id DESC"
+        query += " ORDER BY day DESC, start_time DESC, ref DESC"
         if limit:
             query += " LIMIT ?"
             params.append(limit)
@@ -244,7 +265,7 @@ class Storage:
             """
             SELECT * FROM shifts
             WHERE user_id = ? AND day BETWEEN ? AND ?
-            ORDER BY day ASC, start_time ASC, id ASC
+            ORDER BY day ASC, start_time ASC, ref ASC
             """,
             (user_id, first.isoformat(), last.isoformat()),
         )
@@ -343,7 +364,7 @@ class Storage:
 
     def get_shift(self, user_id: int, shift_id: int) -> ShiftRecord | None:
         row = self._conn.execute(
-            "SELECT * FROM shifts WHERE user_id = ? AND id = ?", (user_id, shift_id)
+            "SELECT * FROM shifts WHERE user_id = ? AND ref = ?", (user_id, shift_id)
         ).fetchone()
         return None if row is None else _to_record(row)
 
@@ -353,7 +374,7 @@ class Storage:
             """
             SELECT * FROM shifts
             WHERE user_id = ? AND (lower(event) = lower(?) OR lower(event) LIKE lower(?))
-            ORDER BY day ASC, start_time ASC, id ASC
+            ORDER BY day ASC, start_time ASC, ref ASC
             """,
             (user_id, event, f"%{event}%"),
         )
@@ -367,7 +388,7 @@ class Storage:
             raise ValueError(f"Cannot update {', '.join(sorted(unknown))}")
         assignments = ", ".join(f"{column} = ?" for column in fields)
         cursor = self._conn.execute(
-            f"UPDATE shifts SET {assignments} WHERE user_id = ? AND id = ?",
+            f"UPDATE shifts SET {assignments} WHERE user_id = ? AND ref = ?",
             (*fields.values(), user_id, shift_id),
         )
         self._conn.commit()
@@ -375,7 +396,7 @@ class Storage:
 
     def delete_shift(self, user_id: int, shift_id: int) -> bool:
         cursor = self._conn.execute(
-            "DELETE FROM shifts WHERE user_id = ? AND id = ?", (user_id, shift_id)
+            "DELETE FROM shifts WHERE user_id = ? AND ref = ?", (user_id, shift_id)
         )
         self._conn.commit()
         return cursor.rowcount > 0
@@ -406,7 +427,7 @@ def _to_reminder(row: sqlite3.Row) -> Reminder:
 
 def _to_record(row: sqlite3.Row) -> ShiftRecord:
     return ShiftRecord(
-        id=row["id"],
+        id=row["ref"],
         day=date.fromisoformat(row["day"]),
         start=time.fromisoformat(row["start_time"]),
         end=time.fromisoformat(row["end_time"]),

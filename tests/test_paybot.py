@@ -622,3 +622,26 @@ def test_shift_table_keeps_full_event_names_on_their_own_line():
         "#12  Thu 13 Aug  09:00–17:00  Hermes Private Sale\n"
         "    8h × 12.50 = 100.00</pre>"
     )
+
+
+def test_each_user_numbers_their_shifts_from_one(tmp_path):
+    storage = Storage(tmp_path / "paybot.sqlite3")
+    numbers = [
+        storage.add_shift(
+            user_id,
+            TODAY,
+            time(9, 0),
+            time(17, 0),
+            "Gig",
+            Decimal("0"),
+            False,
+            Decimal("8"),
+            Decimal("100"),
+            "SGD",
+        )
+        for user_id in (1, 1, 2)
+    ]
+    assert numbers == [1, 2, 1]
+    assert [r.id for r in storage.list_shifts(2)] == [1]
+    assert storage.delete_shift(2, 1) and storage.get_shift(1, 1) is not None
+    storage.close()
