@@ -50,7 +50,7 @@ reported without blocking the rest.
 
 Logging a shift that overlaps one you already stored still logs it, but the reply
 warns which shift it clashes with (overnight shifts are compared properly).
-`/upcoming` lists what you're booked for from today onwards and flags clashes.
+`/upcoming` lists what you're booked for from today onwards and flags clashes; `/upcomingshifts` shows every booked shift ahead, however far away.
 
 ## Calendar
 
@@ -119,6 +119,7 @@ command menu on startup. Unknown commands get a nudge back to `/commands`.
 | `/overtime 8 1.5` | ×1.5 beyond 8 hours (`/overtime off` to disable) |
 | `/break 1 unpaid` | Default break for shifts that don't mention one (`/break off`) |
 | `/upcoming [days]` | Shifts you're booked for (next 14 days by default) |
+| `/upcomingshifts` | Every upcoming booked shift, with the booked total |
 | `/reminders on\|off\|20:00 [+8]` | Message the evening before each shift |
 | `/list [month]` | Recent shifts, or every shift in a month |
 | `/month` | Summary per month; `/month aug` lists that month's shifts |

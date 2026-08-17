@@ -724,17 +724,19 @@ async def send_due_reminders(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.exception("Could not send the reminder to chat %s", reminder.chat_id)
 
 
-async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show the shifts already booked from today onwards, flagging any clashes."""
+async def _show_booked(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    days: int,
+    window: str,
+) -> None:
+    """The shifts booked from today over the given window, flagging any clashes."""
     storage = _storage(context)
     user_id = update.effective_user.id
-    days = 14
-    if context.args and context.args[0].isdigit():
-        days = max(1, min(int(context.args[0]), 365))
     today = _today(storage, user_id)
     records = storage.shifts_between(user_id, today, today + timedelta(days=days - 1))
     if not records:
-        await update.message.reply_text(f"Nothing booked in the next {days} days.")
+        await update.message.reply_text(f"Nothing booked {window}.")
         return
 
     clashing: set[int] = set()
@@ -751,13 +753,30 @@ async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         for record in records
     ]
+    hours = sum((r.hours for r in records), Decimal("0"))
+    pay = sum((r.pay for r in records), Decimal("0"))
     await _send_html(
         update,
         [
-            f"🗓 <b>Booked · next {days} days</b>",
+            f"🗓 <b>Booked · {escape(window)}</b>",
             _block(_aligned(rows, right=set())),
+            f"Booked  <b>{_money(pay, records[0].currency)}</b>  "
+            f"· {format_hours(hours)}h · {len(records)} shifts",
         ],
     )
+
+
+async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the shifts already booked in the next fortnight, or a given number of days."""
+    days = 14
+    if context.args and context.args[0].isdigit():
+        days = max(1, min(int(context.args[0]), 365))
+    await _show_booked(update, context, days, f"next {days} days")
+
+
+async def upcoming_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Every shift booked from today onwards, however far ahead it sits."""
+    await _show_booked(update, context, 366, "all upcoming")
 
 
 async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1270,6 +1289,10 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
             Command(
                 ("upcoming", "schedule"), "/upcoming [days]",
                 "What you're booked for (next 14 days)", upcoming,
+            ),
+            Command(
+                ("upcomingshifts", "allupcoming"), "/upcomingshifts",
+                "Every upcoming booked shift", upcoming_shifts,
             ),
             Command(
                 ("calendar", "ics"), "/calendar [month|all|#id]",
