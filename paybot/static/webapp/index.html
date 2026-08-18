@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Pay tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <h1 id="greeting">Pay tracker</h1>
+      <div class="asof" id="asof"></div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="today">Today</button>
+      <button class="tab" data-tab="week">Week</button>
+      <button class="tab" data-tab="month">Month</button>
+      <button class="tab" data-tab="upcoming">Upcoming</button>
+      <button class="tab" data-tab="months">By month</button>
+    </nav>
+
+    <main id="main">
+      <div class="state" id="loading">
+        <div class="spinner"></div>
+        <p>Loading your shifts…</p>
+      </div>
+      <div class="state hidden" id="error">
+        <p id="error-text">Open this from the Pay tracker bot in Telegram.</p>
+      </div>
+      <div class="hidden" id="content"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -14,7 +14,14 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from html import escape
 
-from telegram import BotCommand, Update
+from telegram import (
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    Update,
+    WebAppInfo,
+)
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import (
@@ -1238,6 +1245,23 @@ async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(commands_text(), parse_mode=ParseMode.MARKDOWN)
 
 
+async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a button that opens the mini app dashboard in place of a wall of text."""
+    url = context.application.bot_data.get("webapp_url")
+    if not url:
+        await update.message.reply_text(
+            "The dashboard isn't set up for this deployment — set PAYBOT_FEED_URL "
+            "(it doubles as the mini app's address) and restart the bot."
+        )
+        return
+    keyboard = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("📊 Open dashboard", web_app=WebAppInfo(url=url))]]
+    )
+    await update.message.reply_text(
+        "Your pay, shifts and calendar at a glance:", reply_markup=keyboard
+    )
+
+
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     command = update.message.text.split()[0]
     await update.message.reply_text(
@@ -1270,6 +1294,10 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
     (
         "Your shifts",
         (
+            Command(
+                ("app", "dashboard", "stats"), "/app",
+                "Open the pay dashboard (mini app)", open_app,
+            ),
             Command(
                 ("earnings", "earned"), "/earnings [today|week|month|aug]",
                 "Pay earned so far, with a per-shift breakdown", earnings,
@@ -1354,7 +1382,7 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
 
 
 async def _publish_commands(application: Application) -> None:
-    """Show a tidy command menu in Telegram's ⌘ button."""
+    """Show a tidy command menu in Telegram's ⌘ button, and open the mini app from the ☰ button."""
     menu = [
         BotCommand(command.name, command.summary)
         for _, commands_in_section in SECTIONS
@@ -1365,13 +1393,26 @@ async def _publish_commands(application: Application) -> None:
     except TelegramError:
         logger.exception("Could not publish the command menu")
 
+    webapp_url = application.bot_data.get("webapp_url")
+    if webapp_url:
+        try:
+            await application.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Dashboard", web_app=WebAppInfo(url=webapp_url))
+            )
+        except TelegramError:
+            logger.exception("Could not set the mini app menu button")
+
 
 def build_application(
-    token: str, db_path: str, feed_base_url: str | None = None
+    token: str,
+    db_path: str,
+    feed_base_url: str | None = None,
+    webapp_url: str | None = None,
 ) -> Application:
     application = Application.builder().token(token).post_init(_publish_commands).build()
     application.bot_data["storage"] = Storage(db_path)
     application.bot_data["feed_base_url"] = feed_base_url
+    application.bot_data["webapp_url"] = webapp_url
 
     for _, commands_in_section in SECTIONS:
         for command in commands_in_section:
@@ -1391,7 +1432,8 @@ def main() -> None:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN before starting the bot.")
     db_path = os.environ.get("PAYBOT_DB", "paybot.sqlite3")
     feed_base_url = os.environ.get("PAYBOT_FEED_URL")
-    application = build_application(token, db_path, feed_base_url)
+    webapp_url = os.environ.get("PAYBOT_WEBAPP_URL")
+    application = build_application(token, db_path, feed_base_url, webapp_url)
     feed_port = os.environ.get("PAYBOT_FEED_PORT")
     if feed_port:
         serve(application.bot_data["storage"], int(feed_port))

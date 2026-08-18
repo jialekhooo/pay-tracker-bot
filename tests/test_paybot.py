@@ -1,6 +1,11 @@
 from dataclasses import replace
 from datetime import date, datetime, time
 from decimal import Decimal
+import hashlib
+import hmac
+import json
+import time as time_module
+from urllib.parse import urlencode
 
 import pytest
 
@@ -23,6 +28,7 @@ from paybot.pay import RateConfig, calculate_pay, format_hours
 from paybot.reminders import due, format_offset, local_today, parse_offset
 from paybot.schedule import find_clashes
 from paybot.storage import Reminder, ShiftRecord, Storage
+from paybot.webapp import INIT_DATA_MAX_AGE_SECONDS, parse_init_data
 
 TODAY = date(2026, 8, 11)
 NOON = datetime(2026, 8, 13, 12, 0)
@@ -520,6 +526,48 @@ def test_storage_roundtrip(tmp_path):
     assert records[0].break_paid is False
     assert storage.delete_shift(1, shift_id) is True
     assert storage.list_shifts(1) == []
+
+
+def _signed_init_data(token: str, **fields: str) -> str:
+    """A Telegram-style ``initData`` string signed the way the client would."""
+    data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
+    secret_key = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+    signature = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    return urlencode({**fields, "hash": signature})
+
+
+def test_parse_init_data_accepts_a_valid_signature():
+    token = "123:ABC"
+    init_data = _signed_init_data(
+        token,
+        auth_date=str(int(time_module.time())),
+        user=json.dumps({"id": 42, "first_name": "Ada"}),
+    )
+    user = parse_init_data(init_data, token)
+    assert user == {"id": 42, "first_name": "Ada"}
+
+
+def test_parse_init_data_rejects_a_tampered_payload():
+    token = "123:ABC"
+    init_data = _signed_init_data(
+        token, auth_date=str(int(time_module.time())), user=json.dumps({"id": 42})
+    )
+    tampered = init_data.replace("id%22%3A+42", "id%22%3A+43")
+    assert parse_init_data(tampered, "123:ABC") is None
+
+
+def test_parse_init_data_rejects_wrong_bot_token():
+    init_data = _signed_init_data(
+        "123:ABC", auth_date=str(int(time_module.time())), user=json.dumps({"id": 42})
+    )
+    assert parse_init_data(init_data, "999:ZZZ") is None
+
+
+def test_parse_init_data_rejects_stale_auth_date():
+    token = "123:ABC"
+    old = str(int(time_module.time()) - INIT_DATA_MAX_AGE_SECONDS - 60)
+    init_data = _signed_init_data(token, auth_date=old, user=json.dumps({"id": 42}))
+    assert parse_init_data(init_data, token) is None
 
 
 @pytest.mark.parametrize(

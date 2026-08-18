@@ -79,6 +79,19 @@ export PAYBOT_FEED_URL=https://your-host # public base URL of that port
 Google Calendar refuses URLs carrying basic-auth credentials, so host the feed
 somewhere with a plain `https://host/<token>.ics` address (see below).
 
+## Mini app dashboard
+
+`/app` sends a button that opens a Telegram Mini App — a native-feeling web
+dashboard showing today/this week/this month's earnings (with a running shift
+counted pro-rata), what's upcoming with clashes flagged, and a tap-through
+by-month breakdown. It reuses the calendar feed's public address, so no extra
+hosting is needed. The bot also sets it as the chat's ☰ menu button, so tapping
+that opens the dashboard directly.
+
+The dashboard only runs alongside `paybot.web` (see *Hosting* below) since it's
+served over HTTP; set `PAYBOT_WEBAPP_URL` to override the address it's hosted at
+if it differs from the calendar feed's.
+
 ## Reminders
 
 `/reminders on` sends you a message the evening before (20:00, UTC+8 by default)
@@ -110,6 +123,7 @@ command menu on startup. Unknown commands get a nudge back to `/commands`.
 | `/commands` | List every command (alias `/cmds`) |
 | `/help` | How to log shifts (alias `/start`) |
 | `/log <shift>` | Log a shift (or just send it as a plain message) |
+| `/app` | Open the pay dashboard mini app (aliases `/dashboard`, `/stats`) |
 | `/add <field> <event> <value>` | Backfill location/rate/name/time (alias `/set`) |
 | `/rate` | Show current rates |
 | `/rate 25` | Set the default hourly rate |
@@ -162,8 +176,9 @@ uvicorn paybot.web:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
 
 The included `Dockerfile` does exactly that and keeps the database on a `/data`
-volume, so shifts survive redeploys. `GET /healthz` is a health check and
-`GET /<token>.ics` is the per-user feed.
+volume, so shifts survive redeploys. `GET /healthz` is a health check,
+`GET /<token>.ics` is the per-user feed, and `GET /webapp/` serves the mini app
+dashboard (its `/webapp/api/*` endpoints require Telegram's signed `initData`).
 
 ## Tests
 
