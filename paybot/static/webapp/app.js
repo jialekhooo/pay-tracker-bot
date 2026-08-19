@@ -3,25 +3,38 @@
 
   const tg = window.Telegram ? window.Telegram.WebApp : null;
   const els = {
+    avatar: document.getElementById("avatar"),
     greeting: document.getElementById("greeting"),
     asof: document.getElementById("asof"),
-    tabs: document.getElementById("tabs"),
+    refresh: document.getElementById("refresh"),
+    bottomNav: document.getElementById("bottom-nav"),
     loading: document.getElementById("loading"),
     error: document.getElementById("error"),
     errorText: document.getElementById("error-text"),
     content: document.getElementById("content"),
   };
 
+  const SCOPES = {
+    today: { label: "Today", icon: "☀️" },
+    week: { label: "Week", icon: "📆" },
+    month: { label: "Month", icon: "🗓️" },
+    all: { label: "All time", icon: "💰" },
+  };
+
   let summaryData = null;
-  let activeTab = "today";
-  let monthDetail = null; // set when drilled into a month from the "By month" tab
+  let view = "overview"; // overview | upcoming | months
+  let scope = "today"; // which quick action is selected within overview
+  let monthDetail = null; // set when drilled into a month from the "Months" view
 
   function initTelegram() {
     if (!tg) return;
     tg.ready();
     tg.expand();
-    const name = tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name;
-    if (name) els.greeting.textContent = `Hi ${name} 👋`;
+    const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
+    if (user && user.first_name) {
+      els.greeting.textContent = `Hi ${user.first_name} 👋`;
+      els.avatar.textContent = user.first_name.trim()[0].toUpperCase();
+    }
   }
 
   function authHeader() {
@@ -36,6 +49,12 @@
     const response = await fetch(path, { headers });
     if (!response.ok) throw new Error(`http-${response.status}`);
     return response.json();
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   function money(amount, currency) {
@@ -54,34 +73,25 @@
     return shift.location ? `${shift.event} @ ${shift.location}` : shift.event;
   }
 
+  const STATE_ICON = { done: "✓", running: "⏳", upcoming: "📅" };
+
   function shiftRow(shift, currency, options = {}) {
     const state = options.state || "done";
     const tagText = { running: "in progress", upcoming: "to come" }[state] || "";
     const displayPay = options.earnedPay !== undefined ? options.earnedPay : shift.pay;
-    const clash = shift.clash
-      ? '<span class="clash-badge">⚠ clash</span>'
-      : "";
+    const clash = shift.clash ? '<span class="clash-badge">⚠ clash</span>' : "";
     return `
-      <div class="shift state-${state}">
-        <div class="date">
-          <div class="weekday">${shift.weekday}</div>
-          <div class="day">${shift.date_label.split(" ")[0]}</div>
-        </div>
+      <div class="row state-${state}">
+        <div class="icon">${STATE_ICON[state]}</div>
         <div class="info">
-          <div class="title">#${shift.id} ${escapeHtml(shiftWhere(shift))}${clash}</div>
-          <div class="sub">${shift.start}\u2013${shift.end} \u00b7 ${hours(shift.hours)} \u00b7 ${shift.date_label}</div>
+          <div class="title">${escapeHtml(shiftWhere(shift))}${clash}</div>
+          <div class="sub">${shift.date_label} \u00b7 ${shift.start}\u2013${shift.end} \u00b7 ${hours(shift.hours)}</div>
         </div>
-        <div class="amount">
+        <div class="value">
           ${money(displayPay, currency)}
           ${tagText ? `<span class="tag">${tagText}</span>` : ""}
         </div>
       </div>`;
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   function heroBlock(block, currency) {
@@ -103,16 +113,60 @@
       </div>`;
   }
 
-  function tallyView(block, currency) {
+  function quickActionsBar() {
+    const buttons = Object.entries(SCOPES)
+      .map(
+        ([key, meta]) => `
+      <button class="quick-action${key === scope ? " active" : ""}" data-scope="${key}">
+        <span class="qi">${meta.icon}</span>
+        <span>${meta.label}</span>
+      </button>`
+      )
+      .join("");
+    return `<div class="quick-actions">${buttons}</div>`;
+  }
+
+  function overviewView(data) {
+    const bar = quickActionsBar();
+    if (scope === "all") {
+      const hero = `
+        <div class="hero">
+          <div class="label">All time</div>
+          <div class="amount">${money(data.all_time.earned, data.currency)}</div>
+          <div class="meta">${hours(data.all_time.hours)} \u00b7 ${data.all_time.shifts} shift${
+        data.all_time.shifts === 1 ? "" : "s"
+      }</div>
+        </div>`;
+      const month = data.month;
+      const rows = month.shifts.length
+        ? month.shifts
+            .map((s) =>
+              shiftRow(s, data.currency, {
+                state: s.state,
+                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
+              })
+            )
+            .join("")
+        : `<div class="empty">Nothing logged yet.</div>`;
+      return (
+        bar +
+        hero +
+        `<div class="section-title">This month</div><div class="card-list">${rows}</div>`
+      );
+    }
+    const block = data[scope];
     if (!block.shifts.length) {
-      return heroBlock(block, currency) + `<div class="empty">Nothing logged yet.</div>`;
+      return bar + heroBlock(block, data.currency) + `<div class="empty">Nothing logged yet.</div>`;
     }
     const rows = block.shifts
       .map((s) =>
-        shiftRow(s, currency, { state: s.state, earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay })
+        shiftRow(s, data.currency, {
+          state: s.state,
+          earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
+        })
       )
       .join("");
-    return heroBlock(block, currency) + `<div class="card-list">${rows}</div>`;
+    return bar + heroBlock(block, data.currency) + `<div class="card-list">${rows}</div>`;
   }
 
   function upcomingView(data) {
@@ -136,19 +190,18 @@
     const rows = data.months
       .map(
         (m) => `
-      <div class="month-row" data-month="${m.month}">
-        <div>
-          <div class="label">${escapeHtml(m.label)}</div>
-          <div class="count">${m.shifts} shift${m.shifts === 1 ? "" : "s"} \u00b7 ${hours(m.hours)}</div>
+      <div class="row" data-month="${m.month}">
+        <div class="icon">📆</div>
+        <div class="info">
+          <div class="title">${escapeHtml(m.label)}</div>
+          <div class="sub">${m.shifts} shift${m.shifts === 1 ? "" : "s"} \u00b7 ${hours(m.hours)}</div>
         </div>
-        <div style="display:flex;align-items:center;">
-          <div class="pay">${money(m.pay, m.currency)}</div>
-          <div class="chevron">\u203a</div>
-        </div>
+        <div class="value">${money(m.pay, m.currency)}</div>
+        <div class="chevron">\u203a</div>
       </div>`
       )
       .join("");
-    return allTime + `<div class="card-list">${rows}</div>`;
+    return allTime + `<div class="section-title">By month</div><div class="card-list">${rows}</div>`;
   }
 
   function monthDetailView(detail) {
@@ -156,7 +209,7 @@
       ? detail.shifts.map((s) => shiftRow(s, detail.currency)).join("")
       : `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
     return `
-      <div class="back-row" id="back-to-months">\u2039 By month</div>
+      <div class="back-row" id="back-to-months">\u2039 Months</div>
       <div class="hero">
         <div class="label">${escapeHtml(detail.label)}</div>
         <div class="amount">${money(detail.pay, detail.currency)}</div>
@@ -182,34 +235,24 @@
       return;
     }
 
-    const currency = summaryData.currency;
-    switch (activeTab) {
-      case "today":
-        els.content.innerHTML = tallyView(summaryData.today, currency);
-        break;
-      case "week":
-        els.content.innerHTML = tallyView(summaryData.week, currency);
-        break;
-      case "month":
-        els.content.innerHTML = tallyView(summaryData.month, currency);
-        break;
-      case "upcoming":
-        els.content.innerHTML = upcomingView(summaryData);
-        break;
-      case "months":
-        els.content.innerHTML = monthsView(summaryData);
-        summaryData.months.forEach((m) => {
-          const row = els.content.querySelector(`[data-month="${m.month}"]`);
-          if (row) row.addEventListener("click", () => openMonth(m.month));
-        });
-        break;
+    if (view === "overview") {
+      els.content.innerHTML = overviewView(summaryData);
+      els.content.querySelectorAll("[data-scope]").forEach((btn) => {
+        btn.addEventListener("click", () => selectScope(btn.dataset.scope));
+      });
+    } else if (view === "upcoming") {
+      els.content.innerHTML = upcomingView(summaryData);
+    } else {
+      els.content.innerHTML = monthsView(summaryData);
+      summaryData.months.forEach((m) => {
+        const row = els.content.querySelector(`[data-month="${m.month}"]`);
+        if (row) row.addEventListener("click", () => openMonth(m.month));
+      });
     }
   }
 
   async function openMonth(month) {
-    if (tg && tg.BackButton) {
-      tg.BackButton.show();
-    }
+    if (tg && tg.BackButton) tg.BackButton.show();
     try {
       monthDetail = await api(`/webapp/api/month/${month}`);
       render();
@@ -227,12 +270,17 @@
     render();
   }
 
-  function selectTab(tab) {
-    activeTab = tab;
+  function selectScope(next) {
+    scope = next;
+    render();
+  }
+
+  function selectView(next) {
+    view = next;
     monthDetail = null;
     if (tg && tg.BackButton) tg.BackButton.hide();
-    [...els.tabs.querySelectorAll(".tab")].forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.tab === tab);
+    [...els.bottomNav.querySelectorAll(".nav-btn")].forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.view === next);
     });
     render();
   }
@@ -244,7 +292,7 @@
     if (err && err.message === "no-init-data") {
       els.errorText.textContent = "Open this from the Pay tracker bot in Telegram.";
     } else {
-      els.errorText.textContent = "Couldn't load your shifts — pull down to try again.";
+      els.errorText.textContent = "Couldn't load your shifts — tap ⟳ to try again.";
     }
   }
 
@@ -262,10 +310,12 @@
     }
   }
 
-  els.tabs.addEventListener("click", (event) => {
-    const btn = event.target.closest(".tab");
-    if (btn) selectTab(btn.dataset.tab);
+  els.bottomNav.addEventListener("click", (event) => {
+    const btn = event.target.closest(".nav-btn");
+    if (btn) selectView(btn.dataset.view);
   });
+
+  els.refresh.addEventListener("click", () => load());
 
   if (tg && tg.BackButton) {
     tg.BackButton.onClick(() => setMonthDetail(null));

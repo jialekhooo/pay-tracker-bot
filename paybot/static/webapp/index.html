@@ -10,17 +10,15 @@
 <body>
   <div id="app">
     <header class="topbar">
-      <h1 id="greeting">Pay tracker</h1>
-      <div class="asof" id="asof"></div>
+      <div class="who">
+        <div class="avatar" id="avatar">P</div>
+        <div class="titles">
+          <h1 id="greeting">Pay tracker</h1>
+          <div class="asof" id="asof">mini app</div>
+        </div>
+      </div>
+      <button class="icon-btn" id="refresh" aria-label="Refresh" title="Refresh">⟳</button>
     </header>
-
-    <nav class="tabs" id="tabs">
-      <button class="tab active" data-tab="today">Today</button>
-      <button class="tab" data-tab="week">Week</button>
-      <button class="tab" data-tab="month">Month</button>
-      <button class="tab" data-tab="upcoming">Upcoming</button>
-      <button class="tab" data-tab="months">By month</button>
-    </nav>
 
     <main id="main">
       <div class="state" id="loading">
@@ -32,6 +30,18 @@
       </div>
       <div class="hidden" id="content"></div>
     </main>
+
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-btn active" data-view="overview">
+        <span class="nav-icon">🏠</span><span>Overview</span>
+      </button>
+      <button class="nav-btn" data-view="upcoming">
+        <span class="nav-icon">🗓️</span><span>Upcoming</span>
+      </button>
+      <button class="nav-btn" data-view="months">
+        <span class="nav-icon">📊</span><span>Months</span>
+      </button>
+    </nav>
   </div>
   <script src="app.js"></script>
 </body>
