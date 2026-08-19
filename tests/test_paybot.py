@@ -61,6 +61,17 @@ def test_overnight_shift_wraps_past_midnight():
     assert shift.hours == 4
 
 
+def test_parse_day_month_name_with_military_time_range():
+    """A 4-digit military start time (e.g. 0800) must not be read as a year."""
+    shift = parse_shift("29 Sep 0800-1730 Fund Forum @ MBS 18/h", today=TODAY)
+    assert shift.day == date(2026, 9, 29)
+    assert shift.start == time(8, 0)
+    assert shift.end == time(17, 30)
+    assert shift.event == "Fund Forum"
+    assert shift.location == "MBS"
+    assert shift.rate_override == Decimal("18")
+
+
 def test_parse_rejects_incomplete_input():
     with pytest.raises(ParseError):
         parse_shift("today 9am Roadshow", today=TODAY)

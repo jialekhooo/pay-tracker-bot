@@ -237,7 +237,7 @@ _DATE_CANDIDATE_RE = re.compile(
         today|yesterday|tomorrow
         | \d{4}[-/]\d{1,2}[-/]\d{1,2}
         | \d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?
-        | \d{1,2}\s+[A-Za-z]{3,9}(?:\s+\d{4})?
+        | \d{1,2}\s+[A-Za-z]{3,9}(?:\s+(?:19|20)\d{2})?
     )\b
     """,
     re.IGNORECASE | re.VERBOSE,
