@@ -16,7 +16,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 
-from .bot import build_application
+from .bot import _publish_commands, build_application
 from .feed import feed_body
 from .webapp import router as webapp_router
 
@@ -74,6 +74,8 @@ async def lifespan(app: FastAPI):
     app.state.storage = application.bot_data["storage"]
     app.state.bot_token = token
     await application.initialize()
+    # initialize() (unlike run_polling()) doesn't call post_init, so publish the menu ourselves.
+    await _publish_commands(application)
     await application.start()
     await application.updater.start_polling(drop_pending_updates=True)
     logger.info("Bot polling; calendar feed at %s; mini app at %s", feed_base_url(), webapp_url())
