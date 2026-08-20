@@ -366,7 +366,7 @@
 
   function plainPeriodBody(detail) {
     const rows = detail.shifts.length
-      ? detail.shifts.map((s) => shiftRow(s, detail.currency)).join("")
+      ? detail.shifts.map((s) => shiftRow(s, detail.currency, { state: s.state })).join("")
       : "";
     const body = detail.shifts.length
       ? `<div class="card-list">${rows}</div>`
@@ -385,7 +385,9 @@
     if (!data.upcoming.length) {
       return `<div class="empty">Nothing booked in the next 14 days.</div>`;
     }
-    const rows = data.upcoming.map((s) => shiftRow(s, data.currency)).join("");
+    const rows = data.upcoming
+      .map((s) => shiftRow(s, data.currency, { state: s.state }))
+      .join("");
     return `<div class="section-title">Next 14 days</div><div class="card-list">${rows}</div>`;
   }
 

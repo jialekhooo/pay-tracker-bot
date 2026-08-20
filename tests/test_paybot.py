@@ -902,3 +902,22 @@ def test_webapp_week_rejects_bad_date(tmp_path):
     response = client.get("/webapp/api/week/not-a-date", headers=_auth_headers("TESTTOKEN"))
     assert response.status_code == 400
     storage.close()
+
+
+def test_webapp_month_labels_shifts_as_done_or_upcoming(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2020, 1, 10), time(9, 0), time(17, 0), "Long past gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2099, 1, 10), time(9, 0), time(17, 0), "Far future gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    headers = _auth_headers("TESTTOKEN")
+    past = client.get("/webapp/api/month/2020-01", headers=headers).json()
+    future = client.get("/webapp/api/month/2099-01", headers=headers).json()
+    assert past["shifts"][0]["state"] == "done"
+    assert future["shifts"][0]["state"] == "upcoming"
+    storage.close()

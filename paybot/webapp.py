@@ -14,14 +14,14 @@ import json
 import re
 import time as time_module
 from datetime import date as date_cls
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
-from .bot import earned_by
+from .bot import earned_by, worked_by
 from .parsing import ParseError, parse_time
 from .pay import calculate_pay, round_money
 from .reminders import DEFAULT_UTC_OFFSET_MINUTES, local_clock
@@ -122,8 +122,8 @@ class ShiftCreate(BaseModel):
     break_paid: bool = False
 
 
-def _shift_json(record: ShiftRecord) -> dict:
-    return {
+def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
+    data = {
         "id": record.id,
         "day": record.day.isoformat(),
         "weekday": record.day.strftime("%a"),
@@ -139,6 +139,9 @@ def _shift_json(record: ShiftRecord) -> dict:
         "break_hours": str(record.break_hours),
         "break_paid": record.break_paid,
     }
+    if now is not None:
+        data["state"] = worked_by(record, now).state
+    return data
 
 
 def _tally_json(label: str, records: list[ShiftRecord], now) -> dict:
@@ -201,7 +204,7 @@ async def summary(request: Request, authorization: str | None = Header(default=N
             "shifts": all_time_shifts,
         },
         "upcoming": [
-            {**_shift_json(record), "clash": record.id in clashing} for record in upcoming
+            {**_shift_json(record, now), "clash": record.id in clashing} for record in upcoming
         ],
         "months": [
             {
@@ -224,6 +227,7 @@ async def month_shifts(
     if not re.fullmatch(r"\d{4}-\d{2}", month):
         raise HTTPException(status_code=400, detail="Invalid month, expected YYYY-MM")
     storage, user_id = _authed_user(request, authorization)
+    now = local_clock(_offset(storage, user_id))
     records = storage.list_shifts(user_id, month=month)
     pay = sum((r.pay for r in records), Decimal("0"))
     hours = sum((r.hours for r in records), Decimal("0"))
@@ -234,7 +238,7 @@ async def month_shifts(
         "currency": currency,
         "pay": _num(pay),
         "hours": str(hours),
-        "shifts": [_shift_json(r) for r in records],
+        "shifts": [_shift_json(r, now) for r in records],
     }
 
 
@@ -247,6 +251,7 @@ async def week_shifts(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid date, expected YYYY-MM-DD") from exc
     storage, user_id = _authed_user(request, authorization)
+    now = local_clock(_offset(storage, user_id))
     sunday = monday + timedelta(days=6)
     records = storage.shifts_between(user_id, monday, sunday)
     pay = sum((r.pay for r in records), Decimal("0"))
@@ -258,7 +263,7 @@ async def week_shifts(
         "currency": currency,
         "pay": _num(pay),
         "hours": str(hours),
-        "shifts": [_shift_json(r) for r in records],
+        "shifts": [_shift_json(r, now) for r in records],
     }
 
 
@@ -328,7 +333,7 @@ async def update_shift(
 
     storage.update_shift(user_id, shift_id, **fields)
     updated = storage.get_shift(user_id, shift_id)
-    return _shift_json(updated)
+    return _shift_json(updated, local_clock(_offset(storage, user_id)))
 
 
 @router.post("/shifts")
@@ -395,4 +400,4 @@ async def create_shift(
         pay=pay,
         currency=config.currency,
     )
-    return _shift_json(storage.get_shift(user_id, shift_id))
+    return _shift_json(storage.get_shift(user_id, shift_id), local_clock(_offset(storage, user_id)))
