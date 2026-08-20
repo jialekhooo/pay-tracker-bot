@@ -921,3 +921,87 @@ def test_webapp_month_labels_shifts_as_done_or_upcoming(tmp_path):
     assert past["shifts"][0]["state"] == "done"
     assert future["shifts"][0]["state"] == "upcoming"
     storage.close()
+
+
+def test_event_summaries_group_by_event_across_months(tmp_path):
+    storage = Storage(tmp_path / "paybot.sqlite3")
+    storage.add_shift(
+        1, date(2026, 8, 10), time(9, 0), time(17, 0), "Hermes Private Sale",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        1, date(2026, 9, 1), time(9, 0), time(17, 0), "Hermes Private Sale",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        1, date(2026, 9, 5), time(9, 0), time(17, 0), "IGG Gaming",
+        Decimal("0"), False, Decimal("8"), Decimal("160"), "SGD",
+    )
+    summaries = {s.event: s for s in storage.event_summaries(1)}
+    assert summaries["Hermes Private Sale"].shifts == 2
+    assert summaries["Hermes Private Sale"].pay == Decimal("240")
+    assert summaries["IGG Gaming"].shifts == 1
+    storage.close()
+
+
+def test_shifts_for_event_is_an_exact_case_insensitive_match(tmp_path):
+    storage = Storage(tmp_path / "paybot.sqlite3")
+    storage.add_shift(
+        1, date(2026, 8, 10), time(9, 0), time(17, 0), "Hermes Private Sale",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        1, date(2026, 8, 11), time(9, 0), time(17, 0), "Hermes Private Sale Extended",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    matches = storage.shifts_for_event(1, "hermes private sale")
+    assert [r.event for r in matches] == ["Hermes Private Sale"]
+    storage.close()
+
+
+def test_webapp_events_lists_totals_grouped_by_event(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 10), time(9, 0), time(17, 0), "Hermes Private Sale",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2026, 9, 5), time(9, 0), time(17, 0), "IGG Gaming",
+        Decimal("0"), False, Decimal("8"), Decimal("160"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/events", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    events = {e["event"]: e for e in response.json()["events"]}
+    assert events["Hermes Private Sale"]["pay"] == "120.00"
+    assert events["IGG Gaming"]["pay"] == "160.00"
+    storage.close()
+
+
+def test_webapp_event_detail_returns_its_shifts(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 10), time(9, 0), time(17, 0), "Hermes Private Sale",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2026, 9, 1), time(9, 0), time(17, 0), "Hermes Private Sale",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.get(
+        "/webapp/api/event/Hermes%20Private%20Sale", headers=_auth_headers("TESTTOKEN")
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pay"] == "240.00"
+    assert len(body["shifts"]) == 2
+    storage.close()
+
+
+def test_webapp_event_detail_404s_for_unknown_event(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/event/Nothing", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 404
+    storage.close()

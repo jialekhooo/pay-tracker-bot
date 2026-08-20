@@ -100,6 +100,15 @@ class MonthSummary:
     currency: str
 
 
+@dataclass(frozen=True)
+class EventSummary:
+    event: str
+    shifts: int
+    hours: Decimal
+    pay: Decimal
+    currency: str
+
+
 class Storage:
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
@@ -295,6 +304,30 @@ class Storage:
             for row in rows
         ]
 
+    def event_summaries(self, user_id: int) -> list[EventSummary]:
+        rows = self._conn.execute(
+            """
+            SELECT event, COUNT(*) AS shifts,
+                   SUM(CAST(hours AS REAL)) AS hours, SUM(CAST(pay AS REAL)) AS pay,
+                   currency
+            FROM shifts
+            WHERE user_id = ?
+            GROUP BY lower(event)
+            ORDER BY pay DESC
+            """,
+            (user_id,),
+        )
+        return [
+            EventSummary(
+                event=row["event"],
+                shifts=row["shifts"],
+                hours=Decimal(str(row["hours"])),
+                pay=Decimal(str(row["pay"])),
+                currency=row["currency"],
+            )
+            for row in rows
+        ]
+
     def get_feed_token(self, user_id: int) -> str | None:
         row = self._conn.execute(
             "SELECT token FROM feeds WHERE user_id = ?", (user_id,)
@@ -377,6 +410,18 @@ class Storage:
             ORDER BY day ASC, start_time ASC, ref ASC
             """,
             (user_id, event, f"%{event}%"),
+        )
+        return [_to_record(row) for row in rows]
+
+    def shifts_for_event(self, user_id: int, event: str) -> list[ShiftRecord]:
+        """Every shift for one event, newest first — an exact match, ignoring case."""
+        rows = self._conn.execute(
+            """
+            SELECT * FROM shifts
+            WHERE user_id = ? AND lower(event) = lower(?)
+            ORDER BY day DESC, start_time DESC, ref DESC
+            """,
+            (user_id, event),
         )
         return [_to_record(row) for row in rows]
 

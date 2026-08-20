@@ -30,9 +30,11 @@
   };
 
   let summaryData = null;
-  let view = "overview"; // overview | upcoming | months
+  let view = "overview"; // overview | upcoming | months | events
   let scope = "today"; // which quick action is selected within overview
   let monthDetail = null; // set when drilled into a month from the "Months" view
+  let eventsData = null; // fetched lazily the first time the Events tab is opened
+  let eventDetail = null; // set when drilled into one event from the "Events" view
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
@@ -183,6 +185,38 @@
 
   const STATE_ICON = { done: "✓", running: "⏳", upcoming: "📅" };
 
+  // A consistent color per event name, so the same gig always looks the same in every list.
+  const EVENT_COLORS = [
+    { bg: "#ffe0e6", fg: "#c2185b" },
+    { bg: "#e3f2fd", fg: "#1565c0" },
+    { bg: "#fff3e0", fg: "#ef6c00" },
+    { bg: "#e8f5e9", fg: "#2e7d32" },
+    { bg: "#f3e5f5", fg: "#7b1fa2" },
+    { bg: "#e0f7fa", fg: "#00838f" },
+    { bg: "#fce4ec", fg: "#ad1457" },
+    { bg: "#ede7f6", fg: "#4527a0" },
+  ];
+
+  function eventColor(event) {
+    let hash = 0;
+    for (let i = 0; i < event.length; i += 1) {
+      hash = (hash * 31 + event.charCodeAt(i)) >>> 0;
+    }
+    return EVENT_COLORS[hash % EVENT_COLORS.length];
+  }
+
+  function eventInitial(event) {
+    const trimmed = (event || "").trim();
+    return trimmed ? trimmed[0].toUpperCase() : "?";
+  }
+
+  function eventBadge(event) {
+    const color = eventColor(event);
+    return `<div class="icon" style="background:${color.bg};color:${color.fg}">${escapeHtml(
+      eventInitial(event)
+    )}</div>`;
+  }
+
   function shiftRow(shift, currency, options = {}) {
     shiftsById.set(shift.id, shift);
     const state = options.state || "done";
@@ -191,7 +225,7 @@
     const clash = shift.clash ? '<span class="clash-badge">⚠ clash</span>' : "";
     return `
       <div class="row editable state-${state}" data-id="${shift.id}">
-        <div class="icon">${STATE_ICON[state]}</div>
+        ${eventBadge(shift.event)}
         <div class="info">
           <div class="title">${escapeHtml(shiftWhere(shift))}${clash}</div>
           <div class="sub">${shift.date_label} \u00b7 ${shift.start}\u2013${shift.end} \u00b7 ${hours(shift.hours)}</div>
@@ -429,6 +463,40 @@
       ${plainPeriodBody(detail)}`;
   }
 
+  function eventListRows(events) {
+    return events
+      .map(
+        (e) => `
+      <div class="row" data-event="${encodeURIComponent(e.event)}">
+        ${eventBadge(e.event)}
+        <div class="info">
+          <div class="title">${escapeHtml(e.event)}</div>
+          <div class="sub">${e.shifts} shift${e.shifts === 1 ? "" : "s"} \u00b7 ${hours(e.hours)}</div>
+        </div>
+        <div class="value">${money(e.pay, e.currency)}</div>
+        <div class="chevron">\u203a</div>
+      </div>`
+      )
+      .join("");
+  }
+
+  function eventsView(data) {
+    if (!data) {
+      return `<div class="empty">Loading…</div>`;
+    }
+    if (!data.events.length) {
+      return `<div class="empty">No shifts logged yet.</div>`;
+    }
+    const rows = eventListRows(data.events);
+    return `<div class="section-title">By event</div><div class="card-list">${rows}</div>`;
+  }
+
+  function eventDetailView(detail) {
+    return `
+      <div class="back-row" id="back-to-events">\u2039 Events</div>
+      ${plainPeriodBody(detail)}`;
+  }
+
   function render() {
     if (!summaryData) return;
     els.asof.textContent = `As of ${new Date(summaryData.now).toLocaleString(undefined, {
@@ -443,13 +511,28 @@
       els.content.innerHTML = monthDetailView(monthDetail);
       return;
     }
+    if (eventDetail) {
+      els.content.innerHTML = eventDetailView(eventDetail);
+      return;
+    }
 
     if (view === "overview") {
       els.content.innerHTML = overviewView(summaryData);
     } else if (view === "upcoming") {
       els.content.innerHTML = upcomingView(summaryData);
+    } else if (view === "events") {
+      els.content.innerHTML = eventsView(eventsData);
     } else {
       els.content.innerHTML = monthsView(summaryData);
+    }
+  }
+
+  async function loadEvents() {
+    try {
+      eventsData = await api("/webapp/api/events");
+      render();
+    } catch (err) {
+      showError(err);
     }
   }
 
@@ -525,6 +608,25 @@
     render();
   }
 
+  async function openEvent(name) {
+    if (tg && tg.BackButton) tg.BackButton.show();
+    try {
+      eventDetail = await api(`/webapp/api/event/${encodeURIComponent(name)}`);
+      render();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  function setEventDetail(value) {
+    eventDetail = value;
+    if (tg && tg.BackButton) {
+      if (value) tg.BackButton.show();
+      else tg.BackButton.hide();
+    }
+    render();
+  }
+
   function selectScope(next) {
     scope = next;
     if (next === "month") {
@@ -541,6 +643,7 @@
   function selectView(next) {
     view = next;
     monthDetail = null;
+    eventDetail = null;
     overviewMonth = null;
     overviewMonthData = null;
     overviewWeekStart = null;
@@ -549,7 +652,12 @@
     [...els.bottomNav.querySelectorAll(".nav-btn")].forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.view === next);
     });
-    render();
+    if (next === "events" && !eventsData) {
+      render();
+      loadEvents();
+    } else {
+      render();
+    }
   }
 
   function showError(err) {
@@ -623,6 +731,16 @@
         monthDetail = null;
       }
     }
+    if (eventDetail) {
+      try {
+        eventDetail = await api(`/webapp/api/event/${encodeURIComponent(eventDetail.event)}`);
+      } catch (err) {
+        eventDetail = null;
+      }
+    }
+    if (eventsData) {
+      loadEvents();
+    }
     await load();
   }
 
@@ -684,7 +802,10 @@
     if (btn) selectView(btn.dataset.view);
   });
 
-  els.refresh.addEventListener("click", () => load());
+  els.refresh.addEventListener("click", () => {
+    load();
+    if (view === "events") loadEvents();
+  });
   els.fabAdd.addEventListener("click", () => openCreator());
 
   els.content.addEventListener("click", (event) => {
@@ -710,9 +831,19 @@
       setMonthDetail(null);
       return;
     }
+    const backToEventsRow = event.target.closest("#back-to-events");
+    if (backToEventsRow) {
+      setEventDetail(null);
+      return;
+    }
     const monthRow = event.target.closest("[data-month]");
     if (monthRow) {
       openMonth(monthRow.dataset.month);
+      return;
+    }
+    const eventRow = event.target.closest("[data-event]");
+    if (eventRow) {
+      openEvent(decodeURIComponent(eventRow.dataset.event));
       return;
     }
     const shiftRowEl = event.target.closest("[data-id]");
@@ -732,7 +863,10 @@
   });
 
   if (tg && tg.BackButton) {
-    tg.BackButton.onClick(() => setMonthDetail(null));
+    tg.BackButton.onClick(() => {
+      if (eventDetail) setEventDetail(null);
+      else setMonthDetail(null);
+    });
   }
 
   initTelegram();

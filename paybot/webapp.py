@@ -401,3 +401,42 @@ async def create_shift(
         currency=config.currency,
     )
     return _shift_json(storage.get_shift(user_id, shift_id), local_clock(_offset(storage, user_id)))
+
+
+@router.get("/events")
+async def events(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    summaries = storage.event_summaries(user_id)
+    return {
+        "events": [
+            {
+                "event": s.event,
+                "shifts": s.shifts,
+                "hours": str(s.hours),
+                "pay": _num(s.pay),
+                "currency": s.currency,
+            }
+            for s in summaries
+        ]
+    }
+
+
+@router.get("/event/{event}")
+async def event_shifts(
+    event: str, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    records = storage.shifts_for_event(user_id, event)
+    if not records:
+        raise HTTPException(status_code=404, detail="No shifts logged for this event")
+    now = local_clock(_offset(storage, user_id))
+    pay = sum((r.pay for r in records), Decimal("0"))
+    hours = sum((r.hours for r in records), Decimal("0"))
+    return {
+        "event": records[0].event,
+        "label": records[0].event,
+        "currency": records[0].currency,
+        "pay": _num(pay),
+        "hours": str(hours),
+        "shifts": [_shift_json(r, now) for r in records],
+    }

@@ -230,6 +230,7 @@ main {
   gap: 12px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--secondary-bg);
+  border-left: 3px solid transparent;
 }
 
 .row:last-child {
@@ -244,6 +245,18 @@ main {
   background: var(--secondary-bg);
 }
 
+.row.state-done {
+  border-left-color: var(--done);
+}
+
+.row.state-running {
+  border-left-color: var(--running);
+}
+
+.row.state-upcoming {
+  border-left-color: var(--upcoming);
+}
+
 .row .icon {
   flex: none;
   width: 38px;
@@ -252,19 +265,10 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  background: var(--done-bg);
-  color: var(--done);
-}
-
-.row.state-running .icon {
-  background: var(--running-bg);
-  color: var(--running);
-}
-
-.row.state-upcoming .icon {
-  background: var(--upcoming-bg);
-  color: var(--upcoming);
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--secondary-bg);
+  color: var(--hint);
 }
 
 .row .info {
