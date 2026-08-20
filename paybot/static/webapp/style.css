@@ -336,6 +336,40 @@ main {
   font-size: 14px;
 }
 
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 2px;
+}
+
+.month-nav-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--section-bg);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.month-nav-btn:active {
+  opacity: 0.6;
+}
+
+.month-nav-label {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+
 /* Bottom tab bar */
 .bottom-nav {
   position: fixed;

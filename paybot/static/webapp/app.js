@@ -35,6 +35,8 @@
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
+  let overviewMonth = null; // "YYYY-MM" shown by the Month quick action; null = the live current month
+  let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
 
   function initTelegram() {
     if (!tg) return;
@@ -99,6 +101,34 @@
     return shift.location ? `${shift.event} @ ${shift.location}` : shift.event;
   }
 
+  function currentMonthKey(data) {
+    return (data.now || "").slice(0, 7);
+  }
+
+  function shiftMonthKey(key, delta) {
+    const [year, month] = key.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1 + delta, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function monthKeyLabel(key) {
+    const [year, month] = key.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(undefined, {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }
+
+  function monthNavBar(label) {
+    return `
+      <div class="month-nav">
+        <button type="button" class="month-nav-btn" data-month-nav="prev" aria-label="Previous month">\u2039</button>
+        <div class="month-nav-label">${escapeHtml(label)}</div>
+        <button type="button" class="month-nav-btn" data-month-nav="next" aria-label="Next month">\u203a</button>
+      </div>`;
+  }
+
   const STATE_ICON = { done: "✓", running: "⏳", upcoming: "📅" };
 
   function shiftRow(shift, currency, options = {}) {
@@ -154,6 +184,7 @@
   }
 
   function overviewView(data) {
+    if (scope === "month") return monthScopeView(data);
     const bar = quickActionsBar();
     if (scope === "all") {
       const hero = `
@@ -194,6 +225,71 @@
       )
       .join("");
     return bar + heroBlock(block, data.currency) + `<div class="card-list">${rows}</div>`;
+  }
+
+  function monthScopeView(data) {
+    const bar = quickActionsBar();
+    const liveKey = currentMonthKey(data);
+    const activeKey = overviewMonth || liveKey;
+    const nav = monthNavBar(monthKeyLabel(activeKey));
+
+    if (activeKey === liveKey) {
+      const block = data.month;
+      const rows = block.shifts.length
+        ? block.shifts
+            .map((s) =>
+              shiftRow(s, data.currency, {
+                state: s.state,
+                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
+              })
+            )
+            .join("")
+        : "";
+      const body = block.shifts.length
+        ? `<div class="card-list">${rows}</div>`
+        : `<div class="empty">Nothing logged yet.</div>`;
+      const projected =
+        Number(block.to_come) > 0
+          ? `<div class="projected">+ ${money(block.to_come, data.currency)} to come \u2192 ${money(
+              block.projected,
+              data.currency
+            )} projected</div>`
+          : "";
+      return (
+        bar +
+        nav +
+        `<div class="hero">
+          <div class="amount">${money(block.earned, data.currency)}</div>
+          <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
+          block.finished === 1 ? "" : "s"
+        }</div>
+          ${projected}
+        </div>` +
+        body
+      );
+    }
+
+    if (!overviewMonthData || overviewMonthData.month !== activeKey) {
+      return bar + nav + `<div class="empty">Loading…</div>`;
+    }
+    const detail = overviewMonthData;
+    const rows = detail.shifts.length
+      ? detail.shifts.map((s) => shiftRow(s, detail.currency)).join("")
+      : "";
+    const body = detail.shifts.length
+      ? `<div class="card-list">${rows}</div>`
+      : `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
+    return (
+      bar +
+      nav +
+      `<div class="hero">
+        <div class="amount">${money(detail.pay, detail.currency)}</div>
+        <div class="meta">${hours(detail.hours)} \u00b7 ${detail.shifts.length} shift${
+        detail.shifts.length === 1 ? "" : "s"
+      }</div>
+      </div>` +
+      body
+    );
   }
 
   function upcomingView(data) {
@@ -237,10 +333,12 @@
       : `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
     return `
       <div class="back-row" id="back-to-months">\u2039 Months</div>
+      ${monthNavBar(detail.label)}
       <div class="hero">
-        <div class="label">${escapeHtml(detail.label)}</div>
         <div class="amount">${money(detail.pay, detail.currency)}</div>
-        <div class="meta">${hours(detail.hours)} \u00b7 ${detail.shifts.length} shifts</div>
+        <div class="meta">${hours(detail.hours)} \u00b7 ${detail.shifts.length} shift${
+      detail.shifts.length === 1 ? "" : "s"
+    }</div>
       </div>
       <div class="card-list">${rows}</div>`;
   }
@@ -279,6 +377,38 @@
     }
   }
 
+  async function navigateMonthDetail(direction) {
+    if (!monthDetail) return;
+    const nextKey = shiftMonthKey(monthDetail.month, direction);
+    try {
+      monthDetail = await api(`/webapp/api/month/${nextKey}`);
+      render();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  async function navigateOverviewMonth(direction) {
+    const liveKey = currentMonthKey(summaryData);
+    const activeKey = overviewMonth || liveKey;
+    const nextKey = shiftMonthKey(activeKey, direction);
+    if (nextKey === liveKey) {
+      overviewMonth = null;
+      overviewMonthData = null;
+      render();
+      return;
+    }
+    overviewMonth = nextKey;
+    overviewMonthData = null;
+    render();
+    try {
+      overviewMonthData = await api(`/webapp/api/month/${nextKey}`);
+      render();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
   function setMonthDetail(value) {
     monthDetail = value;
     if (tg && tg.BackButton) {
@@ -290,12 +420,18 @@
 
   function selectScope(next) {
     scope = next;
+    if (next === "month") {
+      overviewMonth = null;
+      overviewMonthData = null;
+    }
     render();
   }
 
   function selectView(next) {
     view = next;
     monthDetail = null;
+    overviewMonth = null;
+    overviewMonthData = null;
     if (tg && tg.BackButton) tg.BackButton.hide();
     [...els.bottomNav.querySelectorAll(".nav-btn")].forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.view === next);
@@ -440,6 +576,16 @@
     const scopeBtn = event.target.closest("[data-scope]");
     if (scopeBtn) {
       selectScope(scopeBtn.dataset.scope);
+      return;
+    }
+    const monthNavBtn = event.target.closest("[data-month-nav]");
+    if (monthNavBtn) {
+      const direction = monthNavBtn.dataset.monthNav === "next" ? 1 : -1;
+      if (monthDetail) {
+        navigateMonthDetail(direction);
+      } else {
+        navigateOverviewMonth(direction);
+      }
       return;
     }
     const backRow = event.target.closest("#back-to-months");
