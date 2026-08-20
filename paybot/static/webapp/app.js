@@ -274,14 +274,7 @@
     if (scope === "week") return weekScopeView(data);
     const bar = quickActionsBar();
     if (scope === "all") {
-      const hero = `
-        <div class="hero">
-          <div class="label">All time</div>
-          <div class="amount">${money(data.all_time.earned, data.currency)}</div>
-          <div class="meta">${hours(data.all_time.hours)} \u00b7 ${data.all_time.shifts} shift${
-        data.all_time.shifts === 1 ? "" : "s"
-      }</div>
-        </div>`;
+      const hero = heroBlock(data.all_time, data.currency);
       const body = data.months.length
         ? `<div class="card-list">${monthListRows(data.months)}</div>`
         : `<div class="empty">Nothing logged yet.</div>`;
@@ -446,12 +439,7 @@
     if (!data.months.length) {
       return `<div class="empty">No shifts logged yet.</div>`;
     }
-    const allTime = `
-      <div class="hero">
-        <div class="label">All time</div>
-        <div class="amount">${money(data.all_time.earned, data.currency)}</div>
-        <div class="meta">${hours(data.all_time.hours)} \u00b7 ${data.all_time.shifts} shifts</div>
-      </div>`;
+    const allTime = heroBlock(data.all_time, data.currency);
     const rows = monthListRows(data.months);
     return allTime + `<div class="section-title">By month</div><div class="card-list">${rows}</div>`;
   }

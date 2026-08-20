@@ -167,6 +167,21 @@ def _tally_json(label: str, records: list[ShiftRecord], now) -> dict:
     }
 
 
+def _all_time_json(records: list[ShiftRecord], now) -> dict:
+    """Same earned-vs-to-come split as a tally block, but across every shift ever logged."""
+    tally = earned_by(records, now)
+    return {
+        "label": "All time",
+        "earned": _num(tally.pay),
+        "hours": str(tally.hours),
+        "finished": tally.finished,
+        "to_come": _num(tally.booked_pay),
+        "booked": tally.booked,
+        "projected": _num(tally.pay + tally.booked_pay),
+        "shifts": len(records),
+    }
+
+
 @router.get("/summary")
 async def summary(request: Request, authorization: str | None = Header(default=None)) -> dict:
     storage, user_id = _authed_user(request, authorization)
@@ -182,9 +197,7 @@ async def summary(request: Request, authorization: str | None = Header(default=N
     month_records = storage.list_shifts(user_id, month=month_key)
 
     summaries = storage.month_summaries(user_id)
-    all_time_pay = sum((s.pay for s in summaries), Decimal("0"))
-    all_time_hours = sum((s.hours for s in summaries), Decimal("0"))
-    all_time_shifts = sum((s.shifts for s in summaries), 0)
+    all_records = storage.list_shifts(user_id)
 
     upcoming = storage.shifts_between(user_id, today, today + timedelta(days=14))
     clashing: set[int] = set()
@@ -198,11 +211,7 @@ async def summary(request: Request, authorization: str | None = Header(default=N
         "today": _tally_json("Today", today_records, now),
         "week": _tally_json(f"Week of {monday.strftime('%d %b')}", week_records, now),
         "month": _tally_json(_month_label(month_key), month_records, now),
-        "all_time": {
-            "earned": _num(all_time_pay),
-            "hours": str(all_time_hours),
-            "shifts": all_time_shifts,
-        },
+        "all_time": _all_time_json(all_records, now),
         "upcoming": [
             {**_shift_json(record, now), "clash": record.id in clashing} for record in upcoming
         ],

@@ -1005,3 +1005,26 @@ def test_webapp_event_detail_404s_for_unknown_event(tmp_path):
     response = client.get("/webapp/api/event/Nothing", headers=_auth_headers("TESTTOKEN"))
     assert response.status_code == 404
     storage.close()
+
+
+def test_webapp_summary_splits_all_time_into_earned_and_to_come(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2020, 1, 10), time(9, 0), time(17, 0), "Long past gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2099, 1, 10), time(9, 0), time(17, 0), "Far future gig",
+        Decimal("0"), False, Decimal("8"), Decimal("160"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/summary", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    all_time = response.json()["all_time"]
+    assert all_time["earned"] == "120.00"
+    assert all_time["to_come"] == "160.00"
+    assert all_time["projected"] == "280.00"
+    assert all_time["finished"] == 1
+    assert all_time["booked"] == 1
+    assert all_time["shifts"] == 2
+    storage.close()
