@@ -91,6 +91,19 @@
               placeholder="uses your saved rate"
             />
           </label>
+          <div class="field-row">
+            <label>
+              Break (hours)
+              <input type="number" name="break_hours" min="0" step="0.25" placeholder="0" />
+            </label>
+          </div>
+          <div class="edit-toggle-row">
+            <span>Paid break</span>
+            <label class="switch">
+              <input type="checkbox" name="break_paid" />
+              <span class="slider"></span>
+            </label>
+          </div>
           <p class="modal-error hidden" id="edit-error"></p>
           <div class="modal-actions">
             <button type="button" class="btn secondary" id="edit-cancel">Cancel</button>

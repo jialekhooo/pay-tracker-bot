@@ -433,7 +433,17 @@ class Storage:
 
     def update_shift(self, user_id: int, shift_id: int, **fields: object) -> bool:
         """Overwrite the given columns of one shift."""
-        allowed = {"day", "start_time", "end_time", "event", "location", "hours", "pay"}
+        allowed = {
+            "day",
+            "start_time",
+            "end_time",
+            "event",
+            "location",
+            "hours",
+            "pay",
+            "break_hours",
+            "break_paid",
+        }
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"Cannot update {', '.join(sorted(unknown))}")

@@ -116,6 +116,8 @@ class ShiftUpdate(BaseModel):
     start: str | None = None
     end: str | None = None
     day: str | None = None
+    break_hours: str | None = None
+    break_paid: bool | None = None
 
 
 class ShiftCreate(BaseModel):
@@ -325,8 +327,24 @@ async def update_shift(
     if payload.location is not None:
         fields["location"] = payload.location.strip()
 
+    break_hours = record.break_hours
+    if payload.break_hours is not None:
+        try:
+            break_hours = Decimal(payload.break_hours)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid break hours") from exc
+        if break_hours < 0:
+            raise HTTPException(status_code=400, detail="Break hours can't be negative")
+    break_paid = record.break_paid if payload.break_paid is None else payload.break_paid
+
     hours = record.hours
-    if payload.start is not None or payload.end is not None:
+    durational_change = (
+        payload.start is not None
+        or payload.end is not None
+        or payload.break_hours is not None
+        or payload.break_paid is not None
+    )
+    if durational_change:
         try:
             start = parse_time(payload.start) if payload.start is not None else record.start
             end = parse_time(payload.end) if payload.end is not None else record.end
@@ -334,12 +352,14 @@ async def update_shift(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         begins, ends = span(record.day, start, end)
         worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
-        if not record.break_paid:
-            worked -= record.break_hours
+        if not break_paid:
+            worked -= break_hours
         hours = max(worked, Decimal("0"))
         fields["start_time"] = start.isoformat(timespec="minutes")
         fields["end_time"] = end.isoformat(timespec="minutes")
         fields["hours"] = str(hours)
+        fields["break_hours"] = str(break_hours)
+        fields["break_paid"] = int(break_paid)
 
     if payload.day is not None:
         try:
@@ -358,7 +378,7 @@ async def update_shift(
             raise HTTPException(status_code=400, detail="Rate can't be negative")
         fields["pay"] = str(calculate_pay(float(hours), event, config, rate))
     elif "hours" in fields:
-        # the time changed but not the rate — keep the same hourly rate, new hours
+        # the time or break changed but not the rate — keep the same hourly rate, new hours
         old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
         fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
 

@@ -1108,3 +1108,84 @@ def test_webapp_calendar_rotate_503s_without_feed_url(tmp_path):
     response = client.post("/webapp/api/calendar/rotate", headers=_auth_headers("TESTTOKEN"))
     assert response.status_code == 503
     storage.close()
+
+
+def test_webapp_update_shift_adds_an_unpaid_break_and_recomputes_pay(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"break_hours": "1", "break_paid": False},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hours"] == "7"
+    assert body["pay"] == "105.00"
+    assert body["break_hours"] == "1"
+    assert body["break_paid"] is False
+    storage.close()
+
+
+def test_webapp_update_shift_making_break_paid_restores_full_hours(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("1"), False, Decimal("7"), Decimal("105"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"break_paid": True},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hours"] == "8"
+    assert body["pay"] == "120.00"
+    assert body["break_paid"] is True
+    storage.close()
+
+
+def test_webapp_update_shift_rejects_negative_break_hours(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"break_hours": "-1"},
+    )
+    assert response.status_code == 400
+    storage.close()
+
+
+def test_webapp_create_shift_with_a_paid_break(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Gig",
+            "day": "2026-08-30",
+            "start": "09:00",
+            "end": "17:00",
+            "rate": "15",
+            "break_hours": "1",
+            "break_paid": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hours"] == "8"
+    assert body["break_hours"] == "1"
+    assert body["break_paid"] is True
+    storage.close()
