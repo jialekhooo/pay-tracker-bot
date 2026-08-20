@@ -810,3 +810,67 @@ def test_each_user_numbers_their_shifts_from_one(tmp_path):
     assert [r.id for r in storage.list_shifts(2)] == [1]
     assert storage.delete_shift(2, 1) and storage.get_shift(1, 1) is not None
     storage.close()
+
+
+def test_webapp_create_shift_with_explicit_rate(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Wedding gig",
+            "location": "MBS",
+            "day": "2026-08-25",
+            "start": "18:00",
+            "end": "23:30",
+            "rate": "25",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["event"] == "Wedding gig"
+    assert body["location"] == "MBS"
+    assert body["hours"] == "5.5"
+    assert body["pay"] == "137.50"
+    storage.close()
+
+
+def test_webapp_create_shift_uses_saved_rate_when_none_given(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.save_config(42, RateConfig(default_rate=Decimal("18"), event_rates={}))
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "Roadshow", "day": "2026-08-26", "start": "09:00", "end": "17:00"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hours"] == "8"
+    assert body["pay"] == "144.00"
+    storage.close()
+
+
+def test_webapp_create_shift_rejects_empty_event(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "  ", "day": "2026-08-26", "start": "09:00", "end": "17:00"},
+    )
+    assert response.status_code == 400
+    storage.close()
+
+
+def test_webapp_create_shift_rejects_bad_time(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "Gig", "day": "2026-08-26", "start": "9x", "end": "17:00"},
+    )
+    assert response.status_code == 400
+    storage.close()

@@ -109,6 +109,19 @@ class ShiftUpdate(BaseModel):
     day: str | None = None
 
 
+class ShiftCreate(BaseModel):
+    """A new shift logged from the mini app's "+" button."""
+
+    event: str
+    location: str = ""
+    day: str
+    start: str
+    end: str
+    rate: str | None = None
+    break_hours: str | None = None
+    break_paid: bool = False
+
+
 def _shift_json(record: ShiftRecord) -> dict:
     return {
         "id": record.id,
@@ -292,3 +305,70 @@ async def update_shift(
     storage.update_shift(user_id, shift_id, **fields)
     updated = storage.get_shift(user_id, shift_id)
     return _shift_json(updated)
+
+
+@router.post("/shifts")
+async def create_shift(
+    payload: ShiftCreate, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    config = storage.get_config(user_id)
+
+    event = payload.event.strip()
+    if not event:
+        raise HTTPException(status_code=400, detail="Event name can't be empty")
+
+    try:
+        day = date_cls.fromisoformat(payload.day)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date, expected YYYY-MM-DD") from exc
+
+    try:
+        start = parse_time(payload.start)
+        end = parse_time(payload.end)
+    except ParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if payload.break_hours is not None:
+        try:
+            break_hours = Decimal(payload.break_hours)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid break hours") from exc
+        break_paid = payload.break_paid
+    else:
+        # no break given — fall back to the user's /break default, same as logging by text
+        break_hours = config.default_break_hours
+        break_paid = config.default_break_paid
+    if break_hours < 0:
+        raise HTTPException(status_code=400, detail="Break hours can't be negative")
+
+    begins, ends = span(day, start, end)
+    worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
+    if not break_paid:
+        worked -= break_hours
+    hours = max(worked, Decimal("0"))
+
+    rate_override = None
+    if payload.rate:
+        try:
+            rate_override = Decimal(payload.rate)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid rate") from exc
+        if rate_override < 0:
+            raise HTTPException(status_code=400, detail="Rate can't be negative")
+
+    pay = calculate_pay(float(hours), event, config, rate_override)
+    shift_id = storage.add_shift(
+        user_id=user_id,
+        day=day,
+        start=start,
+        end=end,
+        event=event,
+        location=payload.location.strip(),
+        break_hours=break_hours,
+        break_paid=break_paid,
+        hours=hours,
+        pay=pay,
+        currency=config.currency,
+    )
+    return _shift_json(storage.get_shift(user_id, shift_id))

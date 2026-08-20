@@ -373,6 +373,27 @@ main {
   color: var(--button);
 }
 
+/* Floating "+" button to log a new shift */
+.fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 14px);
+  width: 54px;
+  height: 54px;
+  border: none;
+  border-radius: 50%;
+  background: var(--button);
+  color: var(--button-text);
+  font-size: 28px;
+  line-height: 1;
+  box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
+  z-index: 15;
+}
+
+.fab:active {
+  opacity: 0.85;
+}
+
 /* Edit-shift modal */
 .modal-backdrop {
   position: fixed;

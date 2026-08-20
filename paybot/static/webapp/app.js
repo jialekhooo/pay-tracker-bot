@@ -14,9 +14,11 @@
     content: document.getElementById("content"),
     editBackdrop: document.getElementById("edit-backdrop"),
     editForm: document.getElementById("edit-form"),
+    editTitle: document.getElementById("edit-title"),
     editError: document.getElementById("edit-error"),
     editSave: document.getElementById("edit-save"),
     editCancel: document.getElementById("edit-cancel"),
+    fabAdd: document.getElementById("fab-add"),
   };
 
   const SCOPES = {
@@ -32,6 +34,7 @@
   let monthDetail = null; // set when drilled into a month from the "Months" view
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
+  let editorMode = null; // "edit" | "create"
 
   function initTelegram() {
     if (!tg) return;
@@ -327,7 +330,10 @@
 
   function openEditor(shift) {
     if (!shift) return;
+    editorMode = "edit";
     editingShiftId = shift.id;
+    els.editTitle.textContent = "Edit shift";
+    els.editSave.textContent = "Save";
     els.editForm.event.value = shift.event;
     els.editForm.location.value = shift.location || "";
     els.editForm.day.value = shift.day;
@@ -338,9 +344,24 @@
     els.editBackdrop.classList.remove("hidden");
   }
 
+  function openCreator() {
+    editorMode = "create";
+    editingShiftId = null;
+    els.editForm.reset();
+    els.editTitle.textContent = "Add shift";
+    els.editSave.textContent = "Add shift";
+    const today = ((summaryData && summaryData.now) || new Date().toISOString()).slice(0, 10);
+    els.editForm.day.value = today;
+    els.editForm.start.value = "09:00";
+    els.editForm.end.value = "17:00";
+    els.editError.classList.add("hidden");
+    els.editBackdrop.classList.remove("hidden");
+  }
+
   function closeEditor() {
     els.editBackdrop.classList.add("hidden");
     editingShiftId = null;
+    editorMode = null;
   }
 
   async function refreshAfterEdit() {
@@ -354,13 +375,22 @@
     await load();
   }
 
-  async function submitEditor(event) {
-    event.preventDefault();
+  async function submitCreate() {
+    const form = els.editForm;
+    const payload = {
+      event: form.event.value.trim(),
+      location: form.location.value.trim(),
+      day: form.day.value,
+      start: form.start.value,
+      end: form.end.value,
+    };
+    if (form.rate.value) payload.rate = form.rate.value;
+    await api("/webapp/api/shifts", { method: "POST", body: payload });
+  }
+
+  async function submitUpdate() {
     const shift = shiftsById.get(editingShiftId);
-    if (!shift) {
-      closeEditor();
-      return;
-    }
+    if (!shift) return;
     const form = els.editForm;
     const payload = {};
     if (form.event.value.trim() !== shift.event) payload.event = form.event.value.trim();
@@ -370,18 +400,28 @@
     if (form.start.value !== shift.start) payload.start = form.start.value;
     if (form.end.value !== shift.end) payload.end = form.end.value;
     if (form.rate.value !== shift.rate) payload.rate = form.rate.value;
-    if (!Object.keys(payload).length) {
-      closeEditor();
-      return;
-    }
+    if (!Object.keys(payload).length) return;
+    await api(`/webapp/api/shifts/${shift.id}`, { method: "PATCH", body: payload });
+  }
+
+  async function submitEditor(event) {
+    event.preventDefault();
     els.editSave.disabled = true;
     els.editError.classList.add("hidden");
     try {
-      await api(`/webapp/api/shifts/${shift.id}`, { method: "PATCH", body: payload });
+      if (editorMode === "create") {
+        await submitCreate();
+      } else {
+        await submitUpdate();
+      }
       closeEditor();
       await refreshAfterEdit();
     } catch (err) {
-      els.editError.textContent = err.detail || "Couldn't save — check the fields and try again.";
+      const fallback =
+        editorMode === "create"
+          ? "Couldn't add the shift — check the fields and try again."
+          : "Couldn't save — check the fields and try again.";
+      els.editError.textContent = err.detail || fallback;
       els.editError.classList.remove("hidden");
     } finally {
       els.editSave.disabled = false;
@@ -394,6 +434,7 @@
   });
 
   els.refresh.addEventListener("click", () => load());
+  els.fabAdd.addEventListener("click", () => openCreator());
 
   els.content.addEventListener("click", (event) => {
     const scopeBtn = event.target.closest("[data-scope]");
