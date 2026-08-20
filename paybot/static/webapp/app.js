@@ -799,7 +799,7 @@
     els.editForm.end.value = shift.end;
     els.editForm.rate.value = shift.rate;
     els.editForm.break_hours.value = shift.break_hours;
-    els.editForm.break_paid.checked = shift.break_paid;
+    els.editForm.break_paid.value = shift.break_paid ? "yes" : "no";
     els.editError.classList.add("hidden");
     els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
@@ -815,6 +815,7 @@
     els.editForm.day.value = today;
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
+    els.editForm.break_paid.value = "no";
     els.editError.classList.add("hidden");
     els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
@@ -859,7 +860,7 @@
     if (form.rate.value) payload.rate = form.rate.value;
     if (form.break_hours.value) {
       payload.break_hours = form.break_hours.value;
-      payload.break_paid = form.break_paid.checked;
+      payload.break_paid = form.break_paid.value === "yes";
     }
     await api("/webapp/api/shifts", { method: "POST", body: payload });
   }
@@ -878,7 +879,8 @@
     if (form.rate.value !== shift.rate) payload.rate = form.rate.value;
     if (form.break_hours.value !== shift.break_hours)
       payload.break_hours = form.break_hours.value || "0";
-    if (form.break_paid.checked !== shift.break_paid) payload.break_paid = form.break_paid.checked;
+    const breakPaid = form.break_paid.value === "yes";
+    if (breakPaid !== shift.break_paid) payload.break_paid = breakPaid;
     if (!Object.keys(payload).length) return;
     await api(`/webapp/api/shifts/${shift.id}`, { method: "PATCH", body: payload });
   }

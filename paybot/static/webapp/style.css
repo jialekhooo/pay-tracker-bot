@@ -485,7 +485,8 @@ main {
   color: var(--hint);
 }
 
-#edit-form input {
+#edit-form input,
+#edit-form select {
   font: inherit;
   font-weight: 500;
   color: var(--text);
@@ -505,15 +506,6 @@ main {
 
 .field-row label {
   min-width: 0;
-}
-
-.edit-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
 }
 
 .modal-error {
