@@ -13,6 +13,7 @@
     errorText: document.getElementById("error-text"),
     content: document.getElementById("content"),
     editBackdrop: document.getElementById("edit-backdrop"),
+    editSheet: document.getElementById("edit-sheet"),
     editForm: document.getElementById("edit-form"),
     editTitle: document.getElementById("edit-title"),
     editError: document.getElementById("edit-error"),
@@ -48,6 +49,22 @@
     if (user && user.first_name) {
       els.greeting.textContent = `Hi ${user.first_name} 👋`;
       els.avatar.textContent = user.first_name.trim()[0].toUpperCase();
+    }
+  }
+
+  // Keep the modal pinned above the on-screen keyboard instead of letting it cover the buttons.
+  function syncAppHeight() {
+    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty("--app-height", `${height}px`);
+  }
+
+  function initViewport() {
+    syncAppHeight();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", syncAppHeight);
+      window.visualViewport.addEventListener("scroll", syncAppHeight);
+    } else {
+      window.addEventListener("resize", syncAppHeight);
     }
   }
 
@@ -579,6 +596,7 @@
     els.editForm.end.value = shift.end;
     els.editForm.rate.value = shift.rate;
     els.editError.classList.add("hidden");
+    els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
   }
 
@@ -593,6 +611,7 @@
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
     els.editError.classList.add("hidden");
+    els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
   }
 
@@ -713,11 +732,16 @@
     if (event.target === els.editBackdrop) closeEditor();
   });
   els.editForm.addEventListener("submit", submitEditor);
+  els.editForm.addEventListener("focusin", (event) => {
+    // give the keyboard time to animate in before scrolling the field into view
+    setTimeout(() => event.target.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+  });
 
   if (tg && tg.BackButton) {
     tg.BackButton.onClick(() => setMonthDetail(null));
   }
 
   initTelegram();
+  initViewport();
   load();
 })();

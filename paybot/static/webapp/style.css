@@ -431,7 +431,10 @@ main {
 /* Edit-shift modal */
 .modal-backdrop {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--app-height, 100vh);
   background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: flex-end;
@@ -443,8 +446,9 @@ main {
   background: var(--bg);
   border-radius: 18px 18px 0 0;
   padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
-  max-height: 88vh;
+  max-height: 100%;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .modal-handle {
@@ -486,11 +490,17 @@ main {
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 15px;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .field-row {
   display: flex;
   gap: 10px;
+}
+
+.field-row label {
+  min-width: 0;
 }
 
 .modal-error {
@@ -503,6 +513,10 @@ main {
   display: flex;
   gap: 10px;
   margin-top: 4px;
+  padding: 10px 0 calc(4px + env(safe-area-inset-bottom, 0px));
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
 }
 
 .btn {
