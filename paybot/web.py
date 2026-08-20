@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI):
     application = build_application(token, database_path(), feed_base_url(), webapp_url())
     app.state.storage = application.bot_data["storage"]
     app.state.bot_token = token
+    app.state.feed_base_url = feed_base_url()
     await application.initialize()
     # initialize() (unlike run_polling()) doesn't call post_init, so publish the menu ourselves.
     await _publish_commands(application)

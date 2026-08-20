@@ -17,6 +17,7 @@ class RateConfig:
     currency: str = "SGD"
     default_break_hours: Decimal = Decimal("0")
     default_break_paid: bool = False
+    display_name: str = ""
 
     def rate_for(self, event: str) -> Decimal:
         return self.event_rates.get(event.strip().lower(), self.default_rate)

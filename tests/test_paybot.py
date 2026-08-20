@@ -583,11 +583,14 @@ def test_parse_init_data_rejects_stale_auth_date():
     assert parse_init_data(init_data, token) is None
 
 
-def _webapp_client(storage: Storage, token: str = "TESTTOKEN") -> TestClient:
+def _webapp_client(
+    storage: Storage, token: str = "TESTTOKEN", feed_base_url: str | None = None
+) -> TestClient:
     app = FastAPI()
     app.include_router(webapp_router)
     app.state.storage = storage
     app.state.bot_token = token
+    app.state.feed_base_url = feed_base_url
     return TestClient(app)
 
 
@@ -1027,4 +1030,81 @@ def test_webapp_summary_splits_all_time_into_earned_and_to_come(tmp_path):
     assert all_time["finished"] == 1
     assert all_time["booked"] == 1
     assert all_time["shifts"] == 2
+    storage.close()
+
+
+def test_webapp_get_settings_defaults(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage, feed_base_url="https://example.test")
+    response = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["display_name"] == ""
+    assert body["default_rate"] == "15.00"
+    assert body["currency"] == "SGD"
+    assert body["reminders"]["enabled"] is False
+    assert body["calendar_url"].endswith(".ics")
+    storage.close()
+
+
+def test_webapp_update_settings_changes_name_rate_and_currency(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.patch(
+        "/webapp/api/settings",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"display_name": "Jia Le", "default_rate": "18", "currency": "usd"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["display_name"] == "Jia Le"
+    assert body["default_rate"] == "18.00"
+    assert body["currency"] == "USD"
+    storage.close()
+
+
+def test_webapp_update_settings_rejects_bad_rate(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.patch(
+        "/webapp/api/settings",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"default_rate": "nope"},
+    )
+    assert response.status_code == 400
+    storage.close()
+
+
+def test_webapp_update_reminders_roundtrips(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.patch(
+        "/webapp/api/reminders",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"enabled": True, "send_at": "19:30", "utc_offset": "+5:30"},
+    )
+    assert response.status_code == 200
+    reminders = response.json()["reminders"]
+    assert reminders["enabled"] is True
+    assert reminders["send_at"] == "19:30"
+    assert reminders["utc_offset_minutes"] == 330
+    storage.close()
+
+
+def test_webapp_calendar_rotate_changes_the_token(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage, feed_base_url="https://example.test")
+    before = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN")).json()
+    response = client.post("/webapp/api/calendar/rotate", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    after = response.json()["calendar_url"]
+    assert after != before["calendar_url"]
+    storage.close()
+
+
+def test_webapp_calendar_rotate_503s_without_feed_url(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post("/webapp/api/calendar/rotate", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 503
     storage.close()

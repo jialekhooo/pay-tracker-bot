@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS settings (
     overtime_after_hours TEXT,
     overtime_multiplier TEXT NOT NULL DEFAULT '1.5',
     default_break_hours TEXT NOT NULL DEFAULT '0',
-    default_break_paid INTEGER NOT NULL DEFAULT 0
+    default_break_paid INTEGER NOT NULL DEFAULT 0,
+    display_name TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS event_rates (
@@ -125,6 +126,7 @@ class Storage:
             "settings": {
                 "default_break_hours": "TEXT NOT NULL DEFAULT '0'",
                 "default_break_paid": "INTEGER NOT NULL DEFAULT 0",
+                "display_name": "TEXT NOT NULL DEFAULT ''",
             },
             "shifts": {
                 "location": "TEXT NOT NULL DEFAULT ''",
@@ -178,21 +180,24 @@ class Storage:
             currency=row["currency"],
             default_break_hours=Decimal(row["default_break_hours"]),
             default_break_paid=bool(row["default_break_paid"]),
+            display_name=row["display_name"],
         )
 
     def save_config(self, user_id: int, config: RateConfig) -> None:
         self._conn.execute(
             """
             INSERT INTO settings (user_id, default_rate, currency, overtime_after_hours,
-                                  overtime_multiplier, default_break_hours, default_break_paid)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                  overtime_multiplier, default_break_hours, default_break_paid,
+                                  display_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 default_rate = excluded.default_rate,
                 currency = excluded.currency,
                 overtime_after_hours = excluded.overtime_after_hours,
                 overtime_multiplier = excluded.overtime_multiplier,
                 default_break_hours = excluded.default_break_hours,
-                default_break_paid = excluded.default_break_paid
+                default_break_paid = excluded.default_break_paid,
+                display_name = excluded.display_name
             """,
             (
                 user_id,
@@ -202,6 +207,7 @@ class Storage:
                 str(config.overtime_multiplier),
                 str(config.default_break_hours),
                 int(config.default_break_paid),
+                config.display_name,
             ),
         )
         self._conn.execute("DELETE FROM event_rates WHERE user_id = ?", (user_id,))

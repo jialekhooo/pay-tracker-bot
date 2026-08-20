@@ -13,8 +13,10 @@ import hmac
 import json
 import re
 import time as time_module
+from dataclasses import replace
 from datetime import date as date_cls
 from datetime import datetime, timedelta
+from datetime import time as time_cls
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl
 
@@ -22,9 +24,16 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from .bot import earned_by, worked_by
+from .feed import issue_token
 from .parsing import ParseError, parse_time
 from .pay import calculate_pay, round_money
-from .reminders import DEFAULT_UTC_OFFSET_MINUTES, local_clock
+from .reminders import (
+    DEFAULT_SEND_AT,
+    DEFAULT_UTC_OFFSET_MINUTES,
+    format_offset,
+    local_clock,
+    parse_offset,
+)
 from .schedule import find_clashes, span
 from .storage import ShiftRecord, Storage
 
@@ -120,6 +129,22 @@ class ShiftCreate(BaseModel):
     rate: str | None = None
     break_hours: str | None = None
     break_paid: bool = False
+
+
+class SettingsUpdate(BaseModel):
+    """A partial edit from the mini app's Settings tab — unset fields are left alone."""
+
+    display_name: str | None = None
+    default_rate: str | None = None
+    currency: str | None = None
+
+
+class ReminderUpdate(BaseModel):
+    """The day-before reminder, edited as a whole from the Settings tab."""
+
+    enabled: bool
+    send_at: str | None = None
+    utc_offset: str | None = None
 
 
 def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
@@ -449,3 +474,97 @@ async def event_shifts(
         "hours": str(hours),
         "shifts": [_shift_json(r, now) for r in records],
     }
+
+
+def _calendar_url(request: Request, storage: Storage, user_id: int) -> str | None:
+    base_url = getattr(request.app.state, "feed_base_url", None)
+    if not base_url:
+        return None
+    token = issue_token(storage, user_id)
+    return f"{base_url.rstrip('/')}/{token}.ics"
+
+
+def _settings_json(request: Request, storage: Storage, user_id: int) -> dict:
+    config = storage.get_config(user_id)
+    reminder = storage.get_reminder(user_id)
+    send_at = reminder.send_at if reminder else time_cls.fromisoformat(DEFAULT_SEND_AT)
+    offset = reminder.utc_offset_minutes if reminder else DEFAULT_UTC_OFFSET_MINUTES
+    return {
+        "display_name": config.display_name,
+        "default_rate": _num(config.default_rate),
+        "currency": config.currency,
+        "reminders": {
+            "enabled": bool(reminder.enabled) if reminder else False,
+            "send_at": send_at.strftime("%H:%M"),
+            "utc_offset_minutes": offset,
+            "utc_offset_label": format_offset(offset),
+        },
+        "calendar_url": _calendar_url(request, storage, user_id),
+    }
+
+
+@router.get("/settings")
+async def get_settings(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    return _settings_json(request, storage, user_id)
+
+
+@router.patch("/settings")
+async def update_settings(
+    payload: SettingsUpdate, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    config = storage.get_config(user_id)
+    changes: dict[str, object] = {}
+    if payload.display_name is not None:
+        changes["display_name"] = payload.display_name.strip()[:60]
+    if payload.default_rate is not None:
+        try:
+            rate = Decimal(payload.default_rate)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid rate") from exc
+        if rate < 0:
+            raise HTTPException(status_code=400, detail="Rate can't be negative")
+        changes["default_rate"] = rate
+    if payload.currency is not None:
+        code = payload.currency.strip().upper()
+        if not code:
+            raise HTTPException(status_code=400, detail="Currency can't be empty")
+        changes["currency"] = code
+    if changes:
+        storage.save_config(user_id, replace(config, **changes))
+    return _settings_json(request, storage, user_id)
+
+
+@router.patch("/reminders")
+async def update_reminders(
+    payload: ReminderUpdate, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    existing = storage.get_reminder(user_id)
+    send_at = existing.send_at if existing else time_cls.fromisoformat(DEFAULT_SEND_AT)
+    offset = existing.utc_offset_minutes if existing else DEFAULT_UTC_OFFSET_MINUTES
+    if payload.send_at is not None:
+        try:
+            send_at = time_cls.fromisoformat(payload.send_at)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid time, expected HH:MM") from exc
+    if payload.utc_offset is not None:
+        try:
+            offset = parse_offset(payload.utc_offset)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    storage.save_reminder(user_id, user_id, send_at, offset, payload.enabled)
+    return _settings_json(request, storage, user_id)
+
+
+@router.post("/calendar/rotate")
+async def rotate_calendar_link(
+    request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    base_url = getattr(request.app.state, "feed_base_url", None)
+    if not base_url:
+        raise HTTPException(status_code=503, detail="The calendar feed isn't set up")
+    token = issue_token(storage, user_id, refresh=True)
+    return {"calendar_url": f"{base_url.rstrip('/')}/{token}.ics"}

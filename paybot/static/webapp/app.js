@@ -30,11 +30,13 @@
   };
 
   let summaryData = null;
-  let view = "overview"; // overview | upcoming | months | events
+  let view = "overview"; // overview | upcoming | months | events | settings
   let scope = "today"; // which quick action is selected within overview
   let monthDetail = null; // set when drilled into a month from the "Months" view
   let eventsData = null; // fetched lazily the first time the Events tab is opened
   let eventDetail = null; // set when drilled into one event from the "Events" view
+  let settingsData = null; // fetched lazily the first time the Settings tab is opened
+  let telegramFirstName = ""; // fallback greeting name when no display name is set
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
@@ -49,9 +51,16 @@
     tg.expand();
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (user && user.first_name) {
-      els.greeting.textContent = `Hi ${user.first_name} 👋`;
-      els.avatar.textContent = user.first_name.trim()[0].toUpperCase();
+      telegramFirstName = user.first_name;
+      updateGreeting();
     }
+  }
+
+  function updateGreeting() {
+    const name = (settingsData && settingsData.display_name) || telegramFirstName;
+    if (!name) return;
+    els.greeting.textContent = `Hi ${name} 👋`;
+    els.avatar.textContent = name.trim()[0].toUpperCase();
   }
 
   // Keep the modal pinned above the on-screen keyboard instead of letting it cover the buttons.
@@ -485,6 +494,94 @@
       ${plainPeriodBody(detail)}`;
   }
 
+  function settingsView(data) {
+    if (!data) {
+      return `<div class="empty">Loading…</div>`;
+    }
+    return `
+      <div class="section-title">Profile</div>
+      <div class="card-list settings-card">
+        <div class="settings-row">
+          <label for="settings-display-name">Display name</label>
+          <input
+            type="text"
+            id="settings-display-name"
+            maxlength="60"
+            placeholder="${escapeHtml(telegramFirstName || "Your name")}"
+            value="${escapeHtml(data.display_name)}"
+          />
+        </div>
+      </div>
+      <button type="button" class="btn primary settings-btn" data-action="save-profile">Save</button>
+      <p class="modal-error hidden" id="settings-profile-error"></p>
+
+      <div class="section-title">Pay</div>
+      <div class="card-list settings-card">
+        <div class="settings-row">
+          <label for="settings-rate">Default rate / hour</label>
+          <input type="number" id="settings-rate" min="0" step="0.01" value="${data.default_rate}" />
+        </div>
+        <div class="settings-row">
+          <label for="settings-currency">Currency</label>
+          <input type="text" id="settings-currency" maxlength="8" value="${escapeHtml(data.currency)}" />
+        </div>
+      </div>
+      <button type="button" class="btn primary settings-btn" data-action="save-pay">Save</button>
+      <p class="modal-error hidden" id="settings-pay-error"></p>
+
+      <div class="section-title">Reminders</div>
+      <div class="card-list settings-card">
+        <div class="settings-row toggle-row">
+          <label for="settings-reminders-enabled">Day-before reminder</label>
+          <label class="switch">
+            <input type="checkbox" id="settings-reminders-enabled" ${
+              data.reminders.enabled ? "checked" : ""
+            } />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <label for="settings-reminders-time">Send at</label>
+          <input type="time" id="settings-reminders-time" value="${data.reminders.send_at}" />
+        </div>
+        <div class="settings-row">
+          <label for="settings-reminders-offset">Timezone (e.g. +8)</label>
+          <input
+            type="text"
+            id="settings-reminders-offset"
+            value="${escapeHtml(data.reminders.utc_offset_label.replace("UTC", ""))}"
+          />
+        </div>
+      </div>
+      <button type="button" class="btn primary settings-btn" data-action="save-reminders">Save</button>
+      <p class="modal-error hidden" id="settings-reminders-error"></p>
+
+      <div class="section-title">Calendar</div>
+      <div class="card-list settings-card">
+        <div class="settings-row">
+          <label>Subscription link</label>
+          <div class="calendar-link" id="settings-calendar-link">${
+            data.calendar_url
+              ? escapeHtml(data.calendar_url)
+              : "Not available on this deployment"
+          }</div>
+        </div>
+      </div>
+      ${
+        data.calendar_url
+          ? `<div class="settings-actions">
+              <button type="button" class="btn secondary" data-action="copy-calendar">Copy link</button>
+              <button type="button" class="btn secondary" data-action="rotate-calendar">New link</button>
+            </div>`
+          : ""
+      }
+      <p class="section-hint">
+        Subscribe once in Google/Apple Calendar or TimeTree and every shift you log stays in
+        sync automatically.
+      </p>
+    `;
+  }
+
   function render() {
     if (!summaryData) return;
     els.asof.textContent = `As of ${new Date(summaryData.now).toLocaleString(undefined, {
@@ -510,6 +607,8 @@
       els.content.innerHTML = upcomingView(summaryData);
     } else if (view === "events") {
       els.content.innerHTML = eventsView(eventsData);
+    } else if (view === "settings") {
+      els.content.innerHTML = settingsView(settingsData);
     } else {
       els.content.innerHTML = monthsView(summaryData);
     }
@@ -521,6 +620,17 @@
       render();
     } catch (err) {
       showError(err);
+    }
+  }
+
+  async function loadSettings() {
+    try {
+      settingsData = await api("/webapp/api/settings");
+      updateGreeting();
+      render();
+    } catch (err) {
+      // a background/lazy fetch — the Settings tab just keeps showing "Loading…" and
+      // retries next time it's opened, without hijacking whatever view is on screen
     }
   }
 
@@ -643,6 +753,9 @@
     if (next === "events" && !eventsData) {
       render();
       loadEvents();
+    } else if (next === "settings" && !settingsData) {
+      render();
+      loadSettings();
     } else {
       render();
     }
@@ -785,6 +898,115 @@
     }
   }
 
+  function confirmDialog(message) {
+    return new Promise((resolve) => {
+      if (tg && tg.showConfirm) {
+        tg.showConfirm(message, (ok) => resolve(ok));
+      } else {
+        resolve(window.confirm(message));
+      }
+    });
+  }
+
+  function showSettingsError(id, message) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = message;
+      el.classList.remove("hidden");
+    }
+  }
+
+  function hideSettingsError(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add("hidden");
+  }
+
+  async function saveProfile(button) {
+    hideSettingsError("settings-profile-error");
+    const value = document.getElementById("settings-display-name").value.trim();
+    button.disabled = true;
+    try {
+      settingsData = await api("/webapp/api/settings", {
+        method: "PATCH",
+        body: { display_name: value },
+      });
+      updateGreeting();
+    } catch (err) {
+      showSettingsError("settings-profile-error", err.detail || "Couldn't save — try again.");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function savePay(button) {
+    hideSettingsError("settings-pay-error");
+    const rate = document.getElementById("settings-rate").value;
+    const currency = document.getElementById("settings-currency").value;
+    button.disabled = true;
+    try {
+      settingsData = await api("/webapp/api/settings", {
+        method: "PATCH",
+        body: { default_rate: rate, currency },
+      });
+      render();
+    } catch (err) {
+      showSettingsError("settings-pay-error", err.detail || "Couldn't save — check the rate.");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function saveReminders(button) {
+    hideSettingsError("settings-reminders-error");
+    const enabled = document.getElementById("settings-reminders-enabled").checked;
+    const sendAt = document.getElementById("settings-reminders-time").value;
+    const offset = document.getElementById("settings-reminders-offset").value;
+    button.disabled = true;
+    try {
+      settingsData = await api("/webapp/api/reminders", {
+        method: "PATCH",
+        body: { enabled, send_at: sendAt, utc_offset: offset },
+      });
+      render();
+    } catch (err) {
+      showSettingsError(
+        "settings-reminders-error",
+        err.detail || "Couldn't save — check the time and timezone."
+      );
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function copyCalendarLink(button) {
+    if (!settingsData || !settingsData.calendar_url) return;
+    try {
+      await navigator.clipboard.writeText(settingsData.calendar_url);
+      const original = button.textContent;
+      button.textContent = "Copied!";
+      setTimeout(() => {
+        button.textContent = original;
+      }, 1500);
+    } catch (err) {
+      // clipboard API unavailable — the link is already shown on screen to copy by hand
+    }
+  }
+
+  async function rotateCalendarLink(button) {
+    const ok = await confirmDialog("Get a new calendar link? The old one will stop working.");
+    if (!ok) return;
+    button.disabled = true;
+    try {
+      const result = await api("/webapp/api/calendar/rotate", { method: "POST" });
+      settingsData = { ...settingsData, calendar_url: result.calendar_url };
+      render();
+    } catch (err) {
+      showSettingsError("settings-reminders-error", err.detail || "Couldn't rotate the link.");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   els.bottomNav.addEventListener("click", (event) => {
     const btn = event.target.closest(".nav-btn");
     if (btn) selectView(btn.dataset.view);
@@ -793,10 +1015,24 @@
   els.refresh.addEventListener("click", () => {
     load();
     if (view === "events") loadEvents();
+    if (view === "settings") loadSettings();
   });
   els.fabAdd.addEventListener("click", () => openCreator());
 
   els.content.addEventListener("click", (event) => {
+    const actionBtn = event.target.closest("[data-action]");
+    if (actionBtn) {
+      const actions = {
+        "save-profile": saveProfile,
+        "save-pay": savePay,
+        "save-reminders": saveReminders,
+        "copy-calendar": copyCalendarLink,
+        "rotate-calendar": rotateCalendarLink,
+      };
+      const handler = actions[actionBtn.dataset.action];
+      if (handler) handler(actionBtn);
+      return;
+    }
     const scopeBtn = event.target.closest("[data-scope]");
     if (scopeBtn) {
       selectScope(scopeBtn.dataset.scope);
@@ -860,4 +1096,5 @@
   initTelegram();
   initViewport();
   load();
+  loadSettings();
 })();
