@@ -8,6 +8,8 @@ import time as time_module
 from urllib.parse import urlencode
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from paybot.bot import (
     SECTIONS,
@@ -28,7 +30,7 @@ from paybot.pay import RateConfig, calculate_pay, format_hours
 from paybot.reminders import due, format_offset, local_today, parse_offset
 from paybot.schedule import find_clashes
 from paybot.storage import Reminder, ShiftRecord, Storage
-from paybot.webapp import INIT_DATA_MAX_AGE_SECONDS, parse_init_data
+from paybot.webapp import INIT_DATA_MAX_AGE_SECONDS, parse_init_data, router as webapp_router
 
 TODAY = date(2026, 8, 11)
 NOON = datetime(2026, 8, 13, 12, 0)
@@ -579,6 +581,110 @@ def test_parse_init_data_rejects_stale_auth_date():
     old = str(int(time_module.time()) - INIT_DATA_MAX_AGE_SECONDS - 60)
     init_data = _signed_init_data(token, auth_date=old, user=json.dumps({"id": 42}))
     assert parse_init_data(init_data, token) is None
+
+
+def _webapp_client(storage: Storage, token: str = "TESTTOKEN") -> TestClient:
+    app = FastAPI()
+    app.include_router(webapp_router)
+    app.state.storage = storage
+    app.state.bot_token = token
+    return TestClient(app)
+
+
+def _auth_headers(token: str, user_id: int = 42) -> dict:
+    init_data = _signed_init_data(
+        token, auth_date=str(int(time_module.time())), user=json.dumps({"id": user_id})
+    )
+    return {"Authorization": f"tma {init_data}"}
+
+
+def test_webapp_update_shift_renames_event_without_touching_pay(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD", location="SG",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "Renamed gig"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["event"] == "Renamed gig"
+    assert body["pay"] == "120.00"
+    storage.close()
+
+
+def test_webapp_update_shift_recomputes_hours_and_pay_on_time_change(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"start": "10:00", "end": "20:00"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["start"] == "10:00"
+    assert body["end"] == "20:00"
+    assert body["hours"] == "10"
+    assert body["pay"] == "150.00"  # same SGD 15/h rate, 10h instead of 8h
+    storage.close()
+
+
+def test_webapp_update_shift_applies_new_rate(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"rate": "20"},
+    )
+    assert response.status_code == 200
+    assert response.json()["pay"] == "160.00"
+    storage.close()
+
+
+def test_webapp_update_shift_rejects_invalid_rate(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"rate": "not-a-number"},
+    )
+    assert response.status_code == 400
+    storage.close()
+
+
+def test_webapp_update_shift_requires_ownership(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN", user_id=999),
+        json={"event": "Hijack"},
+    )
+    assert response.status_code == 404
+    storage.close()
 
 
 @pytest.mark.parametrize(

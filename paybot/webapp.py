@@ -13,16 +13,19 @@ import hmac
 import json
 import re
 import time as time_module
+from datetime import date as date_cls
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from pydantic import BaseModel
 
 from .bot import earned_by
-from .pay import round_money
+from .parsing import ParseError, parse_time
+from .pay import calculate_pay, round_money
 from .reminders import DEFAULT_UTC_OFFSET_MINUTES, local_clock
-from .schedule import find_clashes
+from .schedule import find_clashes, span
 from .storage import ShiftRecord, Storage
 
 INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
@@ -93,6 +96,17 @@ def _month_label(month: str) -> str:
 
 def _num(value: Decimal) -> str:
     return str(round_money(value))
+
+
+class ShiftUpdate(BaseModel):
+    """A partial edit from the mini app's shift editor — unset fields are left alone."""
+
+    event: str | None = None
+    location: str | None = None
+    rate: str | None = None
+    start: str | None = None
+    end: str | None = None
+    day: str | None = None
 
 
 def _shift_json(record: ShiftRecord) -> dict:
@@ -209,3 +223,72 @@ async def month_shifts(
         "hours": str(hours),
         "shifts": [_shift_json(r) for r in records],
     }
+
+
+@router.patch("/shifts/{shift_id}")
+async def update_shift(
+    shift_id: int,
+    payload: ShiftUpdate,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    record = storage.get_shift(user_id, shift_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    config = storage.get_config(user_id)
+
+    fields: dict[str, object] = {}
+    event = record.event
+    if payload.event is not None:
+        event = payload.event.strip()
+        if not event:
+            raise HTTPException(status_code=400, detail="Event name can't be empty")
+        fields["event"] = event
+
+    if payload.location is not None:
+        fields["location"] = payload.location.strip()
+
+    hours = record.hours
+    if payload.start is not None or payload.end is not None:
+        try:
+            start = parse_time(payload.start) if payload.start is not None else record.start
+            end = parse_time(payload.end) if payload.end is not None else record.end
+        except ParseError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        begins, ends = span(record.day, start, end)
+        worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
+        if not record.break_paid:
+            worked -= record.break_hours
+        hours = max(worked, Decimal("0"))
+        fields["start_time"] = start.isoformat(timespec="minutes")
+        fields["end_time"] = end.isoformat(timespec="minutes")
+        fields["hours"] = str(hours)
+
+    if payload.day is not None:
+        try:
+            fields["day"] = date_cls.fromisoformat(payload.day).isoformat()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid date, expected YYYY-MM-DD"
+            ) from exc
+
+    if payload.rate is not None:
+        try:
+            rate = Decimal(payload.rate)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid rate") from exc
+        if rate < 0:
+            raise HTTPException(status_code=400, detail="Rate can't be negative")
+        fields["pay"] = str(calculate_pay(float(hours), event, config, rate))
+    elif "hours" in fields:
+        # the time changed but not the rate — keep the same hourly rate, new hours
+        old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
+        fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
+
+    if not fields:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    storage.update_shift(user_id, shift_id, **fields)
+    updated = storage.get_shift(user_id, shift_id)
+    return _shift_json(updated)

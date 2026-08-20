@@ -236,6 +236,14 @@ main {
   border-bottom: none;
 }
 
+.row.editable {
+  cursor: pointer;
+}
+
+.row.editable:active {
+  background: var(--secondary-bg);
+}
+
 .row .icon {
   flex: none;
   width: 38px;
@@ -363,4 +371,100 @@ main {
 
 .nav-btn.active {
   color: var(--button);
+}
+
+/* Edit-shift modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 20;
+}
+
+.modal-sheet {
+  width: 100%;
+  background: var(--bg);
+  border-radius: 18px 18px 0 0;
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.modal-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--secondary-bg);
+  margin: 4px auto 12px;
+}
+
+.modal-sheet h2 {
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+#edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#edit-form label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hint);
+}
+
+#edit-form input {
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--secondary-bg);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+}
+
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-error {
+  color: var(--destructive);
+  font-size: 13px;
+  margin: -4px 0 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.btn.primary {
+  background: var(--button);
+  color: var(--button-text);
+}
+
+.btn.secondary {
+  background: var(--secondary-bg);
+  color: var(--text);
 }

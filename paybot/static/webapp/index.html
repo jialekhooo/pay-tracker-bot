@@ -42,6 +42,48 @@
         <span class="nav-icon">📊</span><span>Months</span>
       </button>
     </nav>
+
+    <div class="modal-backdrop hidden" id="edit-backdrop">
+      <div class="modal-sheet" id="edit-sheet">
+        <div class="modal-handle"></div>
+        <h2>Edit shift</h2>
+        <form id="edit-form">
+          <label>
+            Event
+            <input type="text" name="event" required maxlength="120" />
+          </label>
+          <label>
+            Location
+            <input type="text" name="location" maxlength="120" placeholder="optional" />
+          </label>
+          <div class="field-row">
+            <label>
+              Date
+              <input type="date" name="day" required />
+            </label>
+          </div>
+          <div class="field-row">
+            <label>
+              Start
+              <input type="time" name="start" required />
+            </label>
+            <label>
+              End
+              <input type="time" name="end" required />
+            </label>
+          </div>
+          <label>
+            Rate / hour
+            <input type="number" name="rate" min="0" step="0.01" inputmode="decimal" required />
+          </label>
+          <p class="modal-error hidden" id="edit-error"></p>
+          <div class="modal-actions">
+            <button type="button" class="btn secondary" id="edit-cancel">Cancel</button>
+            <button type="submit" class="btn primary" id="edit-save">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
   <script src="app.js"></script>
 </body>

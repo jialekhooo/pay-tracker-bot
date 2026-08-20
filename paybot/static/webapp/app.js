@@ -12,6 +12,11 @@
     error: document.getElementById("error"),
     errorText: document.getElementById("error-text"),
     content: document.getElementById("content"),
+    editBackdrop: document.getElementById("edit-backdrop"),
+    editForm: document.getElementById("edit-form"),
+    editError: document.getElementById("edit-error"),
+    editSave: document.getElementById("edit-save"),
+    editCancel: document.getElementById("edit-cancel"),
   };
 
   const SCOPES = {
@@ -25,6 +30,8 @@
   let view = "overview"; // overview | upcoming | months
   let scope = "today"; // which quick action is selected within overview
   let monthDetail = null; // set when drilled into a month from the "Months" view
+  const shiftsById = new Map(); // repopulated on every render, keyed by shift id
+  let editingShiftId = null;
 
   function initTelegram() {
     if (!tg) return;
@@ -43,12 +50,28 @@
     return { Authorization: `tma ${initData}` };
   }
 
-  async function api(path) {
+  async function api(path, options = {}) {
     const headers = authHeader();
     if (!headers) throw new Error("no-init-data");
-    const response = await fetch(path, { headers });
-    if (!response.ok) throw new Error(`http-${response.status}`);
-    return response.json();
+    const init = { headers };
+    if (options.method) init.method = options.method;
+    if (options.body !== undefined) {
+      init.headers = { ...headers, "Content-Type": "application/json" };
+      init.body = JSON.stringify(options.body);
+    }
+    const response = await fetch(path, init);
+    if (!response.ok) {
+      let detail;
+      try {
+        detail = (await response.json()).detail;
+      } catch (parseErr) {
+        detail = undefined;
+      }
+      const error = new Error(`http-${response.status}`);
+      error.detail = detail;
+      throw error;
+    }
+    return response.status === 204 ? null : response.json();
   }
 
   function escapeHtml(text) {
@@ -76,12 +99,13 @@
   const STATE_ICON = { done: "✓", running: "⏳", upcoming: "📅" };
 
   function shiftRow(shift, currency, options = {}) {
+    shiftsById.set(shift.id, shift);
     const state = options.state || "done";
     const tagText = { running: "in progress", upcoming: "to come" }[state] || "";
     const displayPay = options.earnedPay !== undefined ? options.earnedPay : shift.pay;
     const clash = shift.clash ? '<span class="clash-badge">⚠ clash</span>' : "";
     return `
-      <div class="row state-${state}">
+      <div class="row editable state-${state}" data-id="${shift.id}">
         <div class="icon">${STATE_ICON[state]}</div>
         <div class="info">
           <div class="title">${escapeHtml(shiftWhere(shift))}${clash}</div>
@@ -230,24 +254,15 @@
 
     if (monthDetail) {
       els.content.innerHTML = monthDetailView(monthDetail);
-      const back = document.getElementById("back-to-months");
-      if (back) back.addEventListener("click", () => setMonthDetail(null));
       return;
     }
 
     if (view === "overview") {
       els.content.innerHTML = overviewView(summaryData);
-      els.content.querySelectorAll("[data-scope]").forEach((btn) => {
-        btn.addEventListener("click", () => selectScope(btn.dataset.scope));
-      });
     } else if (view === "upcoming") {
       els.content.innerHTML = upcomingView(summaryData);
     } else {
       els.content.innerHTML = monthsView(summaryData);
-      summaryData.months.forEach((m) => {
-        const row = els.content.querySelector(`[data-month="${m.month}"]`);
-        if (row) row.addEventListener("click", () => openMonth(m.month));
-      });
     }
   }
 
@@ -310,12 +325,103 @@
     }
   }
 
+  function openEditor(shift) {
+    if (!shift) return;
+    editingShiftId = shift.id;
+    els.editForm.event.value = shift.event;
+    els.editForm.location.value = shift.location || "";
+    els.editForm.day.value = shift.day;
+    els.editForm.start.value = shift.start;
+    els.editForm.end.value = shift.end;
+    els.editForm.rate.value = shift.rate;
+    els.editError.classList.add("hidden");
+    els.editBackdrop.classList.remove("hidden");
+  }
+
+  function closeEditor() {
+    els.editBackdrop.classList.add("hidden");
+    editingShiftId = null;
+  }
+
+  async function refreshAfterEdit() {
+    if (monthDetail) {
+      try {
+        monthDetail = await api(`/webapp/api/month/${monthDetail.month}`);
+      } catch (err) {
+        monthDetail = null;
+      }
+    }
+    await load();
+  }
+
+  async function submitEditor(event) {
+    event.preventDefault();
+    const shift = shiftsById.get(editingShiftId);
+    if (!shift) {
+      closeEditor();
+      return;
+    }
+    const form = els.editForm;
+    const payload = {};
+    if (form.event.value.trim() !== shift.event) payload.event = form.event.value.trim();
+    if (form.location.value.trim() !== (shift.location || ""))
+      payload.location = form.location.value.trim();
+    if (form.day.value !== shift.day) payload.day = form.day.value;
+    if (form.start.value !== shift.start) payload.start = form.start.value;
+    if (form.end.value !== shift.end) payload.end = form.end.value;
+    if (form.rate.value !== shift.rate) payload.rate = form.rate.value;
+    if (!Object.keys(payload).length) {
+      closeEditor();
+      return;
+    }
+    els.editSave.disabled = true;
+    els.editError.classList.add("hidden");
+    try {
+      await api(`/webapp/api/shifts/${shift.id}`, { method: "PATCH", body: payload });
+      closeEditor();
+      await refreshAfterEdit();
+    } catch (err) {
+      els.editError.textContent = err.detail || "Couldn't save — check the fields and try again.";
+      els.editError.classList.remove("hidden");
+    } finally {
+      els.editSave.disabled = false;
+    }
+  }
+
   els.bottomNav.addEventListener("click", (event) => {
     const btn = event.target.closest(".nav-btn");
     if (btn) selectView(btn.dataset.view);
   });
 
   els.refresh.addEventListener("click", () => load());
+
+  els.content.addEventListener("click", (event) => {
+    const scopeBtn = event.target.closest("[data-scope]");
+    if (scopeBtn) {
+      selectScope(scopeBtn.dataset.scope);
+      return;
+    }
+    const backRow = event.target.closest("#back-to-months");
+    if (backRow) {
+      setMonthDetail(null);
+      return;
+    }
+    const monthRow = event.target.closest("[data-month]");
+    if (monthRow) {
+      openMonth(monthRow.dataset.month);
+      return;
+    }
+    const shiftRowEl = event.target.closest("[data-id]");
+    if (shiftRowEl) {
+      openEditor(shiftsById.get(Number(shiftRowEl.dataset.id)));
+    }
+  });
+
+  els.editCancel.addEventListener("click", closeEditor);
+  els.editBackdrop.addEventListener("click", (event) => {
+    if (event.target === els.editBackdrop) closeEditor();
+  });
+  els.editForm.addEventListener("submit", submitEditor);
 
   if (tg && tg.BackButton) {
     tg.BackButton.onClick(() => setMonthDetail(null));
