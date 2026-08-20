@@ -17,6 +17,7 @@
   --upcoming: var(--accent);
   --upcoming-bg: #dfeaff;
   --nav-height: 62px;
+  --fab-clearance: 90px;
 }
 
 * {
@@ -101,7 +102,7 @@ body {
 }
 
 main {
-  padding: 6px 16px 16px;
+  padding: 6px 16px var(--fab-clearance);
 }
 
 .state {
