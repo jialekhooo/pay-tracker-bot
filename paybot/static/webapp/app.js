@@ -248,22 +248,10 @@
         data.all_time.shifts === 1 ? "" : "s"
       }</div>
         </div>`;
-      const month = data.month;
-      const rows = month.shifts.length
-        ? month.shifts
-            .map((s) =>
-              shiftRow(s, data.currency, {
-                state: s.state,
-                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
-              })
-            )
-            .join("")
+      const body = data.months.length
+        ? `<div class="card-list">${monthListRows(data.months)}</div>`
         : `<div class="empty">Nothing logged yet.</div>`;
-      return (
-        bar +
-        hero +
-        `<div class="section-title">This month</div><div class="card-list">${rows}</div>`
-      );
+      return bar + hero + `<div class="section-title">Every month</div>` + body;
     }
     const block = data[scope];
     if (!block.shifts.length) {
@@ -401,17 +389,8 @@
     return `<div class="section-title">Next 14 days</div><div class="card-list">${rows}</div>`;
   }
 
-  function monthsView(data) {
-    if (!data.months.length) {
-      return `<div class="empty">No shifts logged yet.</div>`;
-    }
-    const allTime = `
-      <div class="hero">
-        <div class="label">All time</div>
-        <div class="amount">${money(data.all_time.earned, data.currency)}</div>
-        <div class="meta">${hours(data.all_time.hours)} \u00b7 ${data.all_time.shifts} shifts</div>
-      </div>`;
-    const rows = data.months
+  function monthListRows(months) {
+    return months
       .map(
         (m) => `
       <div class="row" data-month="${m.month}">
@@ -425,6 +404,19 @@
       </div>`
       )
       .join("");
+  }
+
+  function monthsView(data) {
+    if (!data.months.length) {
+      return `<div class="empty">No shifts logged yet.</div>`;
+    }
+    const allTime = `
+      <div class="hero">
+        <div class="label">All time</div>
+        <div class="amount">${money(data.all_time.earned, data.currency)}</div>
+        <div class="meta">${hours(data.all_time.hours)} \u00b7 ${data.all_time.shifts} shifts</div>
+      </div>`;
+    const rows = monthListRows(data.months);
     return allTime + `<div class="section-title">By month</div><div class="card-list">${rows}</div>`;
   }
 
