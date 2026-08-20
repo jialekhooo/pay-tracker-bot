@@ -766,7 +766,7 @@
     els.content.classList.add("hidden");
     els.error.classList.remove("hidden");
     if (err && err.message === "no-init-data") {
-      els.errorText.textContent = "Open this from the Pay tracker bot in Telegram.";
+      els.errorText.textContent = "Open this from the HowMuch bot in Telegram.";
     } else {
       els.errorText.textContent = "Couldn't load your shifts — tap ⟳ to try again.";
     }

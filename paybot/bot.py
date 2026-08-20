@@ -1255,7 +1255,7 @@ async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("� Open pay tracker", web_app=WebAppInfo(url=url))]]
+        [[InlineKeyboardButton("💰 Open HowMuch", web_app=WebAppInfo(url=url))]]
     )
     await update.message.reply_text(
         "Your earnings, shifts and calendar at a glance:", reply_markup=keyboard
@@ -1398,7 +1398,7 @@ async def _publish_commands(application: Application) -> None:
         try:
             await application.bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
-                    text="Pay Tracker", web_app=WebAppInfo(url=webapp_url)
+                    text="HowMuch", web_app=WebAppInfo(url=webapp_url)
                 )
             )
         except TelegramError:
