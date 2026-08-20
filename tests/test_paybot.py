@@ -874,3 +874,31 @@ def test_webapp_create_shift_rejects_bad_time(tmp_path):
     )
     assert response.status_code == 400
     storage.close()
+
+
+def test_webapp_week_returns_shifts_within_the_monday_to_sunday_range(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 10), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2026, 8, 17), time(9, 0), time(17, 0), "Next week gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/week/2026-08-10", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == "Week of 10 Aug"
+    assert body["pay"] == "120.00"
+    assert [s["event"] for s in body["shifts"]] == ["Gig"]
+    storage.close()
+
+
+def test_webapp_week_rejects_bad_date(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/week/not-a-date", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 400
+    storage.close()

@@ -37,6 +37,8 @@
   let editorMode = null; // "edit" | "create"
   let overviewMonth = null; // "YYYY-MM" shown by the Month quick action; null = the live current month
   let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
+  let overviewWeekStart = null; // Monday (YYYY-MM-DD) shown by the Week quick action; null = the live week
+  let overviewWeekData = null; // fetched /week/{start} detail when overviewWeekStart isn't the live week
 
   function initTelegram() {
     if (!tg) return;
@@ -120,13 +122,46 @@
     });
   }
 
-  function monthNavBar(label) {
+  function monthNavBar(label, unit = "month") {
     return `
       <div class="month-nav">
-        <button type="button" class="month-nav-btn" data-month-nav="prev" aria-label="Previous month">\u2039</button>
+        <button type="button" class="month-nav-btn" data-month-nav="prev" aria-label="Previous ${unit}">\u2039</button>
         <div class="month-nav-label">${escapeHtml(label)}</div>
-        <button type="button" class="month-nav-btn" data-month-nav="next" aria-label="Next month">\u203a</button>
+        <button type="button" class="month-nav-btn" data-month-nav="next" aria-label="Next ${unit}">\u203a</button>
       </div>`;
+  }
+
+  function currentWeekStart(data) {
+    return mondayOf((data.now || "").slice(0, 10));
+  }
+
+  function isoDateUTC(d) {
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+      d.getUTCDate()
+    ).padStart(2, "0")}`;
+  }
+
+  function mondayOf(dateStr) {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const utc = Date.UTC(year, month - 1, day);
+    const weekday = new Date(utc).getUTCDay(); // 0=Sun..6=Sat
+    const sinceMonday = (weekday + 6) % 7;
+    return isoDateUTC(new Date(utc - sinceMonday * 86400000));
+  }
+
+  function shiftWeekStart(startStr, deltaWeeks) {
+    const [year, month, day] = startStr.split("-").map(Number);
+    return isoDateUTC(new Date(Date.UTC(year, month - 1, day) + deltaWeeks * 7 * 86400000));
+  }
+
+  function weekLabel(startStr) {
+    const [year, month, day] = startStr.split("-").map(Number);
+    const monday = new Date(Date.UTC(year, month - 1, day));
+    return `Week of ${monday.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "short",
+      timeZone: "UTC",
+    })}`;
   }
 
   const STATE_ICON = { done: "✓", running: "⏳", upcoming: "📅" };
@@ -185,6 +220,7 @@
 
   function overviewView(data) {
     if (scope === "month") return monthScopeView(data);
+    if (scope === "week") return weekScopeView(data);
     const bar = quickActionsBar();
     if (scope === "all") {
       const hero = `
@@ -272,7 +308,58 @@
     if (!overviewMonthData || overviewMonthData.month !== activeKey) {
       return bar + nav + `<div class="empty">Loading…</div>`;
     }
-    const detail = overviewMonthData;
+    return bar + nav + plainPeriodBody(overviewMonthData);
+  }
+
+  function weekScopeView(data) {
+    const bar = quickActionsBar();
+    const liveStart = currentWeekStart(data);
+    const activeStart = overviewWeekStart || liveStart;
+    const nav = monthNavBar(weekLabel(activeStart), "week");
+
+    if (activeStart === liveStart) {
+      const block = data.week;
+      const rows = block.shifts.length
+        ? block.shifts
+            .map((s) =>
+              shiftRow(s, data.currency, {
+                state: s.state,
+                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
+              })
+            )
+            .join("")
+        : "";
+      const body = block.shifts.length
+        ? `<div class="card-list">${rows}</div>`
+        : `<div class="empty">Nothing logged yet.</div>`;
+      const projected =
+        Number(block.to_come) > 0
+          ? `<div class="projected">+ ${money(block.to_come, data.currency)} to come \u2192 ${money(
+              block.projected,
+              data.currency
+            )} projected</div>`
+          : "";
+      return (
+        bar +
+        nav +
+        `<div class="hero">
+          <div class="amount">${money(block.earned, data.currency)}</div>
+          <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
+          block.finished === 1 ? "" : "s"
+        }</div>
+          ${projected}
+        </div>` +
+        body
+      );
+    }
+
+    if (!overviewWeekData || overviewWeekData.start !== activeStart) {
+      return bar + nav + `<div class="empty">Loading…</div>`;
+    }
+    return bar + nav + plainPeriodBody(overviewWeekData);
+  }
+
+  function plainPeriodBody(detail) {
     const rows = detail.shifts.length
       ? detail.shifts.map((s) => shiftRow(s, detail.currency)).join("")
       : "";
@@ -280,15 +367,12 @@
       ? `<div class="card-list">${rows}</div>`
       : `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
     return (
-      bar +
-      nav +
       `<div class="hero">
         <div class="amount">${money(detail.pay, detail.currency)}</div>
         <div class="meta">${hours(detail.hours)} \u00b7 ${detail.shifts.length} shift${
         detail.shifts.length === 1 ? "" : "s"
       }</div>
-      </div>` +
-      body
+      </div>` + body
     );
   }
 
@@ -328,19 +412,10 @@
   }
 
   function monthDetailView(detail) {
-    const rows = detail.shifts.length
-      ? detail.shifts.map((s) => shiftRow(s, detail.currency)).join("")
-      : `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
     return `
       <div class="back-row" id="back-to-months">\u2039 Months</div>
       ${monthNavBar(detail.label)}
-      <div class="hero">
-        <div class="amount">${money(detail.pay, detail.currency)}</div>
-        <div class="meta">${hours(detail.hours)} \u00b7 ${detail.shifts.length} shift${
-      detail.shifts.length === 1 ? "" : "s"
-    }</div>
-      </div>
-      <div class="card-list">${rows}</div>`;
+      ${plainPeriodBody(detail)}`;
   }
 
   function render() {
@@ -409,6 +484,27 @@
     }
   }
 
+  async function navigateOverviewWeek(direction) {
+    const liveStart = currentWeekStart(summaryData);
+    const activeStart = overviewWeekStart || liveStart;
+    const nextStart = shiftWeekStart(activeStart, direction);
+    if (nextStart === liveStart) {
+      overviewWeekStart = null;
+      overviewWeekData = null;
+      render();
+      return;
+    }
+    overviewWeekStart = nextStart;
+    overviewWeekData = null;
+    render();
+    try {
+      overviewWeekData = await api(`/webapp/api/week/${nextStart}`);
+      render();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
   function setMonthDetail(value) {
     monthDetail = value;
     if (tg && tg.BackButton) {
@@ -424,6 +520,10 @@
       overviewMonth = null;
       overviewMonthData = null;
     }
+    if (next === "week") {
+      overviewWeekStart = null;
+      overviewWeekData = null;
+    }
     render();
   }
 
@@ -432,6 +532,8 @@
     monthDetail = null;
     overviewMonth = null;
     overviewMonthData = null;
+    overviewWeekStart = null;
+    overviewWeekData = null;
     if (tg && tg.BackButton) tg.BackButton.hide();
     [...els.bottomNav.querySelectorAll(".nav-btn")].forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.view === next);
@@ -583,6 +685,8 @@
       const direction = monthNavBtn.dataset.monthNav === "next" ? 1 : -1;
       if (monthDetail) {
         navigateMonthDetail(direction);
+      } else if (scope === "week") {
+        navigateOverviewWeek(direction);
       } else {
         navigateOverviewMonth(direction);
       }

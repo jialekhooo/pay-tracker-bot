@@ -238,6 +238,30 @@ async def month_shifts(
     }
 
 
+@router.get("/week/{start}")
+async def week_shifts(
+    start: str, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    try:
+        monday = date_cls.fromisoformat(start)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date, expected YYYY-MM-DD") from exc
+    storage, user_id = _authed_user(request, authorization)
+    sunday = monday + timedelta(days=6)
+    records = storage.shifts_between(user_id, monday, sunday)
+    pay = sum((r.pay for r in records), Decimal("0"))
+    hours = sum((r.hours for r in records), Decimal("0"))
+    currency = records[0].currency if records else storage.get_config(user_id).currency
+    return {
+        "start": monday.isoformat(),
+        "label": f"Week of {monday.strftime('%d %b')}",
+        "currency": currency,
+        "pay": _num(pay),
+        "hours": str(hours),
+        "shifts": [_shift_json(r) for r in records],
+    }
+
+
 @router.patch("/shifts/{shift_id}")
 async def update_shift(
     shift_id: int,
