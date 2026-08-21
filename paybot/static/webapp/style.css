@@ -1020,13 +1020,52 @@ main {
   box-sizing: border-box;
 }
 
-/* Safari's native date/time controls can retain a wider intrinsic size; constrain the
-   box without forcing display:block, which triggers the oversized centered rendering. */
-#edit-form input[type="date"],
-#edit-form input[type="time"] {
-  min-inline-size: 0;
-  max-inline-size: 100%;
-  text-align: left;
+/* iOS Safari renders native date/time inputs full-width, centered and icon-less, and
+   ignores CSS attempts to restyle that control. So the native input is kept functional
+   (it still opens the OS picker) but made invisible, and a custom compact display with
+   our own icon sits on top showing the formatted value instead. */
+.field-control {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.field-control input[type="date"],
+.field-control input[type="time"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+}
+
+.field-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--secondary-bg);
+  border-radius: 11px;
+  padding: 11px 12px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.field-icon {
+  display: flex;
+  flex: 0 0 auto;
+  color: var(--hint);
+}
+
+.field-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .modal-error {

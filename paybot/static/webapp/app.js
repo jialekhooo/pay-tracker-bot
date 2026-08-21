@@ -1334,6 +1334,36 @@
     }
   }
 
+  // iOS renders native date/time inputs with no custom styling ability, so we mirror
+  // their value into a compact custom display (see .field-control in style.css).
+  function formatDayDisplay(value) {
+    if (!value) return "";
+    const [year, month, day] = value.split("-");
+    if (!year || !month || !day) return "";
+    return `${day}/${month}/${year}`;
+  }
+
+  function formatTimeDisplay(value) {
+    if (!value) return "";
+    const [hourStr, minuteStr] = value.split(":");
+    const hour = Number(hourStr);
+    if (Number.isNaN(hour) || !minuteStr) return "";
+    const period = hour >= 12 ? "pm" : "am";
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${hour12}:${minuteStr} ${period}`;
+  }
+
+  function syncFieldDisplay(input) {
+    const control = input.closest(".field-control");
+    const valueEl = control && control.querySelector(".field-value");
+    if (!valueEl) return;
+    valueEl.textContent = input.type === "date" ? formatDayDisplay(input.value) : formatTimeDisplay(input.value);
+  }
+
+  function syncScheduleDisplays() {
+    [els.editForm.day, els.editForm.start, els.editForm.end].forEach(syncFieldDisplay);
+  }
+
   function openEditor(shift) {
     if (!shift) return;
     editorMode = "edit";
@@ -1348,6 +1378,7 @@
     els.editForm.rate.value = shift.rate;
     els.editForm.break_hours.value = shift.break_hours;
     els.editForm.break_paid.value = shift.break_paid ? "yes" : "no";
+    syncScheduleDisplays();
     els.editError.classList.add("hidden");
     els.editDuplicate.classList.remove("hidden");
     els.editDelete.classList.remove("hidden");
@@ -1366,6 +1397,7 @@
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
     els.editForm.break_paid.value = "yes";
+    syncScheduleDisplays();
     els.editError.classList.add("hidden");
     els.editDuplicate.classList.add("hidden");
     els.editDelete.classList.add("hidden");
@@ -1995,6 +2027,10 @@
   els.editForm.addEventListener("focusin", (event) => {
     // give the keyboard time to animate in before scrolling the field into view
     setTimeout(() => event.target.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+  });
+  [els.editForm.day, els.editForm.start, els.editForm.end].forEach((input) => {
+    input.addEventListener("input", () => syncFieldDisplay(input));
+    input.addEventListener("change", () => syncFieldDisplay(input));
   });
 
   if (tg && tg.BackButton) {

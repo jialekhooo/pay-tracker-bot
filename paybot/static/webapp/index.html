@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=35" />
+  <link rel="stylesheet" href="style.css?v=36" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -103,16 +103,34 @@
             <div class="form-section-title">Schedule</div>
             <label>
               Date
-              <input type="date" name="day" required />
+              <span class="field-control">
+                <input type="date" name="day" required />
+                <span class="field-display">
+                  <span class="field-value" data-field="day"></span>
+                  <span class="field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/></svg></span>
+                </span>
+              </span>
             </label>
             <div class="field-row">
               <label>
                 Start
-                <input type="time" name="start" required />
+                <span class="field-control">
+                  <input type="time" name="start" required />
+                  <span class="field-display">
+                    <span class="field-value" data-field="start"></span>
+                    <span class="field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+                  </span>
+                </span>
               </label>
               <label>
                 End
-                <input type="time" name="end" required />
+                <span class="field-control">
+                  <input type="time" name="end" required />
+                  <span class="field-display">
+                    <span class="field-value" data-field="end"></span>
+                    <span class="field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+                  </span>
+                </span>
               </label>
             </div>
           </div>
@@ -156,6 +174,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=36"></script>
 </body>
 </html>
