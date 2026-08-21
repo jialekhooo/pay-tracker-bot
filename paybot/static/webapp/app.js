@@ -1276,7 +1276,7 @@
 
   function selectView(next) {
     if (next === "add") {
-      openCreator();
+      openCreator(view === "calendar" ? calendarSelectedDay : null);
       return;
     }
     view = next;
@@ -1386,14 +1386,14 @@
     els.editBackdrop.classList.remove("hidden");
   }
 
-  function openCreator() {
+  function openCreator(presetDay) {
     editorMode = "create";
     editingShiftId = null;
     els.editForm.reset();
     els.editTitle.textContent = "Add Shift";
     els.editSave.textContent = "Add Shift";
     const today = ((summaryData && summaryData.now) || new Date().toISOString()).slice(0, 10);
-    els.editForm.day.value = today;
+    els.editForm.day.value = presetDay || today;
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
     els.editForm.break_paid.value = "yes";
@@ -1544,6 +1544,7 @@
     form.rate.value = duplicated.rate;
     form.break_hours.value = duplicated.break_hours;
     form.break_paid.value = duplicated.break_paid;
+    syncScheduleDisplays();
   }
 
   async function deleteEditingShift() {
