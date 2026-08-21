@@ -979,6 +979,14 @@ main {
   color: var(--hint);
 }
 
+.form-section > label {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 #edit-form input,
 #edit-form select {
   font: inherit;
@@ -998,11 +1006,27 @@ main {
 .field-row {
   display: flex;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
-.field-row label {
+.field-row > label {
+  flex: 1 1 0;
+  width: 0;
+  max-width: calc((100% - 10px) / 2);
   min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Safari's native date/time controls can retain a wider intrinsic size; constrain the
+   box without forcing display:block, which triggers the oversized centered rendering. */
+#edit-form input[type="date"],
+#edit-form input[type="time"] {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  text-align: left;
 }
 
 .modal-error {
