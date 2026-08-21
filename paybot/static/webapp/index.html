@@ -4,20 +4,25 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=32" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div id="app">
     <header class="topbar">
       <div class="who">
-        <div class="avatar" id="avatar">H</div>
         <div class="titles">
-          <h1 id="greeting">HowMuch</h1>
+          <h1 id="greeting">Overview</h1>
           <div class="asof" id="asof">mini app</div>
         </div>
       </div>
-      <button class="icon-btn" id="refresh" aria-label="Refresh" title="Refresh">⟳</button>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="search-open" aria-label="Search shifts" title="Search shifts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m20 20-4.35-4.35"/></svg></button>
+        <button class="icon-btn" id="refresh" aria-label="Refresh" title="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.5"/><path d="M20 4v4.5h-4.5"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.5"/><path d="M4 20v-4.5h4.5"/></svg></button>
+        <button class="profile-btn hidden" id="profile-button" aria-label="Open profile settings" title="Profile settings">
+          <span class="avatar" id="avatar">H</span>
+        </button>
+      </div>
     </header>
 
     <main id="main">
@@ -28,91 +33,129 @@
       <div class="state hidden" id="error">
         <p id="error-text">Open this from the HowMuch bot in Telegram.</p>
       </div>
-      <div class="hidden" id="content"></div>
+      <div class="hidden" id="content-wrap">
+        <div id="content-head"></div>
+        <div id="content-list"></div>
+      </div>
     </main>
 
     <nav class="bottom-nav" id="bottom-nav">
-      <button class="nav-btn active" data-view="overview">
-        <span class="nav-icon">🏠</span><span>Overview</span>
+      <button class="nav-btn active" data-view="dashboard">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.8 12 4l8.5 6.8"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><span>Overview</span>
       </button>
-      <button class="nav-btn" data-view="upcoming">
-        <span class="nav-icon">🗓️</span><span>Upcoming</span>
+      <button class="nav-btn" data-view="summary">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 20V11"/><path d="M12 20V4.5"/><path d="M19.5 20v-7.5"/></svg></span><span>Earnings</span>
       </button>
-      <button class="nav-btn" data-view="months">
-        <span class="nav-icon">📊</span><span>Months</span>
+      <button class="nav-btn nav-add" data-view="add" aria-label="Add Shift">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span>Add</span>
       </button>
-      <button class="nav-btn" data-view="events">
-        <span class="nav-icon">🏷️</span><span>Events</span>
+      <button class="nav-btn" data-view="calendar">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/><path d="M7.7 13.3h1.6M11.2 13.3h1.6M14.7 13.3h1.6M7.7 16.6h1.6M11.2 16.6h1.6"/></svg></span><span>Calendar</span>
       </button>
       <button class="nav-btn" data-view="settings">
-        <span class="nav-icon">⚙️</span><span>Settings</span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.4a7.6 7.6 0 0 0 .07-1.4 7.6 7.6 0 0 0-.07-1.4l2-1.5-2-3.4-2.3.9a7.7 7.7 0 0 0-2.4-1.4L14.3 3H9.7l-.37 2.3a7.7 7.7 0 0 0-2.4 1.4l-2.3-.9-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2.8l-2 1.5 2 3.4 2.3-.9c.72.62 1.53 1.1 2.4 1.4L9.7 21h4.6l.37-2.3c.87-.3 1.68-.78 2.4-1.4l2.3.9 2-3.4Z"/></svg></span><span>Settings</span>
       </button>
     </nav>
 
-    <button class="fab" id="fab-add" aria-label="Add shift" title="Add shift">+</button>
+    <div class="toast hidden" id="toast">
+      <span id="toast-text"></span>
+      <button type="button" id="toast-action"></button>
+    </div>
+
+    <div class="modal-backdrop hidden" id="search-backdrop">
+      <div class="modal-sheet" id="search-sheet">
+        <div class="modal-handle"></div>
+        <h2>Search shifts</h2>
+        <input
+          type="search"
+          id="search-input"
+          placeholder="Event or location…"
+          autocomplete="off"
+        />
+        <div id="search-results" class="search-results"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" id="search-close">Close</button>
+        </div>
+      </div>
+    </div>
 
     <div class="modal-backdrop hidden" id="edit-backdrop">
       <div class="modal-sheet" id="edit-sheet">
         <div class="modal-handle"></div>
-        <h2 id="edit-title">Edit shift</h2>
+        <div class="modal-title-row">
+          <h2 id="edit-title">Edit Shift</h2>
+          <button type="button" class="sheet-close" id="edit-cancel" aria-label="Close shift editor" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        </div>
         <form id="edit-form">
-          <label>
-            Event
-            <input type="text" name="event" required maxlength="120" />
-          </label>
-          <label>
-            Location
-            <input type="text" name="location" maxlength="120" placeholder="optional" />
-          </label>
-          <div class="field-row">
+          <div class="form-section">
+            <div class="form-section-title">Shift details</div>
+            <label>
+              Event
+              <input type="text" name="event" required maxlength="120" placeholder="e.g. Store shift" />
+            </label>
+            <label>
+              Location
+              <input type="text" name="location" maxlength="120" placeholder="Optional" />
+            </label>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Schedule</div>
             <label>
               Date
               <input type="date" name="day" required />
             </label>
+            <div class="field-row">
+              <label>
+                Start
+                <input type="time" name="start" required />
+              </label>
+              <label>
+                End
+                <input type="time" name="end" required />
+              </label>
+            </div>
           </div>
-          <div class="field-row">
+
+          <div class="form-section">
+            <div class="form-section-title">Pay details</div>
             <label>
-              Start
-              <input type="time" name="start" required />
+              Rate / hour
+              <input
+                type="number"
+                name="rate"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="Uses your saved rate"
+              />
             </label>
-            <label>
-              End
-              <input type="time" name="end" required />
-            </label>
-          </div>
-          <label>
-            Rate / hour
-            <input
-              type="number"
-              name="rate"
-              min="0"
-              step="0.01"
-              inputmode="decimal"
-              placeholder="uses your saved rate"
-            />
-          </label>
-          <div class="field-row">
-            <label>
-              Break (hours)
-              <input type="number" name="break_hours" min="0" step="0.25" placeholder="0" />
-            </label>
-            <label>
-              Paid break?
-              <select name="break_paid">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </label>
+            <div class="field-row">
+              <label>
+                Break (hours)
+                <input type="number" name="break_hours" min="0" step="0.25" placeholder="0" />
+              </label>
+              <label>
+                Paid break?
+                <select name="break_paid">
+                  <option value="yes" selected>Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+            </div>
           </div>
           <p class="modal-error hidden" id="edit-error"></p>
+          <button type="button" class="btn secondary hidden" id="edit-duplicate">
+            Duplicate as new shift
+          </button>
+          <button type="button" class="btn destructive hidden" id="edit-delete">Delete shift</button>
           <div class="modal-actions">
-            <button type="button" class="btn secondary" id="edit-cancel">Cancel</button>
             <button type="submit" class="btn primary" id="edit-save">Save</button>
           </div>
         </form>
       </div>
     </div>
   </div>
-  <script src="app.js"></script>
+  <script src="app.js?v=32"></script>
 </body>
 </html>

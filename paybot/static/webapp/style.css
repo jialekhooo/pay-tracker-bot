@@ -16,8 +16,8 @@
   --running-bg: #ffedd1;
   --upcoming: var(--accent);
   --upcoming-bg: #dfeaff;
-  --nav-height: 62px;
-  --fab-clearance: 90px;
+  --nav-height: 76px;
+  --fab-clearance: calc(var(--nav-height) + 28px);
 }
 
 * {
@@ -29,18 +29,30 @@ body {
   margin: 0;
   padding: 0;
   width: 100%;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--secondary-bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 
+/* iOS/WebKit still rubber-bands the outer document on touch-drag even with overflow:hidden;
+   pinning body to the viewport is the only reliable way to stop it. */
+body {
+  position: fixed;
+  inset: 0;
+}
+
 #app {
-  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  height: var(--app-height, 100vh);
+  overflow: hidden;
 }
 
 .topbar {
@@ -68,6 +80,27 @@ body {
   font-size: 16px;
   color: #fff;
   background: linear-gradient(135deg, var(--button), var(--accent));
+  overflow: hidden;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-btn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+}
+
+.profile-btn:active {
+  opacity: 0.7;
 }
 
 .titles h1 {
@@ -97,12 +130,146 @@ body {
   justify-content: center;
 }
 
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 .icon-btn:active {
   opacity: 0.6;
 }
 
+.topbar-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+  z-index: 25;
+}
+
+.toast.hidden {
+  display: none;
+}
+
+.toast span {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.toast.success {
+  background: var(--section-bg);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.3);
+}
+
+.toast.success::before {
+  content: "✓";
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.toast.success span {
+  flex: 1;
+  font-weight: 700;
+}
+
+.toast button {
+  flex: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--link, #4dabf7);
+  background: none;
+  border: none;
+  padding: 4px;
+}
+
+.toast button:active {
+  opacity: 0.6;
+}
+
+#search-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--secondary-bg);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.search-results .hint {
+  color: var(--hint);
+  font-size: 13px;
+  padding: 8px 2px;
+}
+
+
 main {
-  padding: 6px 16px var(--fab-clearance);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#content-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Not scrollable — sits above the list, unaffected by its scroll. */
+#content-head {
+  flex: none;
+  padding: 6px 8px 0 16px;
+}
+
+/* The only scrollable region, so the scrollbar/scroll indicator is confined to the list
+   itself instead of spanning the whole screen. */
+#content-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 6px 8px calc(var(--fab-clearance) + env(safe-area-inset-bottom, 0px)) 16px;
 }
 
 .state {
@@ -169,6 +336,11 @@ main {
   color: var(--button);
 }
 
+.quick-action .qi svg {
+  width: 17px;
+  height: 17px;
+}
+
 .quick-action.active .qi {
   background: var(--button);
   color: var(--button-text);
@@ -176,6 +348,102 @@ main {
 
 .quick-action.active {
   color: var(--button);
+}
+
+/* Segmented control for choosing how the All Time list is grouped (months vs. events) */
+.group-toggle {
+  display: flex;
+  background: var(--section-bg);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+  margin: 0 0 14px;
+}
+
+.group-toggle-btn {
+  flex: 1;
+  border: none;
+  background: none;
+  border-radius: 9px;
+  padding: 8px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hint);
+}
+
+.group-toggle-btn.active {
+  background: var(--button);
+  color: var(--button-text);
+}
+
+.event-sort {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+
+.event-sort > span {
+  flex: none;
+  color: var(--hint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.event-sort-toggle {
+  display: flex;
+  padding: 3px;
+  gap: 3px;
+  background: var(--section-bg);
+  border-radius: 10px;
+}
+
+.event-sort-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: transparent;
+  color: var(--hint);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.event-sort-btn.active {
+  background: var(--secondary-bg);
+  color: var(--text);
+}
+
+/* Horizontally scrollable chip row for choosing the Upcoming tab's date range */
+.range-toggle {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.range-toggle::-webkit-scrollbar {
+  display: none;
+}
+
+.range-toggle-btn {
+  flex: none;
+  white-space: nowrap;
+  border: none;
+  background: var(--section-bg);
+  color: var(--hint);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px;
+}
+
+.range-toggle-btn.active {
+  background: var(--button);
+  color: var(--button-text);
 }
 
 .hero {
@@ -212,6 +480,52 @@ main {
   padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.35);
   font-size: 13px;
+}
+
+.dashboard-glance {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 2px;
+}
+
+.dashboard-stat {
+  min-width: 0;
+  background: var(--section-bg);
+  border-radius: 14px;
+  padding: 13px 14px;
+}
+
+.dashboard-stat span {
+  display: block;
+  color: var(--hint);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dashboard-stat strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-empty {
+  color: var(--hint);
+  text-align: center;
+  background: var(--section-bg);
+  border-radius: 14px;
+  padding: 24px 12px;
+  font-size: 14px;
+}
+
+@media (max-width: 330px) {
+  .dashboard-glance {
+    grid-template-columns: 1fr;
+  }
 }
 
 .section-title {
@@ -274,6 +588,11 @@ main {
   font-weight: 700;
   background: var(--secondary-bg);
   color: var(--hint);
+}
+
+.row .icon svg {
+  width: 19px;
+  height: 19px;
 }
 
 .row .info {
@@ -379,19 +698,106 @@ main {
   font-weight: 700;
 }
 
-/* Bottom tab bar */
+/* Interactive month grid for the Calendar tab. */
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+
+.calendar-nav-label {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.calendar-card {
+  background: var(--section-bg);
+  border-radius: 16px;
+  padding: 12px 10px 10px;
+  box-sizing: border-box;
+  width: min(100%, 560px);
+  margin: 0 auto;
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays {
+  margin-bottom: 6px;
+  color: var(--hint);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.calendar-day {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.calendar-day.blank {
+  pointer-events: none;
+}
+
+.calendar-day.today {
+  color: var(--button);
+}
+
+.calendar-day.selected {
+  background: var(--button);
+  color: var(--button-text);
+}
+
+.calendar-day i {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  font-size: 0;
+  transform: translateX(-50%);
+}
+
+.calendar-day.selected i {
+  background: var(--button-text);
+}
+
+.calendar-empty {
+  padding-top: 22px;
+}
+
+/* Bottom tab bar — a floating "liquid glass" pill, inset from the edges. */
 .bottom-nav {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 14px;
+  right: 14px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   display: flex;
-  width: 100%;
+  width: auto;
   box-sizing: border-box;
-  background: var(--section-bg);
-  border-top: 1px solid var(--secondary-bg);
-  padding: 6px env(safe-area-inset-right, 0) calc(6px + env(safe-area-inset-bottom, 0px))
-    env(safe-area-inset-left, 0);
+  background: color-mix(in srgb, var(--section-bg) 68%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: 26px;
+  padding: 6px;
+  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28);
   z-index: 10;
 }
 
@@ -403,8 +809,10 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 2px 2px;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 2px;
+  border-radius: 18px;
   font-size: 10px;
   font-weight: 600;
   color: var(--hint);
@@ -418,12 +826,28 @@ main {
 }
 
 .nav-icon {
-  font-size: 18px;
-  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .nav-btn.active {
   color: var(--button);
+  background: color-mix(in srgb, var(--button) 14%, transparent);
+}
+
+.nav-add .nav-icon {
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid currentColor;
+  border-radius: 7px;
 }
 
 /* Floating "+" button to log a new shift */
@@ -465,8 +889,8 @@ main {
 .modal-sheet {
   width: 100%;
   background: var(--bg);
-  border-radius: 18px 18px 0 0;
-  padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px 22px 0 0;
+  padding: 8px 20px calc(14px + env(safe-area-inset-bottom, 0px));
   max-height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
@@ -480,20 +904,73 @@ main {
   margin: 4px auto 12px;
 }
 
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .modal-sheet h2 {
-  margin: 0 0 14px;
-  font-size: 17px;
-  font-weight: 700;
+  margin: 0;
+  font-size: 21px;
+  font-weight: 750;
+}
+
+.sheet-close {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  color: var(--text);
+  background: var(--secondary-bg);
+}
+
+.sheet-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sheet-close:active {
+  opacity: 0.65;
 }
 
 #edit-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 13px;
+  background: var(--section-bg);
+  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  border-radius: 14px;
+}
+
+.form-section-title {
+  color: var(--hint);
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 #edit-form label {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -509,16 +986,19 @@ main {
   color: var(--text);
   background: var(--secondary-bg);
   border: none;
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 11px;
+  padding: 11px 12px;
   font-size: 15px;
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field-row {
   display: flex;
   gap: 10px;
+  min-width: 0;
 }
 
 .field-row label {
@@ -534,20 +1014,28 @@ main {
 .modal-actions {
   display: flex;
   gap: 10px;
-  margin-top: 4px;
-  padding: 10px 0 calc(4px + env(safe-area-inset-bottom, 0px));
+  margin: 0 -20px -14px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
   position: sticky;
   bottom: 0;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .btn {
   flex: 1;
+  display: inline-block;
+  box-sizing: border-box;
   border: none;
   border-radius: 12px;
   padding: 12px;
   font-size: 15px;
   font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .btn.primary {
@@ -555,12 +1043,70 @@ main {
   color: var(--button-text);
 }
 
+.btn.is-saving {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0.82;
+  cursor: wait;
+}
+
+.button-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
 .btn.secondary {
   background: var(--secondary-bg);
   color: var(--text);
 }
 
+.btn.destructive {
+  background: transparent;
+  color: var(--destructive);
+  margin: 4px 0 14px;
+}
+
 /* Settings tab */
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--section-bg);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+
+.profile-card:active {
+  background: var(--secondary-bg);
+}
+
+.profile-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-card-name {
+  font-size: 17px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-card-sub {
+  font-size: 13px;
+  color: var(--hint);
+  margin-top: 2px;
+}
+
 .settings-card {
   padding: 4px 14px;
 }
@@ -583,6 +1129,23 @@ main {
   color: var(--hint);
 }
 
+.export-card .settings-row {
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.export-card .settings-row p {
+  margin: 0;
+  color: var(--hint);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.settings-muted {
+  color: var(--hint);
+  font-size: 13px;
+}
+
 .settings-row input[type="text"],
 .settings-row input[type="number"],
 .settings-row input[type="time"] {
@@ -602,6 +1165,25 @@ main {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+}
+
+.settings-row.avatar-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  border-bottom: none;
+}
+
+.avatar-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+
+.avatar-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .settings-btn {

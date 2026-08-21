@@ -17,10 +17,14 @@ from paybot.bot import (
     _earnings_block,
     _edit_record,
     _shift_table,
+    clear_shifts,
     commands_text,
+    delete_shift,
     earned_by,
+    find_shifts,
     parse_edit,
     parse_month,
+    undo,
     worked_by,
 )
 from paybot.calendar_export import google_link, to_ics
@@ -594,9 +598,12 @@ def _webapp_client(
     return TestClient(app)
 
 
-def _auth_headers(token: str, user_id: int = 42) -> dict:
+def _auth_headers(token: str, user_id: int = 42, username: str | None = None) -> dict:
+    user = {"id": user_id}
+    if username is not None:
+        user["username"] = username
     init_data = _signed_init_data(
-        token, auth_date=str(int(time_module.time())), user=json.dumps({"id": user_id})
+        token, auth_date=str(int(time_module.time())), user=json.dumps(user)
     )
     return {"Authorization": f"tma {init_data}"}
 
@@ -907,6 +914,35 @@ def test_webapp_week_rejects_bad_date(tmp_path):
     storage.close()
 
 
+def test_webapp_day_returns_only_that_days_shifts(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 10), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2026, 8, 11), time(9, 0), time(17, 0), "Next day gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/day/2026-08-10", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["day"] == "2026-08-10"
+    assert body["label"] == "Mon, 10 Aug"
+    assert body["pay"] == "120.00"
+    assert [s["event"] for s in body["shifts"]] == ["Gig"]
+    storage.close()
+
+
+def test_webapp_day_rejects_bad_date(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/day/not-a-date", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 400
+    storage.close()
+
+
 def test_webapp_month_labels_shifts_as_done_or_upcoming(tmp_path):
     storage = Storage(tmp_path / "webapp.sqlite3")
     storage.add_shift(
@@ -977,7 +1013,9 @@ def test_webapp_events_lists_totals_grouped_by_event(tmp_path):
     assert response.status_code == 200
     events = {e["event"]: e for e in response.json()["events"]}
     assert events["Hermes Private Sale"]["pay"] == "120.00"
+    assert events["Hermes Private Sale"]["first_day"] == "2026-08-10"
     assert events["IGG Gaming"]["pay"] == "160.00"
+    assert events["IGG Gaming"]["first_day"] == "2026-09-05"
     storage.close()
 
 
@@ -1189,3 +1227,561 @@ def test_webapp_create_shift_with_a_paid_break(tmp_path):
     assert body["break_hours"] == "1"
     assert body["break_paid"] is True
     storage.close()
+
+
+def test_webapp_create_shift_reports_no_clashes_when_clear(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "Gig", "day": "2026-08-30", "start": "09:00", "end": "17:00"},
+    )
+    assert response.status_code == 200
+    assert response.json()["clashes"] == []
+    storage.close()
+
+
+def test_webapp_create_shift_reports_clash_with_existing_shift(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Existing gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "New gig", "day": "2026-08-30", "start": "15:00", "end": "20:00"},
+    )
+    assert response.status_code == 200
+    clashes = response.json()["clashes"]
+    assert len(clashes) == 1
+    assert clashes[0]["event"] == "Existing gig"
+    storage.close()
+
+
+def test_webapp_update_shift_reports_clash_when_moved_into_conflict(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Existing gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    moved_id = storage.add_shift(
+        42, date(2026, 9, 1), time(9, 0), time(17, 0), "Movable gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{moved_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"day": "2026-08-30", "start": "10:00", "end": "18:00"},
+    )
+    assert response.status_code == 200
+    clashes = response.json()["clashes"]
+    assert len(clashes) == 1
+    assert clashes[0]["event"] == "Existing gig"
+    storage.close()
+
+
+def test_webapp_update_shift_no_clash_field_when_only_renaming(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "Renamed"},
+    )
+    assert response.status_code == 200
+    assert response.json()["clashes"] == []
+    storage.close()
+
+
+def test_webapp_update_shift_does_not_clash_with_itself(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"start": "10:00", "end": "18:00"},
+    )
+    assert response.status_code == 200
+    assert response.json()["clashes"] == []
+    storage.close()
+
+
+def test_webapp_search_matches_event_or_location(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 30), time(9, 0), time(17, 0), "Wedding gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD", location="Marina Bay",
+    )
+    storage.add_shift(
+        42, date(2026, 8, 31), time(9, 0), time(17, 0), "Roadshow",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD", location="Orchard",
+    )
+    client = _webapp_client(storage)
+    by_event = client.get(
+        "/webapp/api/search", headers=_auth_headers("TESTTOKEN"), params={"q": "wedding"}
+    )
+    assert by_event.status_code == 200
+    assert [s["event"] for s in by_event.json()["shifts"]] == ["Wedding gig"]
+
+    by_location = client.get(
+        "/webapp/api/search", headers=_auth_headers("TESTTOKEN"), params={"q": "orchard"}
+    )
+    assert [s["event"] for s in by_location.json()["shifts"]] == ["Roadshow"]
+    storage.close()
+
+
+def test_webapp_search_empty_query_returns_nothing(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get(
+        "/webapp/api/search", headers=_auth_headers("TESTTOKEN"), params={"q": "  "}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"query": "", "shifts": []}
+    storage.close()
+
+
+def test_storage_search_shifts_is_case_insensitive_and_ordered_newest_first(tmp_path):
+    storage = Storage(tmp_path / "test.sqlite3")
+    storage.add_shift(
+        1, date(2026, 8, 10), time(9, 0), time(17, 0), "Old wedding",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        1, date(2026, 8, 20), time(9, 0), time(17, 0), "New WEDDING",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    results = storage.search_shifts(1, "wedding")
+    assert [r.event for r in results] == ["New WEDDING", "Old wedding"]
+    storage.close()
+
+
+class _FakeMessage:
+    def __init__(self):
+        self.sent: list[str] = []
+
+    async def reply_text(self, text, **kwargs):
+        self.sent.append(text)
+
+
+class _FakeUpdate:
+    def __init__(self, user_id: int):
+        self.message = _FakeMessage()
+        self.effective_user = type("U", (), {"id": user_id})()
+
+
+class _FakeContext:
+    def __init__(self, storage: Storage, args=None):
+        self.application = type("App", (), {"bot_data": {"storage": storage}})()
+        self.args = args or []
+
+
+async def _run_delete(storage, user_id, ids):
+    update = _FakeUpdate(user_id)
+    context = _FakeContext(storage, args=[str(i) for i in ids])
+    await delete_shift(update, context)
+    return update, context
+
+
+def test_bot_undo_restores_deleted_shifts(tmp_path):
+    import asyncio
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+    shift_id = storage.add_shift(
+        1, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD", location="SG",
+    )
+
+    async def scenario():
+        update, context = await _run_delete(storage, 1, [shift_id])
+        assert "Send /undo" in update.message.sent[-1]
+        assert storage.list_shifts(1) == []
+
+        undo_update = _FakeUpdate(1)
+        await undo(undo_update, context)
+        restored = storage.list_shifts(1)
+        assert len(restored) == 1
+        assert restored[0].event == "Gig"
+        assert restored[0].location == "SG"
+        assert "Restored 1 shift" in undo_update.message.sent[-1]
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_bot_undo_expires_after_ttl(tmp_path):
+    import asyncio
+
+    from paybot import bot as bot_module
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+    shift_id = storage.add_shift(
+        1, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+
+    async def scenario():
+        update, context = await _run_delete(storage, 1, [shift_id])
+        buffer = context.application.bot_data["undo_buffer"]
+        buffer[1]["expires_at"] = time_module.time() - 1
+
+        undo_update = _FakeUpdate(1)
+        await undo(undo_update, context)
+        assert storage.list_shifts(1) == []
+        assert "Nothing to undo" in undo_update.message.sent[-1]
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_bot_undo_with_nothing_pending(tmp_path):
+    import asyncio
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+
+    async def scenario():
+        update = _FakeUpdate(1)
+        context = _FakeContext(storage)
+        await undo(update, context)
+        assert "Nothing to undo" in update.message.sent[-1]
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_bot_find_reports_matching_shifts(tmp_path):
+    import asyncio
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+    storage.add_shift(
+        1, date(2026, 8, 30), time(9, 0), time(17, 0), "Wedding gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD", location="Marina Bay",
+    )
+
+    async def scenario():
+        update = _FakeUpdate(1)
+        context = _FakeContext(storage, args=["wedding"])
+        await find_shifts(update, context)
+        assert "1 match" in update.message.sent[-1]
+        assert "Wedding gig" in update.message.sent[-1]
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_bot_find_with_no_matches(tmp_path):
+    import asyncio
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+
+    async def scenario():
+        update = _FakeUpdate(1)
+        context = _FakeContext(storage, args=["nothing"])
+        await find_shifts(update, context)
+        assert "No shifts matching" in update.message.sent[-1]
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_bot_undo_restores_shifts_cleared_via_clear(tmp_path):
+    import asyncio
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+    storage.add_shift(
+        1, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+
+    async def scenario():
+        update = _FakeUpdate(1)
+        context = _FakeContext(storage, args=["2026-08", "confirm"])
+        await clear_shifts(update, context)
+        assert storage.list_shifts(1) == []
+        assert "Send /undo" in update.message.sent[-1]
+
+        undo_update = _FakeUpdate(1)
+        await undo(undo_update, context)
+        assert len(storage.list_shifts(1)) == 1
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_bot_find_requires_keyword(tmp_path):
+    import asyncio
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+
+    async def scenario():
+        update = _FakeUpdate(1)
+        context = _FakeContext(storage, args=[])
+        await find_shifts(update, context)
+        assert "Usage: /find" in update.message.sent[-1]
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_webapp_avatar_returns_the_users_telegram_photo(tmp_path, monkeypatch):
+    import paybot.webapp as webapp_module
+
+    async def fake_fetch_avatar(bot_token, user_id):
+        assert bot_token == "TESTTOKEN"
+        assert user_id == 42
+        return b"fake-jpeg-bytes", "image/jpeg"
+
+    monkeypatch.setattr(webapp_module, "_fetch_avatar", fake_fetch_avatar)
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/avatar", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content == b"fake-jpeg-bytes"
+    storage.close()
+
+
+def test_webapp_avatar_404s_when_no_photo(tmp_path, monkeypatch):
+    import paybot.webapp as webapp_module
+
+    async def fake_fetch_avatar(bot_token, user_id):
+        return None
+
+    monkeypatch.setattr(webapp_module, "_fetch_avatar", fake_fetch_avatar)
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/avatar", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 404
+    storage.close()
+
+
+def test_webapp_avatar_falls_back_to_public_t_me_photo(tmp_path, monkeypatch):
+    import paybot.webapp as webapp_module
+
+    async def fake_fetch_avatar(bot_token, user_id):
+        return None
+
+    async def fake_fetch_public_avatar(username):
+        assert username == "jialexample"
+        return b"public-photo-bytes", "image/jpeg"
+
+    monkeypatch.setattr(webapp_module, "_fetch_avatar", fake_fetch_avatar)
+    monkeypatch.setattr(webapp_module, "_fetch_public_avatar", fake_fetch_public_avatar)
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get(
+        "/webapp/api/avatar", headers=_auth_headers("TESTTOKEN", username="jialexample")
+    )
+    assert response.status_code == 200
+    assert response.content == b"public-photo-bytes"
+    storage.close()
+
+
+def test_webapp_avatar_404s_when_no_username_and_no_bot_photo(tmp_path, monkeypatch):
+    import paybot.webapp as webapp_module
+
+    async def fake_fetch_avatar(bot_token, user_id):
+        return None
+
+    async def fake_fetch_public_avatar(username):
+        raise AssertionError("shouldn't be called without a username")
+
+    monkeypatch.setattr(webapp_module, "_fetch_avatar", fake_fetch_avatar)
+    monkeypatch.setattr(webapp_module, "_fetch_public_avatar", fake_fetch_public_avatar)
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/avatar", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 404
+    storage.close()
+
+
+def test_fetch_public_avatar_parses_og_image(monkeypatch):
+    import asyncio
+
+    import httpx
+
+    from paybot.webapp import _fetch_public_avatar
+
+    class FakeResponse:
+        def __init__(self, status_code, text="", content=b"", headers=None):
+            self.status_code = status_code
+            self.text = text
+            self.content = content
+            self.headers = headers or {}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, *args, **kwargs):
+            if url == "https://t.me/jialexample":
+                return FakeResponse(
+                    200, text='<meta property="og:image" content="https://cdn/photo.jpg">'
+                )
+            if url == "https://cdn/photo.jpg":
+                return FakeResponse(
+                    200, content=b"photo-bytes", headers={"content-type": "image/jpeg"}
+                )
+            raise AssertionError(f"unexpected url {url}")
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    result = asyncio.run(_fetch_public_avatar("jialexample"))
+    assert result == (b"photo-bytes", "image/jpeg")
+
+
+def test_fetch_public_avatar_rejects_bad_usernames(monkeypatch):
+    import asyncio
+
+    from paybot.webapp import _fetch_public_avatar
+
+    assert asyncio.run(_fetch_public_avatar("a b")) is None
+    assert asyncio.run(_fetch_public_avatar("ab")) is None
+
+
+def test_webapp_avatar_requires_auth(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/avatar")
+    assert response.status_code == 401
+    storage.close()
+
+
+def test_webapp_csv_export_downloads_all_user_shifts(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 22), time(9, 0), time(17, 0), "Private sale",
+        Decimal("1"), False, Decimal("7"), Decimal("140"), "SGD", location="MBS",
+    )
+    storage.add_shift(
+        99, date(2026, 8, 23), time(9, 0), time(17, 0), "Other user",
+        Decimal("0"), False, Decimal("8"), Decimal("160"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.get("/webapp/api/export/csv", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert 'attachment; filename="howmuch-shifts.csv"' in response.headers["content-disposition"]
+    assert "Private sale" in response.text
+    assert "MBS" in response.text
+    assert "Other user" not in response.text
+    storage.close()
+
+
+_TINY_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+    "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def test_webapp_avatar_prefers_custom_upload_over_telegram_photo(tmp_path, monkeypatch):
+    import paybot.webapp as webapp_module
+
+    async def fake_fetch_avatar(bot_token, user_id):
+        raise AssertionError("shouldn't call Telegram when a custom avatar is stored")
+
+    monkeypatch.setattr(webapp_module, "_fetch_avatar", fake_fetch_avatar)
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    upload = client.post(
+        "/webapp/api/avatar",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"data_url": f"data:image/png;base64,{_TINY_PNG_BASE64}"},
+    )
+    assert upload.status_code == 200
+    response = client.get("/webapp/api/avatar", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    storage.close()
+
+
+def test_webapp_avatar_upload_rejects_bad_data_url(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/avatar",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"data_url": "not-a-data-url"},
+    )
+    assert response.status_code == 400
+    storage.close()
+
+
+def test_webapp_avatar_upload_rejects_unsupported_type(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/avatar",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"data_url": f"data:image/gif;base64,{_TINY_PNG_BASE64}"},
+    )
+    assert response.status_code == 400
+    storage.close()
+
+
+def test_webapp_avatar_upload_rejects_oversized_image(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    huge_base64 = "A" * (3 * 1024 * 1024)
+    response = client.post(
+        "/webapp/api/avatar",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"data_url": f"data:image/png;base64,{huge_base64}"},
+    )
+    assert response.status_code == 400
+    storage.close()
+
+
+def test_webapp_avatar_delete_falls_back_to_telegram(tmp_path, monkeypatch):
+    import paybot.webapp as webapp_module
+
+    async def fake_fetch_avatar(bot_token, user_id):
+        return b"fake-jpeg-bytes", "image/jpeg"
+
+    monkeypatch.setattr(webapp_module, "_fetch_avatar", fake_fetch_avatar)
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    client.post(
+        "/webapp/api/avatar",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"data_url": f"data:image/png;base64,{_TINY_PNG_BASE64}"},
+    )
+    delete_response = client.delete("/webapp/api/avatar", headers=_auth_headers("TESTTOKEN"))
+    assert delete_response.status_code == 204
+    response = client.get("/webapp/api/avatar", headers=_auth_headers("TESTTOKEN"))
+    assert response.status_code == 200
+    assert response.content == b"fake-jpeg-bytes"
+    storage.close()
+
+
+def test_webapp_settings_reports_has_custom_avatar(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    before = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN"))
+    assert before.json()["has_custom_avatar"] is False
+    client.post(
+        "/webapp/api/avatar",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"data_url": f"data:image/png;base64,{_TINY_PNG_BASE64}"},
+    )
+    after = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN"))
+    assert after.json()["has_custom_avatar"] is True
+    storage.close()
+

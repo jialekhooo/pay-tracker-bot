@@ -20,6 +20,7 @@ from .bot import _publish_commands, build_application
 from .feed import feed_body
 from .webapp import router as webapp_router
 
+logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static" / "webapp"
@@ -104,8 +105,6 @@ async def calendar_feed(token: str) -> Response:
     body = feed_body(app.state.storage, token)
     if body is None:
         raise HTTPException(status_code=404, detail="Unknown calendar feed")
-    return Response(
-        content=body,
-        media_type="text/calendar; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="shifts.ics"'},
-    )
+    # No Content-Disposition: attachment here — forcing a download stops Safari/Calendar
+    # from recognizing text/calendar and offering their native "Add to Calendar" screen.
+    return Response(content=body, media_type="text/calendar; charset=utf-8")

@@ -64,6 +64,12 @@ CREATE TABLE IF NOT EXISTS reminders (
     enabled INTEGER NOT NULL DEFAULT 1,
     last_sent_on TEXT
 );
+
+CREATE TABLE IF NOT EXISTS avatars (
+    user_id INTEGER PRIMARY KEY,
+    content_type TEXT NOT NULL,
+    image BLOB NOT NULL
+);
 """
 
 
@@ -216,6 +222,32 @@ class Storage:
             [(user_id, event, str(rate)) for event, rate in config.event_rates.items()],
         )
         self._conn.commit()
+
+    def get_avatar(self, user_id: int) -> tuple[bytes, str] | None:
+        """A user-uploaded custom avatar, or None if they haven't set one."""
+        row = self._conn.execute(
+            "SELECT image, content_type FROM avatars WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        return bytes(row["image"]), row["content_type"]
+
+    def save_avatar(self, user_id: int, image: bytes, content_type: str) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO avatars (user_id, content_type, image) VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                content_type = excluded.content_type,
+                image = excluded.image
+            """,
+            (user_id, content_type, image),
+        )
+        self._conn.commit()
+
+    def delete_avatar(self, user_id: int) -> bool:
+        cursor = self._conn.execute("DELETE FROM avatars WHERE user_id = ?", (user_id,))
+        self._conn.commit()
+        return cursor.rowcount > 0
 
     def add_shift(
         self,
@@ -416,6 +448,20 @@ class Storage:
             ORDER BY day ASC, start_time ASC, ref ASC
             """,
             (user_id, event, f"%{event}%"),
+        )
+        return [_to_record(row) for row in rows]
+
+    def search_shifts(self, user_id: int, keyword: str, limit: int = 50) -> list[ShiftRecord]:
+        """Shifts whose event OR location contains keyword, ignoring case, newest first."""
+        pattern = f"%{keyword}%"
+        rows = self._conn.execute(
+            """
+            SELECT * FROM shifts
+            WHERE user_id = ? AND (lower(event) LIKE lower(?) OR lower(location) LIKE lower(?))
+            ORDER BY day DESC, start_time DESC, ref DESC
+            LIMIT ?
+            """,
+            (user_id, pattern, pattern, limit),
         )
         return [_to_record(row) for row in rows]
 

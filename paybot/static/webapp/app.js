@@ -4,6 +4,7 @@
   const tg = window.Telegram ? window.Telegram.WebApp : null;
   const els = {
     avatar: document.getElementById("avatar"),
+    profileButton: document.getElementById("profile-button"),
     greeting: document.getElementById("greeting"),
     asof: document.getElementById("asof"),
     refresh: document.getElementById("refresh"),
@@ -11,7 +12,9 @@
     loading: document.getElementById("loading"),
     error: document.getElementById("error"),
     errorText: document.getElementById("error-text"),
-    content: document.getElementById("content"),
+    contentWrap: document.getElementById("content-wrap"),
+    contentHead: document.getElementById("content-head"),
+    contentList: document.getElementById("content-list"),
     editBackdrop: document.getElementById("edit-backdrop"),
     editSheet: document.getElementById("edit-sheet"),
     editForm: document.getElementById("edit-form"),
@@ -19,24 +22,46 @@
     editError: document.getElementById("edit-error"),
     editSave: document.getElementById("edit-save"),
     editCancel: document.getElementById("edit-cancel"),
-    fabAdd: document.getElementById("fab-add"),
+    editDuplicate: document.getElementById("edit-duplicate"),
+    editDelete: document.getElementById("edit-delete"),
+    searchOpen: document.getElementById("search-open"),
+    searchBackdrop: document.getElementById("search-backdrop"),
+    searchInput: document.getElementById("search-input"),
+    searchResults: document.getElementById("search-results"),
+    searchClose: document.getElementById("search-close"),
+    toast: document.getElementById("toast"),
+    toastText: document.getElementById("toast-text"),
+    toastAction: document.getElementById("toast-action"),
+  };
+
+  // Clean line icons (stroke = currentColor) used instead of emoji throughout the app.
+  const ICONS = {
+    calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/></svg>`,
+    calendarDays: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/><path d="M7.7 13.3h1.6M11.2 13.3h1.6M14.7 13.3h1.6M7.7 16.6h1.6M11.2 16.6h1.6"/></svg>`,
+    sun: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v3M12 18.5v3M4.4 4.4l2.1 2.1M17.5 17.5l2.1 2.1M2.5 12h3M18.5 12h3M4.4 19.6l2.1-2.1M17.5 6.5l2.1-2.1"/></svg>`,
+    wallet: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6.5" width="18" height="12.5" rx="2.5"/><path d="M3 10.3h18"/><circle cx="16.3" cy="14.6" r="1" fill="currentColor" stroke="none"/></svg>`,
+    user: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.3" r="3.5"/><path d="M4.5 20.2c1.35-3.6 4.24-5.5 7.5-5.5s6.15 1.9 7.5 5.5"/></svg>`,
+    bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 10a5.8 5.8 0 0 1 11.6 0c0 3.9 1.4 5.3 1.4 5.3H4.8S6.2 13.9 6.2 10Z"/><path d="M10.2 18.8a1.9 1.9 0 0 0 3.6 0"/></svg>`,
+    download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="m7.8 10.8 4.2 4.2 4.2-4.2"/><path d="M4 16.5v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`,
   };
 
   const SCOPES = {
-    today: { label: "Today", icon: "☀️" },
-    week: { label: "Week", icon: "📆" },
-    month: { label: "Month", icon: "🗓️" },
-    all: { label: "All time", icon: "💰" },
+    today: { label: "Day", icon: ICONS.sun },
+    week: { label: "Week", icon: ICONS.calendar },
+    month: { label: "Month", icon: ICONS.calendarDays },
+    all: { label: "All time", icon: ICONS.wallet },
   };
 
   let summaryData = null;
-  let view = "overview"; // overview | upcoming | months | events | settings
-  let scope = "today"; // which quick action is selected within overview
+  let view = "dashboard"; // dashboard | summary | calendar | settings
+  let scope = "today"; // which quick action is selected within the Earnings workspace
   let monthDetail = null; // set when drilled into a month from the "Months" view
   let eventsData = null; // fetched lazily the first time the Events tab is opened
   let eventDetail = null; // set when drilled into one event from the "Events" view
   let settingsData = null; // fetched lazily the first time the Settings tab is opened
+  let settingsSection = null; // null | "profile" | "pay" | "reminders" | "calendar" | "export" — drill-down within Settings
   let telegramFirstName = ""; // fallback greeting name when no display name is set
+  let telegramPhotoUrl = ""; // Telegram profile photo, shown in the avatar when available
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
@@ -44,23 +69,77 @@
   let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
   let overviewWeekStart = null; // Monday (YYYY-MM-DD) shown by the Week quick action; null = the live week
   let overviewWeekData = null; // fetched /week/{start} detail when overviewWeekStart isn't the live week
+  let overviewDay = null; // "YYYY-MM-DD" shown by the Day quick action; null = the live current day
+  let overviewDayData = null; // fetched /day/{date} detail when overviewDay isn't the live day
+  let allTimeGroupBy = "month"; // "month" | "event" — how the All Time scope's list is grouped
+  let eventSort = "date"; // "date" | "alphabetical" — ordering for the All time Events list
+  let upcomingRange = "tomorrow"; // "tomorrow" | "7" | "14" | "30" | "all" — the Upcoming tab's selected range
+  let upcomingRangeData = null; // fetched /upcoming/{scope} detail when upcomingRange isn't the default "14"
+  let calendarMonth = null; // "YYYY-MM" currently visible in Calendar
+  let calendarMonthData = null; // /month/{key} payload used by the calendar grid
+  let calendarSelectedDay = null; // "YYYY-MM-DD" selected inside the calendar grid
+  let searchDebounce = null; // setTimeout handle for debouncing the search input
+  let toastTimeout = null; // setTimeout handle for auto-dismissing the undo toast
 
   function initTelegram() {
     if (!tg) return;
     tg.ready();
     tg.expand();
+    // Without this, Telegram treats vertical drags on our content as its own
+    // swipe-to-collapse/close gesture, dragging the whole app instead of scrolling the list.
+    if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (user && user.first_name) {
       telegramFirstName = user.first_name;
       updateGreeting();
+      loadAvatarPhoto();
     }
   }
 
+  // initDataUnsafe.user.photo_url is frequently missing (older clients, privacy
+  // settings), so fetch the photo ourselves via the bot's server-side Bot API access.
+  async function loadAvatarPhoto() {
+    const headers = authHeader();
+    if (!headers) return;
+    try {
+      const response = await fetch("/webapp/api/avatar", { headers });
+      telegramPhotoUrl = response.ok ? URL.createObjectURL(await response.blob()) : "";
+    } catch (err) {
+      telegramPhotoUrl = "";
+    }
+    updateGreeting();
+  }
+
   function updateGreeting() {
-    const name = (settingsData && settingsData.display_name) || telegramFirstName;
-    if (!name) return;
-    els.greeting.textContent = `Hi ${name} 👋`;
-    els.avatar.textContent = name.trim()[0].toUpperCase();
+    const name = (settingsData && settingsData.display_name) || telegramFirstName || "You";
+    const header = {
+      dashboard: ["Overview", "This month at a glance"],
+      summary: ["Earnings", "Detailed earnings"],
+      calendar: ["Calendar", "Your shifts by date"],
+      settings: ["Settings", "Profile and settings"],
+    }[view] || ["HowMuch", "Pay tracker"];
+    els.greeting.textContent = header[0];
+    els.asof.textContent = header[1];
+    els.profileButton.classList.toggle("hidden", view !== "dashboard");
+    paintAvatar(els.avatar, name.trim()[0].toUpperCase());
+    const preview = document.getElementById("settings-avatar-preview");
+    if (preview) paintAvatar(preview, name.trim()[0].toUpperCase());
+  }
+
+  function paintAvatar(el, initial) {
+    if (telegramPhotoUrl) {
+      const img = document.createElement("img");
+      img.src = telegramPhotoUrl;
+      img.alt = "";
+      img.onerror = () => {
+        telegramPhotoUrl = "";
+        el.textContent = initial;
+      };
+      el.textContent = "";
+      el.appendChild(img);
+    } else {
+      el.textContent = initial;
+    }
   }
 
   // Keep the modal pinned above the on-screen keyboard instead of letting it cover the buttons.
@@ -163,6 +242,25 @@
     return mondayOf((data.now || "").slice(0, 10));
   }
 
+  function currentDayKey(data) {
+    return (data.now || "").slice(0, 10);
+  }
+
+  function shiftDayKey(dateStr, deltaDays) {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return isoDateUTC(new Date(Date.UTC(year, month - 1, day) + deltaDays * 86400000));
+  }
+
+  function dayKeyLabel(dateStr) {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      timeZone: "UTC",
+    });
+  }
+
   function isoDateUTC(d) {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
       d.getUTCDate()
@@ -229,7 +327,7 @@
   function shiftRow(shift, currency, options = {}) {
     shiftsById.set(shift.id, shift);
     const state = options.state || "done";
-    const tagText = { running: "in progress", upcoming: "to come" }[state] || "";
+    const tagText = { running: "in progress", upcoming: "Upcoming Shift" }[state] || "";
     const displayPay = options.earnedPay !== undefined ? options.earnedPay : shift.pay;
     const clash = shift.clash ? '<span class="clash-badge">⚠ clash</span>' : "";
     return `
@@ -249,7 +347,7 @@
   function heroBlock(block, currency) {
     const projected =
       Number(block.to_come) > 0
-        ? `<div class="projected">+ ${money(block.to_come, currency)} to come \u2192 ${money(
+        ? `<div class="projected">+ ${money(block.to_come, currency)} upcoming \u2192 ${money(
             block.projected,
             currency
           )} projected</div>`
@@ -278,30 +376,140 @@
     return `<div class="quick-actions">${buttons}</div>`;
   }
 
+  function groupByToggle() {
+    return `
+      <div class="group-toggle">
+        <button type="button" class="group-toggle-btn${
+          allTimeGroupBy === "month" ? " active" : ""
+        }" data-groupby="month">Months</button>
+        <button type="button" class="group-toggle-btn${
+          allTimeGroupBy === "event" ? " active" : ""
+        }" data-groupby="event">Events</button>
+      </div>`;
+  }
+
+  function eventSortToggle() {
+    return `
+      <div class="event-sort">
+        <span>Sort events</span>
+        <div class="event-sort-toggle">
+          <button type="button" class="event-sort-btn${
+            eventSort === "date" ? " active" : ""
+          }" data-event-sort="date">Event date</button>
+          <button type="button" class="event-sort-btn${
+            eventSort === "alphabetical" ? " active" : ""
+          }" data-event-sort="alphabetical">A–Z</button>
+        </div>
+      </div>`;
+  }
+
+  function sortedEvents(events) {
+    return [...events].sort((left, right) => {
+      if (eventSort === "alphabetical") return left.event.localeCompare(right.event);
+      return (left.first_day || "9999-12-31").localeCompare(right.first_day || "9999-12-31") ||
+        left.event.localeCompare(right.event);
+    });
+  }
+
+  function dashboardView(data) {
+    const tomorrow = shiftDayKey(currentDayKey(data), 1);
+    const tomorrowShifts = data.upcoming.filter((shift) => shift.day === tomorrow);
+    const tomorrowLabel = dayKeyLabel(tomorrow);
+    const tomorrowBody = tomorrowShifts.length
+      ? `<div class="card-list">${tomorrowShifts
+          .map((shift) => shiftRow(shift, data.currency, { state: shift.state }))
+          .join("")}</div>`
+      : `<div class="dashboard-empty">Nothing booked for ${escapeHtml(tomorrowLabel)}.</div>`;
+    const month = data.month;
+    const planned = Number(month.to_come) > 0 ? money(month.to_come, data.currency) : "No upcoming pay";
+
+    return {
+      head: heroBlock(month, data.currency),
+      body: `
+        <div class="dashboard-glance">
+          <div class="dashboard-stat">
+            <span>Worked this month</span>
+            <strong>${hours(month.hours)}</strong>
+          </div>
+          <div class="dashboard-stat">
+            <span>Upcoming shifts</span>
+            <strong>${planned}</strong>
+          </div>
+        </div>
+        <div class="section-title">Tomorrow · ${escapeHtml(tomorrowLabel)}</div>
+        ${tomorrowBody}
+      `,
+    };
+  }
+
   function overviewView(data) {
+    if (scope === "today") return dayScopeView(data);
     if (scope === "month") return monthScopeView(data);
     if (scope === "week") return weekScopeView(data);
     const bar = quickActionsBar();
-    if (scope === "all") {
-      const hero = heroBlock(data.all_time, data.currency);
-      const body = data.months.length
-        ? `<div class="card-list">${monthListRows(data.months)}</div>`
+    const hero = heroBlock(data.all_time, data.currency);
+    const toggle = groupByToggle();
+    if (allTimeGroupBy === "event") {
+      if (!eventsData) {
+        return { head: bar + hero + toggle, body: `<div class="empty">Loading…</div>` };
+      }
+      const body = eventsData.events.length
+        ? `${eventSortToggle()}<div class="section-title">By event</div><div class="card-list">${eventListRows(
+            sortedEvents(eventsData.events)
+          )}</div>`
         : `<div class="empty">Nothing logged yet.</div>`;
-      return bar + hero + `<div class="section-title">Every month</div>` + body;
+      return { head: bar + hero + toggle, body };
     }
-    const block = data[scope];
-    if (!block.shifts.length) {
-      return bar + heroBlock(block, data.currency) + `<div class="empty">Nothing logged yet.</div>`;
+    const body = data.months.length
+      ? `<div class="section-title">By month</div><div class="card-list">${monthListRows(
+          data.months
+        )}</div>`
+      : `<div class="empty">Nothing logged yet.</div>`;
+    return { head: bar + hero + toggle, body };
+  }
+
+  function dayScopeView(data) {
+    const bar = quickActionsBar();
+    const liveKey = currentDayKey(data);
+    const activeKey = overviewDay || liveKey;
+    const nav = monthNavBar(dayKeyLabel(activeKey), "day");
+
+    if (activeKey === liveKey) {
+      const block = data.today;
+      const rows = block.shifts.length
+        ? block.shifts
+            .map((s) =>
+              shiftRow(s, data.currency, {
+                state: s.state,
+                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
+              })
+            )
+            .join("")
+        : "";
+      const body = block.shifts.length
+        ? `<div class="card-list">${rows}</div>`
+        : `<div class="empty">Nothing logged yet.</div>`;
+      const projected =
+        Number(block.to_come) > 0
+          ? `<div class="projected">+ ${money(block.to_come, data.currency)} upcoming \u2192 ${money(
+              block.projected,
+              data.currency
+            )} projected</div>`
+          : "";
+      const hero = `<div class="hero">
+          <div class="amount">${money(block.earned, data.currency)}</div>
+          <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
+        block.finished === 1 ? "" : "s"
+      }</div>
+          ${projected}
+        </div>`;
+      return { head: bar + nav + hero, body };
     }
-    const rows = block.shifts
-      .map((s) =>
-        shiftRow(s, data.currency, {
-          state: s.state,
-          earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
-        })
-      )
-      .join("");
-    return bar + heroBlock(block, data.currency) + `<div class="card-list">${rows}</div>`;
+
+    if (!overviewDayData || overviewDayData.day !== activeKey) {
+      return { head: bar + nav, body: `<div class="empty">Loading…</div>` };
+    }
+    return { head: bar + nav + periodHero(overviewDayData), body: periodBody(overviewDayData) };
   }
 
   function monthScopeView(data) {
@@ -327,29 +535,25 @@
         : `<div class="empty">Nothing logged yet.</div>`;
       const projected =
         Number(block.to_come) > 0
-          ? `<div class="projected">+ ${money(block.to_come, data.currency)} to come \u2192 ${money(
+          ? `<div class="projected">+ ${money(block.to_come, data.currency)} upcoming \u2192 ${money(
               block.projected,
               data.currency
             )} projected</div>`
           : "";
-      return (
-        bar +
-        nav +
-        `<div class="hero">
+      const hero = `<div class="hero">
           <div class="amount">${money(block.earned, data.currency)}</div>
           <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
-          block.finished === 1 ? "" : "s"
-        }</div>
+        block.finished === 1 ? "" : "s"
+      }</div>
           ${projected}
-        </div>` +
-        body
-      );
+        </div>`;
+      return { head: bar + nav + hero, body };
     }
 
     if (!overviewMonthData || overviewMonthData.month !== activeKey) {
-      return bar + nav + `<div class="empty">Loading…</div>`;
+      return { head: bar + nav, body: `<div class="empty">Loading…</div>` };
     }
-    return bar + nav + plainPeriodBody(overviewMonthData);
+    return { head: bar + nav + periodHero(overviewMonthData), body: periodBody(overviewMonthData) };
   }
 
   function weekScopeView(data) {
@@ -375,56 +579,88 @@
         : `<div class="empty">Nothing logged yet.</div>`;
       const projected =
         Number(block.to_come) > 0
-          ? `<div class="projected">+ ${money(block.to_come, data.currency)} to come \u2192 ${money(
+          ? `<div class="projected">+ ${money(block.to_come, data.currency)} upcoming \u2192 ${money(
               block.projected,
               data.currency
             )} projected</div>`
           : "";
-      return (
-        bar +
-        nav +
-        `<div class="hero">
+      const hero = `<div class="hero">
           <div class="amount">${money(block.earned, data.currency)}</div>
           <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
-          block.finished === 1 ? "" : "s"
-        }</div>
+        block.finished === 1 ? "" : "s"
+      }</div>
           ${projected}
-        </div>` +
-        body
-      );
+        </div>`;
+      return { head: bar + nav + hero, body };
     }
 
     if (!overviewWeekData || overviewWeekData.start !== activeStart) {
-      return bar + nav + `<div class="empty">Loading…</div>`;
+      return { head: bar + nav, body: `<div class="empty">Loading…</div>` };
     }
-    return bar + nav + plainPeriodBody(overviewWeekData);
+    return { head: bar + nav + periodHero(overviewWeekData), body: periodBody(overviewWeekData) };
   }
 
-  function plainPeriodBody(detail) {
+  // The hero card for a period detail (used once pinned above its list, and once inline).
+  function periodHero(detail) {
+    return `<div class="hero">
+        <div class="amount">${money(detail.pay, detail.currency)}</div>
+        <div class="meta">${hours(detail.hours)} \u00b7 ${detail.shifts.length} shift${
+      detail.shifts.length === 1 ? "" : "s"
+    }</div>
+      </div>`;
+  }
+
+  function periodBody(detail) {
     const rows = detail.shifts.length
       ? detail.shifts.map((s) => shiftRow(s, detail.currency, { state: s.state })).join("")
       : "";
-    const body = detail.shifts.length
+    return detail.shifts.length
       ? `<div class="card-list">${rows}</div>`
       : `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
-    return (
-      `<div class="hero">
-        <div class="amount">${money(detail.pay, detail.currency)}</div>
-        <div class="meta">${hours(detail.hours)} \u00b7 ${detail.shifts.length} shift${
-        detail.shifts.length === 1 ? "" : "s"
-      }</div>
-      </div>` + body
-    );
+  }
+
+  const UPCOMING_RANGES = [
+    ["tomorrow", "Tomorrow"],
+    ["7", "7 days"],
+    ["14", "14 days"],
+    ["30", "30 days"],
+    ["all", "All time"],
+  ];
+
+  function upcomingRangeToggle() {
+    const buttons = UPCOMING_RANGES.map(
+      ([key, label]) => `
+      <button type="button" class="range-toggle-btn${
+        key === upcomingRange ? " active" : ""
+      }" data-upcoming-range="${key}">${label}</button>`
+    ).join("");
+    return `<div class="range-toggle">${buttons}</div>`;
   }
 
   function upcomingView(data) {
-    if (!data.upcoming.length) {
-      return `<div class="empty">Nothing booked in the next 14 days.</div>`;
+    const toggle = upcomingRangeToggle();
+    if (upcomingRange === "14") {
+      if (!data.upcoming.length) {
+        return { head: toggle, body: `<div class="empty">Nothing booked in the next 14 days.</div>` };
+      }
+      const rows = data.upcoming
+        .map((s) => shiftRow(s, data.currency, { state: s.state }))
+        .join("");
+      return { head: toggle, body: `<div class="card-list">${rows}</div>` };
     }
-    const rows = data.upcoming
-      .map((s) => shiftRow(s, data.currency, { state: s.state }))
+    if (!upcomingRangeData || upcomingRangeData.scope !== upcomingRange) {
+      return { head: toggle, body: `<div class="empty">Loading…</div>` };
+    }
+    if (!upcomingRangeData.shifts.length) {
+      return {
+        head: toggle,
+        body: `<div class="empty">Nothing booked for ${escapeHtml(upcomingRangeData.label)}.</div>`,
+      };
+    }
+    const rows = upcomingRangeData.shifts
+      .map((s) => shiftRow(s, upcomingRangeData.currency, { state: s.state }))
       .join("");
-    return `<div class="section-title">Next 14 days</div><div class="card-list">${rows}</div>`;
+    return { head: toggle, body: `<div class="card-list">${rows}</div>` };
   }
 
   function monthListRows(months) {
@@ -432,7 +668,7 @@
       .map(
         (m) => `
       <div class="row" data-month="${m.month}">
-        <div class="icon">📆</div>
+        <div class="icon">${ICONS.calendar}</div>
         <div class="info">
           <div class="title">${escapeHtml(m.label)}</div>
           <div class="sub">${m.shifts} shift${m.shifts === 1 ? "" : "s"} \u00b7 ${hours(m.hours)}</div>
@@ -444,20 +680,81 @@
       .join("");
   }
 
+  function calendarView(data) {
+    const activeMonth = calendarMonth || currentMonthKey(data);
+    const header = `
+      <div class="calendar-nav">
+        <button type="button" class="month-nav-btn" data-calendar-nav="prev" aria-label="Previous month">‹</button>
+        <div class="calendar-nav-label">${escapeHtml(monthKeyLabel(activeMonth))}</div>
+        <button type="button" class="month-nav-btn" data-calendar-nav="next" aria-label="Next month">›</button>
+      </div>`;
+    if (!calendarMonthData || calendarMonthData.month !== activeMonth) {
+      return { head: header, body: `<div class="empty">Loading calendar…</div>` };
+    }
+
+    const selectedDay = calendarSelectedDay || `${activeMonth}-01`;
+    const shiftsByDay = calendarMonthData.shifts.reduce((grouped, shift) => {
+      (grouped[shift.day] ||= []).push(shift);
+      return grouped;
+    }, {});
+    const [year, month] = activeMonth.split("-").map(Number);
+    const firstWeekday = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const today = currentDayKey(data);
+    const blanks = Array.from({ length: firstWeekday }, () => '<div class="calendar-day blank"></div>');
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const key = `${activeMonth}-${String(day).padStart(2, "0")}`;
+      const count = (shiftsByDay[key] || []).length;
+      return `
+        <button type="button" class="calendar-day${key === today ? " today" : ""}${
+          key === selectedDay ? " selected" : ""
+        }${count ? " has-shifts" : ""}" data-calendar-day="${key}" aria-label="${day} ${
+        count ? `with ${count} shift${count === 1 ? "" : "s"}` : ""
+      }">
+          <span>${day}</span>${count ? `<i>${count}</i>` : ""}
+        </button>`;
+    });
+    const dayLabel = dayKeyLabel(selectedDay);
+    const selectedShifts = shiftsByDay[selectedDay] || [];
+    const selectedBody = selectedShifts.length
+      ? `<div class="card-list">${selectedShifts
+          .map((shift) => shiftRow(shift, calendarMonthData.currency, { state: shift.state }))
+          .join("")}</div>`
+      : `<div class="empty calendar-empty">Nothing booked for ${escapeHtml(dayLabel)}.</div>`;
+
+    return {
+      head: header,
+      body: `
+        <div class="calendar-card">
+          <div class="calendar-weekdays"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+          <div class="calendar-grid">${blanks.join("")}${days.join("")}</div>
+        </div>
+        <div class="section-title">${escapeHtml(dayLabel)}</div>
+        ${selectedBody}
+      `,
+    };
+  }
+
   function monthsView(data) {
     if (!data.months.length) {
-      return `<div class="empty">No shifts logged yet.</div>`;
+      return { head: "", body: `<div class="empty">No shifts logged yet.</div>` };
     }
     const allTime = heroBlock(data.all_time, data.currency);
     const rows = monthListRows(data.months);
-    return allTime + `<div class="section-title">By month</div><div class="card-list">${rows}</div>`;
+    return {
+      head: allTime,
+      body: `<div class="section-title">By month</div><div class="card-list">${rows}</div>`,
+    };
   }
 
   function monthDetailView(detail) {
-    return `
-      <div class="back-row" id="back-to-months">\u2039 Months</div>
-      ${monthNavBar(detail.label)}
-      ${plainPeriodBody(detail)}`;
+    return {
+      head: `<div class="back-row" id="back-to-months">\u2039 Months</div>${monthNavBar(
+        detail.label
+      )}${periodHero(detail)}`,
+      body: periodBody(detail),
+    };
   }
 
   function eventListRows(events) {
@@ -479,107 +776,245 @@
 
   function eventsView(data) {
     if (!data) {
-      return `<div class="empty">Loading…</div>`;
+      return { head: "", body: `<div class="empty">Loading…</div>` };
     }
     if (!data.events.length) {
-      return `<div class="empty">No shifts logged yet.</div>`;
+      return { head: "", body: `<div class="empty">No shifts logged yet.</div>` };
     }
+    const allTime = heroBlock(data.all_time, data.currency);
     const rows = eventListRows(data.events);
-    return `<div class="section-title">By event</div><div class="card-list">${rows}</div>`;
+    return {
+      head: allTime,
+      body: `<div class="section-title">By event</div><div class="card-list">${rows}</div>`,
+    };
   }
 
   function eventDetailView(detail) {
-    return `
-      <div class="back-row" id="back-to-events">\u2039 Events</div>
-      ${plainPeriodBody(detail)}`;
+    return {
+      head: `<div class="back-row" id="back-to-events">\u2039 Events</div>${periodHero(detail)}`,
+      body: periodBody(detail),
+    };
+  }
+
+  const SETTINGS_SECTIONS = [
+    { key: "profile", icon: ICONS.user, label: "Profile & Avatar" },
+    { key: "pay", icon: ICONS.wallet, label: "Pay & Rates" },
+    { key: "reminders", icon: ICONS.bell, label: "Reminders" },
+    { key: "calendar", icon: ICONS.calendar, label: "Calendar Sync" },
+    { key: "export", icon: ICONS.download, label: "Export shifts" },
+  ];
+
+  function settingsSectionHint(key, data) {
+    if (key === "pay") return `${money(data.default_rate, data.currency)} / hour`;
+    if (key === "reminders") {
+      return data.reminders.enabled ? `On \u00b7 ${data.reminders.send_at}` : "Off";
+    }
+    if (key === "calendar") return data.calendar_url ? "Connected" : "Not available";
+    if (key === "export") return "Calendar or CSV";
+    return "";
+  }
+
+  function avatarPreviewHtml() {
+    return telegramFirstName ? escapeHtml(telegramFirstName.trim()[0].toUpperCase()) : "";
   }
 
   function settingsView(data) {
     if (!data) {
-      return `<div class="empty">Loading…</div>`;
+      return { head: "", body: `<div class="empty">Loading…</div>` };
     }
-    return `
-      <div class="section-title">Profile</div>
-      <div class="card-list settings-card">
-        <div class="settings-row">
-          <label for="settings-display-name">Display name</label>
-          <input
-            type="text"
-            id="settings-display-name"
-            maxlength="60"
-            placeholder="${escapeHtml(telegramFirstName || "Your name")}"
-            value="${escapeHtml(data.display_name)}"
-          />
-        </div>
-      </div>
-      <button type="button" class="btn primary settings-btn" data-action="save-profile">Save</button>
-      <p class="modal-error hidden" id="settings-profile-error"></p>
+    return settingsSection ? settingsSectionView(data, settingsSection) : settingsHomeView(data);
+  }
 
-      <div class="section-title">Pay</div>
-      <div class="card-list settings-card">
-        <div class="settings-row">
-          <label for="settings-rate">Default rate / hour</label>
-          <input type="number" id="settings-rate" min="0" step="0.01" value="${data.default_rate}" />
+  function settingsHomeView(data) {
+    const name = data.display_name || telegramFirstName || "You";
+    const rows = SETTINGS_SECTIONS.map((section) => {
+      const hint = settingsSectionHint(section.key, data);
+      return `
+      <div class="row editable" data-settings-section="${section.key}">
+        <div class="icon">${section.icon}</div>
+        <div class="info">
+          <div class="title">${section.label}</div>
+          ${hint ? `<div class="sub">${escapeHtml(hint)}</div>` : ""}
         </div>
-        <div class="settings-row">
-          <label for="settings-currency">Currency</label>
-          <input type="text" id="settings-currency" maxlength="8" value="${escapeHtml(data.currency)}" />
-        </div>
-      </div>
-      <button type="button" class="btn primary settings-btn" data-action="save-pay">Save</button>
-      <p class="modal-error hidden" id="settings-pay-error"></p>
+        <div class="chevron">\u203a</div>
+      </div>`;
+    }).join("");
 
-      <div class="section-title">Reminders</div>
-      <div class="card-list settings-card">
-        <div class="settings-row toggle-row">
-          <label for="settings-reminders-enabled">Day-before reminder</label>
-          <label class="switch">
-            <input type="checkbox" id="settings-reminders-enabled" ${
-              data.reminders.enabled ? "checked" : ""
-            } />
-            <span class="slider"></span>
-          </label>
+    return {
+      head: "",
+      body: `
+      <div class="profile-card" data-settings-section="profile">
+        <div class="avatar avatar-lg" id="settings-avatar-preview">${avatarPreviewHtml()}</div>
+        <div class="profile-card-info">
+          <div class="profile-card-name">${escapeHtml(name)}</div>
         </div>
-        <div class="settings-row">
-          <label for="settings-reminders-time">Send at</label>
-          <input type="time" id="settings-reminders-time" value="${data.reminders.send_at}" />
-        </div>
-        <div class="settings-row">
-          <label for="settings-reminders-offset">Timezone (e.g. +8)</label>
-          <input
-            type="text"
-            id="settings-reminders-offset"
-            value="${escapeHtml(data.reminders.utc_offset_label.replace("UTC", ""))}"
-          />
-        </div>
+        <div class="chevron">\u203a</div>
       </div>
-      <button type="button" class="btn primary settings-btn" data-action="save-reminders">Save</button>
-      <p class="modal-error hidden" id="settings-reminders-error"></p>
+      <div class="card-list">${rows}</div>
+    `,
+    };
+  }
 
-      <div class="section-title">Calendar</div>
-      <div class="card-list settings-card">
-        <div class="settings-row">
-          <label>Subscription link</label>
-          <div class="calendar-link" id="settings-calendar-link">${
-            data.calendar_url
-              ? escapeHtml(data.calendar_url)
-              : "Not available on this deployment"
-          }</div>
+  function settingsSectionView(data, section) {
+    const back = `<div class="back-row" id="back-to-settings">\u2039 Settings</div>`;
+    if (section === "profile") {
+      return {
+        head: back,
+        body: `
+        <div class="section-title">Avatar</div>
+        <div class="card-list settings-card">
+          <div class="settings-row avatar-row">
+            <div class="avatar avatar-lg" id="settings-avatar-preview">${avatarPreviewHtml()}</div>
+            <div class="avatar-actions">
+              <button type="button" class="btn secondary" data-action="choose-avatar">Choose photo</button>
+              ${
+                data.has_custom_avatar
+                  ? `<button type="button" class="btn destructive" data-action="remove-avatar">Remove</button>`
+                  : ""
+              }
+            </div>
+          </div>
+          <input type="file" id="avatar-file-input" accept="image/png,image/jpeg,image/webp" class="hidden" />
         </div>
-      </div>
-      ${
-        data.calendar_url
-          ? `<div class="settings-actions">
-              <button type="button" class="btn secondary" data-action="copy-calendar">Copy link</button>
-              <button type="button" class="btn secondary" data-action="rotate-calendar">New link</button>
-            </div>`
-          : ""
-      }
-      <p class="section-hint">
-        Subscribe once in Google/Apple Calendar or TimeTree and every shift you log stays in
-        sync automatically.
-      </p>
-    `;
+        <p class="modal-error hidden" id="settings-avatar-error"></p>
+
+        <div class="section-title">Display name</div>
+        <div class="card-list settings-card">
+          <div class="settings-row">
+            <label for="settings-display-name">Display name</label>
+            <input
+              type="text"
+              id="settings-display-name"
+              maxlength="60"
+              placeholder="${escapeHtml(telegramFirstName || "Your name")}"
+              value="${escapeHtml(data.display_name)}"
+            />
+          </div>
+        </div>
+        <button type="button" class="btn primary settings-btn" data-action="save-profile">Save</button>
+        <p class="modal-error hidden" id="settings-profile-error"></p>
+      `,
+      };
+    }
+    if (section === "pay") {
+      return {
+        head: back,
+        body: `
+        <div class="section-title">Pay</div>
+        <div class="card-list settings-card">
+          <div class="settings-row">
+            <label for="settings-rate">Default rate / hour</label>
+            <input type="number" id="settings-rate" min="0" step="0.01" value="${data.default_rate}" />
+          </div>
+          <div class="settings-row">
+            <label for="settings-currency">Currency</label>
+            <input type="text" id="settings-currency" maxlength="8" value="${escapeHtml(data.currency)}" />
+          </div>
+        </div>
+        <button type="button" class="btn primary settings-btn" data-action="save-pay">Save</button>
+        <p class="modal-error hidden" id="settings-pay-error"></p>
+      `,
+      };
+    }
+    if (section === "reminders") {
+      return {
+        head: back,
+        body: `
+        <div class="section-title">Reminders</div>
+        <div class="card-list settings-card">
+          <div class="settings-row toggle-row">
+            <label for="settings-reminders-enabled">Day-before reminder</label>
+            <label class="switch">
+              <input type="checkbox" id="settings-reminders-enabled" ${
+                data.reminders.enabled ? "checked" : ""
+              } />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <label for="settings-reminders-time">Send at</label>
+            <input type="time" id="settings-reminders-time" value="${data.reminders.send_at}" />
+          </div>
+          <div class="settings-row">
+            <label for="settings-reminders-offset">Timezone (e.g. +8)</label>
+            <input
+              type="text"
+              id="settings-reminders-offset"
+              value="${escapeHtml(data.reminders.utc_offset_label.replace("UTC", ""))}"
+            />
+          </div>
+        </div>
+        <button type="button" class="btn primary settings-btn" data-action="save-reminders">Save</button>
+        <p class="modal-error hidden" id="settings-reminders-error"></p>
+      `,
+      };
+    }
+    if (section === "export") {
+      return {
+        head: back,
+        body: `
+          <div class="section-title">Export shifts</div>
+          <div class="card-list settings-card export-card">
+            <div class="settings-row">
+              <label>Calendar</label>
+              <p>Subscribe to keep your calendar automatically in sync with every shift.</p>
+              ${
+                data.calendar_url
+                  ? `<button type="button" class="btn primary" data-action="export-calendar" data-calendar-url="${escapeHtml(
+                      data.calendar_url
+                    )}">Export to calendar</button>`
+                  : `<span class="settings-muted">Calendar export is not available on this deployment.</span>`
+              }
+            </div>
+            <div class="settings-row">
+              <label>Spreadsheet</label>
+              <p>Download every logged shift as a CSV file for Excel, Numbers, or Google Sheets.</p>
+              <button type="button" class="btn secondary" data-action="export-csv">Download CSV</button>
+            </div>
+          </div>
+          <p class="modal-error hidden" id="settings-export-error"></p>
+        `,
+      };
+    }
+    // section === "calendar"
+    return {
+      head: back,
+      body: `
+        <div class="section-title">Calendar</div>
+        <div class="card-list settings-card">
+          <div class="settings-row">
+            <label>Subscription link</label>
+            <div class="calendar-link" id="settings-calendar-link">${
+              data.calendar_url ? escapeHtml(data.calendar_url) : "Not available on this deployment"
+            }</div>
+          </div>
+        </div>
+        ${
+          data.calendar_url
+            ? `<button type="button" class="btn primary settings-btn" data-action="add-to-calendar" data-calendar-url="${escapeHtml(
+                data.calendar_url
+              )}">Add to Calendar</button>`
+            : ""
+        }
+        ${
+          data.calendar_url
+            ? `<div class="settings-actions">
+                <button type="button" class="btn secondary" data-action="copy-calendar">Copy link</button>
+                <button type="button" class="btn secondary" data-action="rotate-calendar">New link</button>
+              </div>`
+            : ""
+        }
+        <p class="section-hint">
+          Telegram opens calendar files in its own viewer instead of handing them to your
+          Calendar app. To actually import your shifts: tap "Add to Calendar", choose
+          <strong>Save to Files</strong>, then open that saved file from the Files app —
+          that's what triggers your phone's native "Add to Calendar" screen. For live syncing
+          instead of a one-time import, use "Copy link" and paste it into your calendar app's
+          own "Add Subscribed Calendar" / "From URL" option (Settings → Calendar → Accounts →
+          Add Account → Other on iPhone; Other calendars → From URL on Google Calendar).
+        </p>
+      `,
+    };
   }
 
   function render() {
@@ -592,26 +1027,28 @@
       minute: "2-digit",
     })}`;
 
+    let result;
     if (monthDetail) {
-      els.content.innerHTML = monthDetailView(monthDetail);
-      return;
-    }
-    if (eventDetail) {
-      els.content.innerHTML = eventDetailView(eventDetail);
-      return;
-    }
-
-    if (view === "overview") {
-      els.content.innerHTML = overviewView(summaryData);
-    } else if (view === "upcoming") {
-      els.content.innerHTML = upcomingView(summaryData);
+      result = monthDetailView(monthDetail);
+    } else if (eventDetail) {
+      result = eventDetailView(eventDetail);
+    } else if (view === "dashboard") {
+      result = dashboardView(summaryData);
+    } else if (view === "summary") {
+      result = overviewView(summaryData);
+    } else if (view === "calendar") {
+      result = calendarView(summaryData);
     } else if (view === "events") {
-      els.content.innerHTML = eventsView(eventsData);
+      result = eventsView(eventsData);
     } else if (view === "settings") {
-      els.content.innerHTML = settingsView(settingsData);
+      result = settingsView(settingsData);
     } else {
-      els.content.innerHTML = monthsView(summaryData);
+      result = monthsView(summaryData);
     }
+    els.contentHead.innerHTML = result.head;
+    els.contentList.innerHTML = result.body;
+    // Settings previews are freshly created above; repaint it after every render.
+    updateGreeting();
   }
 
   async function loadEvents() {
@@ -623,11 +1060,38 @@
     }
   }
 
+  async function loadCalendarMonth(month, selectedDay = null) {
+    calendarMonth = month;
+    calendarMonthData = null;
+    if (selectedDay) calendarSelectedDay = selectedDay;
+    render();
+    try {
+      const result = await api(`/webapp/api/month/${month}`);
+      if (calendarMonth === month) {
+        calendarMonthData = result;
+        const today = currentDayKey(summaryData);
+        if (!calendarSelectedDay || !calendarSelectedDay.startsWith(`${month}-`)) {
+          calendarSelectedDay = today.startsWith(`${month}-`) ? today : `${month}-01`;
+        }
+        render();
+      }
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  function navigateCalendarMonth(direction) {
+    const activeMonth = calendarMonth || currentMonthKey(summaryData);
+    const nextMonth = shiftMonthKey(activeMonth, direction);
+    const today = currentDayKey(summaryData);
+    loadCalendarMonth(nextMonth, today.startsWith(`${nextMonth}-`) ? today : `${nextMonth}-01`);
+  }
+
   async function loadSettings() {
     try {
       settingsData = await api("/webapp/api/settings");
-      updateGreeting();
       render();
+      updateGreeting();
     } catch (err) {
       // a background/lazy fetch — the Settings tab just keeps showing "Loading…" and
       // retries next time it's opened, without hijacking whatever view is on screen
@@ -697,6 +1161,27 @@
     }
   }
 
+  async function navigateOverviewDay(direction) {
+    const liveKey = currentDayKey(summaryData);
+    const activeKey = overviewDay || liveKey;
+    const nextKey = shiftDayKey(activeKey, direction);
+    if (nextKey === liveKey) {
+      overviewDay = null;
+      overviewDayData = null;
+      render();
+      return;
+    }
+    overviewDay = nextKey;
+    overviewDayData = null;
+    render();
+    try {
+      overviewDayData = await api(`/webapp/api/day/${nextKey}`);
+      render();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
   function setMonthDetail(value) {
     monthDetail = value;
     if (tg && tg.BackButton) {
@@ -725,6 +1210,15 @@
     render();
   }
 
+  function setSettingsSection(value) {
+    settingsSection = value;
+    if (tg && tg.BackButton) {
+      if (value) tg.BackButton.show();
+      else tg.BackButton.hide();
+    }
+    render();
+  }
+
   function selectScope(next) {
     scope = next;
     if (next === "month") {
@@ -735,10 +1229,56 @@
       overviewWeekStart = null;
       overviewWeekData = null;
     }
+    if (next === "today") {
+      overviewDay = null;
+      overviewDayData = null;
+    }
     render();
   }
 
+  function selectAllTimeGroupBy(next) {
+    allTimeGroupBy = next;
+    if (next === "event" && !eventsData) {
+      render();
+      loadEvents();
+    } else {
+      render();
+    }
+  }
+
+  function selectEventSort(next) {
+    eventSort = next;
+    render();
+  }
+
+  function selectUpcomingRange(next) {
+    upcomingRange = next;
+    if (next === "14") {
+      render();
+      return;
+    }
+    upcomingRangeData = null;
+    render();
+    loadUpcomingRange(next);
+  }
+
+  async function loadUpcomingRange(scope) {
+    try {
+      const result = await api(`/webapp/api/upcoming/${scope}`);
+      if (scope === upcomingRange) {
+        upcomingRangeData = result;
+        render();
+      }
+    } catch (err) {
+      showError(err);
+    }
+  }
+
   function selectView(next) {
+    if (next === "add") {
+      openCreator();
+      return;
+    }
     view = next;
     monthDetail = null;
     eventDetail = null;
@@ -746,11 +1286,19 @@
     overviewMonthData = null;
     overviewWeekStart = null;
     overviewWeekData = null;
+    settingsSection = null;
     if (tg && tg.BackButton) tg.BackButton.hide();
     [...els.bottomNav.querySelectorAll(".nav-btn")].forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.view === next);
     });
-    if (next === "events" && !eventsData) {
+    if (next === "calendar") {
+      const month = calendarMonth || currentMonthKey(summaryData);
+      if (!calendarMonthData || calendarMonthData.month !== month) {
+        loadCalendarMonth(month);
+      } else {
+        render();
+      }
+    } else if (next === "events" && !eventsData) {
       render();
       loadEvents();
     } else if (next === "settings" && !settingsData) {
@@ -763,7 +1311,7 @@
 
   function showError(err) {
     els.loading.classList.add("hidden");
-    els.content.classList.add("hidden");
+    els.contentWrap.classList.add("hidden");
     els.error.classList.remove("hidden");
     if (err && err.message === "no-init-data") {
       els.errorText.textContent = "Open this from the HowMuch bot in Telegram.";
@@ -775,11 +1323,11 @@
   async function load() {
     els.loading.classList.remove("hidden");
     els.error.classList.add("hidden");
-    els.content.classList.add("hidden");
+    els.contentWrap.classList.add("hidden");
     try {
       summaryData = await api("/webapp/api/summary");
       els.loading.classList.add("hidden");
-      els.content.classList.remove("hidden");
+      els.contentWrap.classList.remove("hidden");
       render();
     } catch (err) {
       showError(err);
@@ -790,7 +1338,7 @@
     if (!shift) return;
     editorMode = "edit";
     editingShiftId = shift.id;
-    els.editTitle.textContent = "Edit shift";
+    els.editTitle.textContent = "Edit Shift";
     els.editSave.textContent = "Save";
     els.editForm.event.value = shift.event;
     els.editForm.location.value = shift.location || "";
@@ -801,6 +1349,8 @@
     els.editForm.break_hours.value = shift.break_hours;
     els.editForm.break_paid.value = shift.break_paid ? "yes" : "no";
     els.editError.classList.add("hidden");
+    els.editDuplicate.classList.remove("hidden");
+    els.editDelete.classList.remove("hidden");
     els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
   }
@@ -809,14 +1359,16 @@
     editorMode = "create";
     editingShiftId = null;
     els.editForm.reset();
-    els.editTitle.textContent = "Add shift";
-    els.editSave.textContent = "Add shift";
+    els.editTitle.textContent = "Add Shift";
+    els.editSave.textContent = "Add Shift";
     const today = ((summaryData && summaryData.now) || new Date().toISOString()).slice(0, 10);
     els.editForm.day.value = today;
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
-    els.editForm.break_paid.value = "no";
+    els.editForm.break_paid.value = "yes";
     els.editError.classList.add("hidden");
+    els.editDuplicate.classList.add("hidden");
+    els.editDelete.classList.add("hidden");
     els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
   }
@@ -842,6 +1394,13 @@
         eventDetail = null;
       }
     }
+    if (calendarMonth) {
+      try {
+        calendarMonthData = await api(`/webapp/api/month/${calendarMonth}`);
+      } catch (err) {
+        calendarMonthData = null;
+      }
+    }
     if (eventsData) {
       loadEvents();
     }
@@ -862,12 +1421,12 @@
       payload.break_hours = form.break_hours.value;
       payload.break_paid = form.break_paid.value === "yes";
     }
-    await api("/webapp/api/shifts", { method: "POST", body: payload });
+    return api("/webapp/api/shifts", { method: "POST", body: payload });
   }
 
   async function submitUpdate() {
     const shift = shiftsById.get(editingShiftId);
-    if (!shift) return;
+    if (!shift) return null;
     const form = els.editForm;
     const payload = {};
     if (form.event.value.trim() !== shift.event) payload.event = form.event.value.trim();
@@ -881,8 +1440,20 @@
       payload.break_hours = form.break_hours.value || "0";
     const breakPaid = form.break_paid.value === "yes";
     if (breakPaid !== shift.break_paid) payload.break_paid = breakPaid;
-    if (!Object.keys(payload).length) return;
-    await api(`/webapp/api/shifts/${shift.id}`, { method: "PATCH", body: payload });
+    if (!Object.keys(payload).length) return null;
+    return api(`/webapp/api/shifts/${shift.id}`, { method: "PATCH", body: payload });
+  }
+
+  function showClashWarning(clashes) {
+    const lines = clashes
+      .map((c) => `\u2022 ${c.event} — ${c.day} ${c.start}–${c.end}`)
+      .join("\n");
+    const message = `⚠️ This overlaps with:\n${lines}`;
+    if (tg && tg.showAlert) {
+      tg.showAlert(message);
+    } else {
+      window.alert(message);
+    }
   }
 
   async function submitEditor(event) {
@@ -890,13 +1461,17 @@
     els.editSave.disabled = true;
     els.editError.classList.add("hidden");
     try {
+      let result;
       if (editorMode === "create") {
-        await submitCreate();
+        result = await submitCreate();
       } else {
-        await submitUpdate();
+        result = await submitUpdate();
       }
       closeEditor();
       await refreshAfterEdit();
+      if (result && result.clashes && result.clashes.length) {
+        showClashWarning(result.clashes);
+      }
     } catch (err) {
       const fallback =
         editorMode === "create"
@@ -907,6 +1482,124 @@
     } finally {
       els.editSave.disabled = false;
     }
+  }
+
+  // Prefills the create-shift form from the shift currently open for editing, advancing the
+  // date by a day, so logging the same event across several days doesn't mean retyping
+  // the location/time/rate each time.
+  function duplicateEditingShift() {
+    if (editorMode !== "edit" || !editingShiftId) return;
+    const form = els.editForm;
+    const duplicated = {
+      event: form.event.value,
+      location: form.location.value,
+      day: form.day.value,
+      start: form.start.value,
+      end: form.end.value,
+      rate: form.rate.value,
+      break_hours: form.break_hours.value,
+      break_paid: form.break_paid.value,
+    };
+    openCreator();
+    form.event.value = duplicated.event;
+    form.location.value = duplicated.location;
+    if (duplicated.day) {
+      const [year, month, dayNum] = duplicated.day.split("-").map(Number);
+      form.day.value = isoDateUTC(new Date(Date.UTC(year, month - 1, dayNum) + 86400000));
+    }
+    form.start.value = duplicated.start;
+    form.end.value = duplicated.end;
+    form.rate.value = duplicated.rate;
+    form.break_hours.value = duplicated.break_hours;
+    form.break_paid.value = duplicated.break_paid;
+  }
+
+  async function deleteEditingShift() {
+    if (editorMode !== "edit" || !editingShiftId) return;
+    const shift = shiftsById.get(editingShiftId);
+    els.editDelete.disabled = true;
+    els.editError.classList.add("hidden");
+    try {
+      await api(`/webapp/api/shifts/${editingShiftId}`, { method: "DELETE" });
+      closeEditor();
+      await refreshAfterEdit();
+      if (shift) showUndoToast(shift);
+    } catch (err) {
+      els.editError.textContent = err.detail || "Couldn't delete — try again.";
+      els.editError.classList.remove("hidden");
+    } finally {
+      els.editDelete.disabled = false;
+    }
+  }
+
+  function hideToast() {
+    els.toast.classList.add("hidden");
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+      toastTimeout = null;
+    }
+  }
+
+  function showToast(message, actionLabel, onAction) {
+    hideToast();
+    els.toast.classList.remove("success");
+    els.toastText.textContent = message;
+    els.toastAction.textContent = actionLabel || "";
+    els.toastAction.classList.toggle("hidden", !actionLabel);
+    els.toastAction.onclick = () => {
+      hideToast();
+      if (onAction) onAction();
+    };
+    els.toast.classList.remove("hidden");
+    toastTimeout = setTimeout(hideToast, 8000);
+  }
+
+  function showSuccessToast(message) {
+    hideToast();
+    els.toast.classList.add("success");
+    els.toastText.textContent = message;
+    els.toastAction.textContent = "";
+    els.toastAction.classList.add("hidden");
+    els.toastAction.onclick = null;
+    els.toast.classList.remove("hidden");
+    toastTimeout = setTimeout(hideToast, 2600);
+  }
+
+  function setButtonSaving(button, saving, label = "Updating…") {
+    if (!button) return;
+    if (saving) {
+      button.dataset.label = button.textContent;
+      button.disabled = true;
+      button.classList.add("is-saving");
+      button.innerHTML = `<span class="button-spinner" aria-hidden="true"></span>${label}`;
+      return;
+    }
+    button.disabled = false;
+    button.classList.remove("is-saving");
+    if (button.dataset.label) button.textContent = button.dataset.label;
+  }
+
+  function showUndoToast(shift) {
+    showToast("Shift deleted — Undo", "Undo", async () => {
+      try {
+        await api("/webapp/api/shifts", {
+          method: "POST",
+          body: {
+            event: shift.event,
+            location: shift.location || "",
+            day: shift.day,
+            start: shift.start,
+            end: shift.end,
+            rate: shift.rate,
+            break_hours: shift.break_hours,
+            break_paid: shift.break_paid,
+          },
+        });
+        await refreshAfterEdit();
+      } catch (err) {
+        showError(err);
+      }
+    });
   }
 
   function confirmDialog(message) {
@@ -932,20 +1625,72 @@
     if (el) el.classList.add("hidden");
   }
 
+  function chooseAvatar() {
+    const input = document.getElementById("avatar-file-input");
+    if (input) input.click();
+  }
+
+  async function handleAvatarFileSelected(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = ""; // allow choosing the same file again later
+    if (!file) return;
+    hideSettingsError("settings-avatar-error");
+    if (file.size > 2 * 1024 * 1024) {
+      showSettingsError("settings-avatar-error", "Image is too large (max 2 MB).");
+      return;
+    }
+    const chooseButton = document.querySelector('[data-action="choose-avatar"]');
+    setButtonSaving(chooseButton, true, "Uploading…");
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      await api("/webapp/api/avatar", { method: "POST", body: { data_url: dataUrl } });
+      settingsData = await api("/webapp/api/settings");
+      await loadAvatarPhoto();
+      render();
+      showSuccessToast("Avatar updated successfully");
+    } catch (err) {
+      showSettingsError("settings-avatar-error", err.detail || "Couldn't upload — try a smaller image.");
+    } finally {
+      setButtonSaving(chooseButton, false);
+    }
+  }
+
+  async function removeAvatar(button) {
+    hideSettingsError("settings-avatar-error");
+    setButtonSaving(button, true, "Removing…");
+    try {
+      await api("/webapp/api/avatar", { method: "DELETE" });
+      settingsData = await api("/webapp/api/settings");
+      await loadAvatarPhoto();
+      render();
+      showSuccessToast("Avatar removed successfully");
+    } catch (err) {
+      showSettingsError("settings-avatar-error", err.detail || "Couldn't remove — try again.");
+    } finally {
+      setButtonSaving(button, false);
+    }
+  }
+
   async function saveProfile(button) {
     hideSettingsError("settings-profile-error");
     const value = document.getElementById("settings-display-name").value.trim();
-    button.disabled = true;
+    setButtonSaving(button, true);
     try {
       settingsData = await api("/webapp/api/settings", {
         method: "PATCH",
         body: { display_name: value },
       });
       updateGreeting();
+      showSuccessToast("Display name updated successfully");
     } catch (err) {
       showSettingsError("settings-profile-error", err.detail || "Couldn't save — try again.");
     } finally {
-      button.disabled = false;
+      setButtonSaving(button, false);
     }
   }
 
@@ -953,17 +1698,18 @@
     hideSettingsError("settings-pay-error");
     const rate = document.getElementById("settings-rate").value;
     const currency = document.getElementById("settings-currency").value;
-    button.disabled = true;
+    setButtonSaving(button, true);
     try {
       settingsData = await api("/webapp/api/settings", {
         method: "PATCH",
         body: { default_rate: rate, currency },
       });
       render();
+      showSuccessToast("Pay settings updated successfully");
     } catch (err) {
       showSettingsError("settings-pay-error", err.detail || "Couldn't save — check the rate.");
     } finally {
-      button.disabled = false;
+      setButtonSaving(button, false);
     }
   }
 
@@ -972,20 +1718,68 @@
     const enabled = document.getElementById("settings-reminders-enabled").checked;
     const sendAt = document.getElementById("settings-reminders-time").value;
     const offset = document.getElementById("settings-reminders-offset").value;
-    button.disabled = true;
+    setButtonSaving(button, true);
     try {
       settingsData = await api("/webapp/api/reminders", {
         method: "PATCH",
         body: { enabled, send_at: sendAt, utc_offset: offset },
       });
       render();
+      showSuccessToast("Reminder settings updated successfully");
     } catch (err) {
       showSettingsError(
         "settings-reminders-error",
         err.detail || "Couldn't save — check the time and timezone."
       );
     } finally {
-      button.disabled = false;
+      setButtonSaving(button, false);
+    }
+  }
+
+  // Telegram only reliably opens http(s) links via tg.openLink() (custom schemes like webcal:
+  // get swallowed as a generic document share instead). Serving the feed without a forced
+  // download means Safari/Calendar recognize text/calendar and show their own import screen.
+  function openCalendarSubscription(button) {
+    const url = button.dataset.calendarUrl;
+    if (!url) return;
+    if (tg && tg.openLink) {
+      tg.openLink(url);
+    } else {
+      window.location.href = url;
+    }
+  }
+
+  async function exportCsv(button) {
+    const headers = authHeader();
+    if (!headers) return;
+    hideSettingsError("settings-export-error");
+    setButtonSaving(button, true, "Preparing…");
+    try {
+      const response = await fetch("/webapp/api/export/csv", { headers });
+      if (!response.ok) {
+        let detail;
+        try {
+          detail = (await response.json()).detail;
+        } catch (err) {
+          detail = undefined;
+        }
+        const error = new Error("csv-export-failed");
+        error.detail = detail;
+        throw error;
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "howmuch-shifts.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showSuccessToast("CSV downloaded successfully");
+    } catch (err) {
+      showSettingsError("settings-export-error", err.detail || "Couldn't export CSV — try again.");
+    } finally {
+      setButtonSaving(button, false);
     }
   }
 
@@ -1009,7 +1803,11 @@
     button.disabled = true;
     try {
       const result = await api("/webapp/api/calendar/rotate", { method: "POST" });
-      settingsData = { ...settingsData, calendar_url: result.calendar_url };
+      settingsData = {
+        ...settingsData,
+        calendar_url: result.calendar_url,
+        webcal_url: result.webcal_url,
+      };
       render();
     } catch (err) {
       showSettingsError("settings-reminders-error", err.detail || "Couldn't rotate the link.");
@@ -1023,14 +1821,71 @@
     if (btn) selectView(btn.dataset.view);
   });
 
+  els.profileButton.addEventListener("click", () => selectView("settings"));
+
   els.refresh.addEventListener("click", () => {
     load();
     if (view === "events") loadEvents();
+    if (view === "calendar") loadCalendarMonth(calendarMonth || currentMonthKey(summaryData));
     if (view === "settings") loadSettings();
   });
-  els.fabAdd.addEventListener("click", () => openCreator());
 
-  els.content.addEventListener("click", (event) => {
+  function openSearch() {
+    els.searchBackdrop.classList.remove("hidden");
+    els.searchInput.value = "";
+    els.searchResults.innerHTML = '<p class="hint">Type to search event or location…</p>';
+    setTimeout(() => els.searchInput.focus(), 100);
+  }
+
+  function closeSearch() {
+    els.searchBackdrop.classList.add("hidden");
+    if (searchDebounce) {
+      clearTimeout(searchDebounce);
+      searchDebounce = null;
+    }
+  }
+
+  async function runSearch(keyword) {
+    if (!keyword.trim()) {
+      els.searchResults.innerHTML = '<p class="hint">Type to search event or location…</p>';
+      return;
+    }
+    try {
+      const data = await api(`/webapp/api/search?q=${encodeURIComponent(keyword.trim())}`);
+      if (!data.shifts.length) {
+        els.searchResults.innerHTML = '<p class="hint">No shifts found.</p>';
+        return;
+      }
+      els.searchResults.innerHTML = data.shifts
+        .map((s) => shiftRow(s, s.currency))
+        .join("");
+    } catch (err) {
+      els.searchResults.innerHTML = '<p class="hint">Couldn\u2019t search — try again.</p>';
+    }
+  }
+
+  els.searchOpen.addEventListener("click", openSearch);
+  els.searchClose.addEventListener("click", closeSearch);
+  els.searchBackdrop.addEventListener("click", (event) => {
+    if (event.target === els.searchBackdrop) closeSearch();
+  });
+  els.searchInput.addEventListener("input", (event) => {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    const value = event.target.value;
+    searchDebounce = setTimeout(() => runSearch(value), 250);
+  });
+  els.searchResults.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-id]");
+    if (!row) return;
+    closeSearch();
+    openEditor(shiftsById.get(Number(row.dataset.id)));
+  });
+
+  els.contentWrap.addEventListener("change", (event) => {
+    if (event.target.id === "avatar-file-input") handleAvatarFileSelected(event);
+  });
+
+  els.contentWrap.addEventListener("click", (event) => {
     const actionBtn = event.target.closest("[data-action]");
     if (actionBtn) {
       const actions = {
@@ -1039,6 +1894,11 @@
         "save-reminders": saveReminders,
         "copy-calendar": copyCalendarLink,
         "rotate-calendar": rotateCalendarLink,
+        "add-to-calendar": openCalendarSubscription,
+        "export-calendar": openCalendarSubscription,
+        "export-csv": exportCsv,
+        "choose-avatar": chooseAvatar,
+        "remove-avatar": removeAvatar,
       };
       const handler = actions[actionBtn.dataset.action];
       if (handler) handler(actionBtn);
@@ -1049,6 +1909,21 @@
       selectScope(scopeBtn.dataset.scope);
       return;
     }
+    const groupByBtn = event.target.closest("[data-groupby]");
+    if (groupByBtn) {
+      selectAllTimeGroupBy(groupByBtn.dataset.groupby);
+      return;
+    }
+    const eventSortBtn = event.target.closest("[data-event-sort]");
+    if (eventSortBtn) {
+      selectEventSort(eventSortBtn.dataset.eventSort);
+      return;
+    }
+    const upcomingRangeBtn = event.target.closest("[data-upcoming-range]");
+    if (upcomingRangeBtn) {
+      selectUpcomingRange(upcomingRangeBtn.dataset.upcomingRange);
+      return;
+    }
     const monthNavBtn = event.target.closest("[data-month-nav]");
     if (monthNavBtn) {
       const direction = monthNavBtn.dataset.monthNav === "next" ? 1 : -1;
@@ -1056,9 +1931,22 @@
         navigateMonthDetail(direction);
       } else if (scope === "week") {
         navigateOverviewWeek(direction);
+      } else if (scope === "today") {
+        navigateOverviewDay(direction);
       } else {
         navigateOverviewMonth(direction);
       }
+      return;
+    }
+    const calendarNavBtn = event.target.closest("[data-calendar-nav]");
+    if (calendarNavBtn) {
+      navigateCalendarMonth(calendarNavBtn.dataset.calendarNav === "next" ? 1 : -1);
+      return;
+    }
+    const calendarDay = event.target.closest("[data-calendar-day]");
+    if (calendarDay) {
+      calendarSelectedDay = calendarDay.dataset.calendarDay;
+      render();
       return;
     }
     const backRow = event.target.closest("#back-to-months");
@@ -1069,6 +1957,16 @@
     const backToEventsRow = event.target.closest("#back-to-events");
     if (backToEventsRow) {
       setEventDetail(null);
+      return;
+    }
+    const backToSettingsRow = event.target.closest("#back-to-settings");
+    if (backToSettingsRow) {
+      setSettingsSection(null);
+      return;
+    }
+    const settingsSectionEl = event.target.closest("[data-settings-section]");
+    if (settingsSectionEl) {
+      setSettingsSection(settingsSectionEl.dataset.settingsSection);
       return;
     }
     const monthRow = event.target.closest("[data-month]");
@@ -1088,6 +1986,8 @@
   });
 
   els.editCancel.addEventListener("click", closeEditor);
+  els.editDuplicate.addEventListener("click", duplicateEditingShift);
+  els.editDelete.addEventListener("click", deleteEditingShift);
   els.editBackdrop.addEventListener("click", (event) => {
     if (event.target === els.editBackdrop) closeEditor();
   });
@@ -1100,7 +2000,8 @@
   if (tg && tg.BackButton) {
     tg.BackButton.onClick(() => {
       if (eventDetail) setEventDetail(null);
-      else setMonthDetail(null);
+      else if (monthDetail) setMonthDetail(null);
+      else if (settingsSection) setSettingsSection(null);
     });
   }
 

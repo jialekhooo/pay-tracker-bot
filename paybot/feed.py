@@ -57,7 +57,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/calendar; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Content-Disposition", 'attachment; filename="shifts.ics"')
+        # No Content-Disposition: attachment here — forcing a download stops Safari/Calendar
+        # from recognizing text/calendar and offering their native "Add to Calendar" screen.
         self.end_headers()
         self.wfile.write(payload)
 

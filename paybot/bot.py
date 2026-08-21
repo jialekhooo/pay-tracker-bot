@@ -8,6 +8,7 @@ import io
 import logging
 import os
 import re
+import time as time_module
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
@@ -1004,6 +1005,84 @@ def _totals_line(storage: Storage, user_id: int, month: str | None, currency: st
     return "\n".join(lines)
 
 
+_UNDO_TTL_SECONDS = 120
+
+
+def _remember_undo(
+    context: ContextTypes.DEFAULT_TYPE, user_id: int, records: list[ShiftRecord]
+) -> None:
+    """Keeps a short-lived snapshot of deleted shifts so /undo can restore them."""
+    buffer: dict[int, dict[str, object]] = context.application.bot_data.setdefault(
+        "undo_buffer", {}
+    )
+    buffer[user_id] = {"records": records, "expires_at": time_module.time() + _UNDO_TTL_SECONDS}
+
+
+async def undo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Restores the shifts most recently removed by /delete or /clear."""
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    buffer: dict[int, dict[str, object]] = context.application.bot_data.get("undo_buffer", {})
+    entry = buffer.get(user_id)
+    if not entry or time_module.time() > entry["expires_at"]:
+        buffer.pop(user_id, None)
+        await update.message.reply_text("Nothing to undo — it's either done already or expired.")
+        return
+    records: list[ShiftRecord] = entry["records"]
+    restored = [
+        replace(
+            record,
+            id=storage.add_shift(
+                user_id=user_id,
+                day=record.day,
+                start=record.start,
+                end=record.end,
+                event=record.event,
+                location=record.location,
+                break_hours=record.break_hours,
+                break_paid=record.break_paid,
+                hours=record.hours,
+                pay=record.pay,
+                currency=record.currency,
+            ),
+        )
+        for record in records
+    ]
+    buffer.pop(user_id, None)
+    config = storage.get_config(user_id)
+    await _send_html(
+        update,
+        [
+            f"↩️ <b>Restored {len(restored)} shift{'s' if len(restored) > 1 else ''}</b>",
+            _shift_table(restored),
+            _totals_line(storage, user_id, None, config.currency),
+        ],
+    )
+
+
+async def find_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Search shifts by event or location keyword."""
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    keyword = " ".join(context.args).strip()
+    if not keyword:
+        await update.message.reply_text("Usage: /find <keyword> — searches event and location")
+        return
+    records = storage.search_shifts(user_id, keyword)
+    if not records:
+        await update.message.reply_text(f"No shifts matching {keyword!r}.")
+        return
+    pay = sum((r.pay for r in records), Decimal("0"))
+    hours = sum((r.hours for r in records), Decimal("0"))
+    lines = [f"🔍 <b>{len(records)} match{'es' if len(records) != 1 else ''} for {escape(keyword)}</b>"]
+    lines.append(_shift_table(records))
+    lines.append(
+        f"Total  <b>{_money(pay, records[0].currency)}</b>  "
+        f"· {format_hours(hours)}h"
+    )
+    await _send_html(update, lines)
+
+
 async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     user_id = update.effective_user.id
@@ -1014,6 +1093,7 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     deleted: list[tuple[str, ...]] = []
+    deleted_records: list[ShiftRecord] = []
     missing: list[str] = []
     months_touched: set[str] = set()
     for shift_id in (int(i) for i in ids):
@@ -1022,6 +1102,7 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             missing.append(f"#{shift_id}")
             continue
         months_touched.add(record.day.strftime("%Y-%m"))
+        deleted_records.append(record)
         deleted.append(
             (
                 f"#{shift_id}",
@@ -1039,6 +1120,8 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         reply.append(_block(_aligned(deleted, right={3})))
         month = months_touched.pop() if len(months_touched) == 1 else None
         reply.append(_totals_line(storage, user_id, month, config.currency))
+        _remember_undo(context, user_id, deleted_records)
+        reply.append("Send /undo within 2 minutes to bring them back.")
     if missing:
         reply.append(f"Not found: {escape(', '.join(missing))}")
     await _send_html(update, reply)
@@ -1072,11 +1155,13 @@ async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     removed = storage.delete_shifts(user_id, month=month)
+    _remember_undo(context, user_id, pending)
     await _send_html(
         update,
         [
             f"🗑 <b>Deleted {removed} shifts from {escape(scope)}</b>",
             _totals_line(storage, user_id, month, config.currency),
+            "Send /undo within 2 minutes to bring them back.",
         ],
     )
 
@@ -1201,11 +1286,17 @@ async def calendar_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     url = f"{base_url.rstrip('/')}/{token}.ics"
     await update.message.reply_text(
         ("New link — the old one stops working:\n" if refresh else "")
+        + f"[Add to Calendar]({url})\n"
         + f"`{url}`\n\n"
-        "Subscribe once and every shift you log shows up automatically:\n"
-        "• iPhone: Settings → Calendar → Accounts → Add Account → Other → "
-        "Add Subscribed Calendar → paste the link\n"
-        "• Google Calendar (web): Other calendars → + → From URL → paste\n"
+        "Telegram opens calendar files in its own viewer, not your Calendar app, so tapping "
+        "the link above won't offer to add events directly. To actually import them:\n"
+        "1. Tap the link, then choose *Save to Files*\n"
+        "2. Open the saved file from the Files app — that triggers your phone's native "
+        "\"Add to Calendar\" screen\n\n"
+        "For shifts to sync automatically instead of a one-time import:\n"
+        "• iPhone/Mac: paste the link into Settings → Calendar → Accounts → Add Account → "
+        "Other → Add Subscribed Calendar\n"
+        "• Google Calendar (web): Other calendars → + → From URL → paste the link\n"
         "• TimeTree: sync the calendar above into TimeTree "
         "(Settings → Calendar sync), it reads your phone's calendars\n\n"
         "Keep the link private — anyone with it can see your shifts "
@@ -1288,6 +1379,14 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
             Command(
                 ("clear",), "/clear [month]",
                 "Delete a whole month, or everything", clear_shifts,
+            ),
+            Command(
+                ("undo",), "/undo",
+                "Bring back what /delete or /clear just removed", undo,
+            ),
+            Command(
+                ("find", "search"), "/find <keyword>",
+                "Search shifts by event or location", find_shifts,
             ),
         ),
     ),

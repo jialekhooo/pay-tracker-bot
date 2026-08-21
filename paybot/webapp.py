@@ -8,11 +8,16 @@ verify that signature here with the bot token before touching a user's data.
 from __future__ import annotations
 
 import calendar
+import csv
 import hashlib
 import hmac
+import io
 import json
+import logging
 import re
 import time as time_module
+from base64 import b64decode
+from binascii import Error as Base64Error
 from dataclasses import replace
 from datetime import date as date_cls
 from datetime import datetime, timedelta
@@ -20,7 +25,8 @@ from datetime import time as time_cls
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl
 
-from fastapi import APIRouter, Header, HTTPException, Request
+import httpx
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from .bot import earned_by, worked_by
@@ -42,6 +48,8 @@ INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
 router = APIRouter(prefix="/webapp/api")
 
 _MONTH_NAMES = list(calendar.month_name)
+
+logger = logging.getLogger(__name__)
 
 
 def parse_init_data(init_data: str, bot_token: str) -> dict | None:
@@ -77,7 +85,8 @@ def parse_init_data(init_data: str, bot_token: str) -> dict | None:
     return user
 
 
-def _authed_user(request: Request, authorization: str | None) -> tuple[Storage, int]:
+def _authed_user_info(request: Request, authorization: str | None) -> tuple[Storage, dict]:
+    """Like _authed_user, but also returns the raw Telegram user dict (e.g. for username)."""
     storage: Storage | None = getattr(request.app.state, "storage", None)
     bot_token: str | None = getattr(request.app.state, "bot_token", None)
     if storage is None or not bot_token:
@@ -90,6 +99,11 @@ def _authed_user(request: Request, authorization: str | None) -> tuple[Storage, 
     user = parse_init_data(init_data, bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+    return storage, user
+
+
+def _authed_user(request: Request, authorization: str | None) -> tuple[Storage, int]:
+    storage, user = _authed_user_info(request, authorization)
     return storage, int(user["id"])
 
 
@@ -105,6 +119,136 @@ def _month_label(month: str) -> str:
 
 def _num(value: Decimal) -> str:
     return str(round_money(value))
+
+
+async def _fetch_avatar(bot_token: str, user_id: int) -> tuple[bytes, str] | None:
+    """The user's Telegram profile photo via the Bot API.
+
+    More reliable than initData's ``photo_url`` field, which is frequently
+    missing (older clients, or the user's "who can see my photo" privacy setting).
+    """
+    api = f"https://api.telegram.org/bot{bot_token}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        photos_resp = await client.get(
+            f"{api}/getUserProfilePhotos", params={"user_id": user_id, "limit": 1}
+        )
+        photos = photos_resp.json()
+        if not photos.get("ok") or not photos["result"]["photos"]:
+            logger.info("No avatar for user %s: %s", user_id, photos)
+            return None
+        file_id = photos["result"]["photos"][0][-1]["file_id"]  # largest size
+        file_resp = await client.get(f"{api}/getFile", params={"file_id": file_id})
+        file_info = file_resp.json()
+        if not file_info.get("ok"):
+            logger.info("getFile failed for user %s: %s", user_id, file_info)
+            return None
+        file_path = file_info["result"]["file_path"]
+        image_resp = await client.get(f"https://api.telegram.org/file/bot{bot_token}/{file_path}")
+        if image_resp.status_code != 200:
+            return None
+        content_type = "image/jpeg" if file_path.endswith((".jpg", ".jpeg")) else "image/png"
+        return image_resp.content, content_type
+
+
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{5,32}$")
+_OG_IMAGE_RE = re.compile(r'<meta\s+property="og:image"\s+content="([^"]+)"')
+
+
+async def _fetch_public_avatar(username: str) -> tuple[bytes, str] | None:
+    """The photo shown on a user's public t.me/<username> page, if they have one.
+
+    This is a plain, unauthenticated public webpage — the same preview anyone
+    gets from sharing a t.me link — so it's a legitimate fallback for users whose
+    "who can see my photo" setting blocks the Bot API from seeing it directly.
+    """
+    if not _USERNAME_RE.fullmatch(username):
+        return None
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        page_resp = await client.get(f"https://t.me/{username}")
+        if page_resp.status_code != 200:
+            logger.info("t.me/%s returned %s", username, page_resp.status_code)
+            return None
+        match = _OG_IMAGE_RE.search(page_resp.text)
+        if not match:
+            logger.info("No og:image on t.me/%s", username)
+            return None
+        image_resp = await client.get(match.group(1))
+        if image_resp.status_code != 200:
+            return None
+        content_type = image_resp.headers.get("content-type", "image/jpeg").split(";")[0]
+        if not content_type.startswith("image/"):
+            return None
+        return image_resp.content, content_type
+
+
+@router.get("/avatar")
+async def avatar(request: Request, authorization: str | None = Header(default=None)) -> Response:
+    storage, user = _authed_user_info(request, authorization)
+    user_id = int(user["id"])
+    custom = storage.get_avatar(user_id)
+    if custom is not None:
+        content, content_type = custom
+        return Response(
+            content=content, media_type=content_type, headers={"Cache-Control": "private, max-age=3600"}
+        )
+    bot_token = request.app.state.bot_token
+    try:
+        result = await _fetch_avatar(bot_token, user_id)
+        if result is None:
+            if user.get("username"):
+                result = await _fetch_public_avatar(user["username"])
+            else:
+                logger.info("No username for user %s; skipping public avatar fallback", user_id)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Couldn't reach Telegram") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="No profile photo")
+    content, content_type = result
+    return Response(content=content, media_type=content_type, headers={"Cache-Control": "private, max-age=3600"})
+
+
+_MAX_AVATAR_BYTES = 2 * 1024 * 1024
+_ALLOWED_AVATAR_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_DATA_URL_RE = re.compile(r"data:(image/[\w.+-]+);base64,(.+)", re.DOTALL)
+
+
+class AvatarUpload(BaseModel):
+    data_url: str
+
+
+@router.post("/avatar")
+async def upload_avatar(
+    payload: AvatarUpload, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    """Stores a user-picked image so the mini app can show it without needing
+    Telegram's Bot API access, which some users' privacy settings block."""
+    storage, user_id = _authed_user(request, authorization)
+    match = _DATA_URL_RE.fullmatch(payload.data_url)
+    if not match:
+        raise HTTPException(status_code=400, detail="Expected a base64 image data URL")
+    content_type = match.group(1)
+    if content_type not in _ALLOWED_AVATAR_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG or WebP images are supported")
+    encoded = match.group(2)
+    if len(encoded) > _MAX_AVATAR_BYTES * 4 // 3 + 8:
+        raise HTTPException(status_code=400, detail="Image is too large (max 2 MB)")
+    try:
+        image_bytes = b64decode(encoded, validate=True)
+    except (Base64Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid image data") from exc
+    if len(image_bytes) > _MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=400, detail="Image is too large (max 2 MB)")
+    storage.save_avatar(user_id, image_bytes, content_type)
+    return {"ok": True}
+
+
+@router.delete("/avatar", status_code=204)
+async def remove_avatar(
+    request: Request, authorization: str | None = Header(default=None)
+) -> Response:
+    storage, user_id = _authed_user(request, authorization)
+    storage.delete_avatar(user_id)
+    return Response(status_code=204)
 
 
 class ShiftUpdate(BaseModel):
@@ -227,10 +371,7 @@ async def summary(request: Request, authorization: str | None = Header(default=N
     all_records = storage.list_shifts(user_id)
 
     upcoming = storage.shifts_between(user_id, today, today + timedelta(days=14))
-    clashing: set[int] = set()
-    for index, record in enumerate(upcoming):
-        for other in find_clashes(upcoming[index + 1 :], record.day, record.start, record.end):
-            clashing.update({record.id, other.id})
+    clashing = _clashing_ids(upcoming)
 
     return {
         "currency": config.currency,
@@ -253,6 +394,73 @@ async def summary(request: Request, authorization: str | None = Header(default=N
             }
             for s in summaries
         ],
+    }
+
+
+def _clashing_ids(records: list[ShiftRecord]) -> set[int]:
+    clashing: set[int] = set()
+    for index, record in enumerate(records):
+        for other in find_clashes(records[index + 1 :], record.day, record.start, record.end):
+            clashing.update({record.id, other.id})
+    return clashing
+
+
+def _clash_summaries(
+    storage: Storage,
+    user_id: int,
+    day: date_cls,
+    start: time_cls,
+    end: time_cls,
+    exclude_id: int | None = None,
+) -> list[dict]:
+    """Other booked shifts that overlap this slot, for warning the user at save time."""
+    nearby = storage.shifts_between(user_id, day - timedelta(days=1), day + timedelta(days=1))
+    if exclude_id is not None:
+        nearby = [r for r in nearby if r.id != exclude_id]
+    return [
+        {
+            "id": c.id,
+            "event": c.event,
+            "day": c.day.isoformat(),
+            "start": c.start.strftime("%H:%M"),
+            "end": c.end.strftime("%H:%M"),
+        }
+        for c in find_clashes(nearby, day, start, end)
+    ]
+
+
+_UPCOMING_SPANS = {"7": 6, "14": 14, "30": 30}
+_UPCOMING_ALL_DAYS = 3650  # ~10 years; effectively "everything booked ahead"
+
+
+@router.get("/upcoming/{scope}")
+async def upcoming_shifts(
+    scope: str, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    now = local_clock(_offset(storage, user_id))
+    today = now.date()
+    if scope == "tomorrow":
+        first = last = today + timedelta(days=1)
+        label = "Tomorrow"
+    elif scope == "all":
+        first, last = today, today + timedelta(days=_UPCOMING_ALL_DAYS)
+        label = "All upcoming"
+    elif scope in _UPCOMING_SPANS:
+        first, last = today, today + timedelta(days=_UPCOMING_SPANS[scope])
+        label = f"Next {scope} days"
+    else:
+        raise HTTPException(
+            status_code=400, detail="Unknown range, expected tomorrow/7/14/30/all"
+        )
+    records = storage.shifts_between(user_id, first, last)
+    clashing = _clashing_ids(records)
+    currency = records[0].currency if records else storage.get_config(user_id).currency
+    return {
+        "scope": scope,
+        "label": label,
+        "currency": currency,
+        "shifts": [{**_shift_json(r, now), "clash": r.id in clashing} for r in records],
     }
 
 
@@ -296,6 +504,30 @@ async def week_shifts(
     return {
         "start": monday.isoformat(),
         "label": f"Week of {monday.strftime('%d %b')}",
+        "currency": currency,
+        "pay": _num(pay),
+        "hours": str(hours),
+        "shifts": [_shift_json(r, now) for r in records],
+    }
+
+
+@router.get("/day/{day}")
+async def day_shifts(
+    day: str, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    try:
+        target = date_cls.fromisoformat(day)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date, expected YYYY-MM-DD") from exc
+    storage, user_id = _authed_user(request, authorization)
+    now = local_clock(_offset(storage, user_id))
+    records = storage.shifts_between(user_id, target, target)
+    pay = sum((r.pay for r in records), Decimal("0"))
+    hours = sum((r.hours for r in records), Decimal("0"))
+    currency = records[0].currency if records else storage.get_config(user_id).currency
+    return {
+        "day": target.isoformat(),
+        "label": target.strftime("%a, %d %b"),
         "currency": currency,
         "pay": _num(pay),
         "hours": str(hours),
@@ -387,7 +619,18 @@ async def update_shift(
 
     storage.update_shift(user_id, shift_id, **fields)
     updated = storage.get_shift(user_id, shift_id)
-    return _shift_json(updated, local_clock(_offset(storage, user_id)))
+    clashes: list[dict] = []
+    if durational_change or payload.day is not None:
+        final_day = date_cls.fromisoformat(payload.day) if payload.day is not None else record.day
+        final_start = start if durational_change else record.start
+        final_end = end if durational_change else record.end
+        clashes = _clash_summaries(
+            storage, user_id, final_day, final_start, final_end, exclude_id=shift_id
+        )
+    return {
+        **_shift_json(updated, local_clock(_offset(storage, user_id))),
+        "clashes": clashes,
+    }
 
 
 @router.post("/shifts")
@@ -454,14 +697,49 @@ async def create_shift(
         pay=pay,
         currency=config.currency,
     )
-    return _shift_json(storage.get_shift(user_id, shift_id), local_clock(_offset(storage, user_id)))
+    clashes = _clash_summaries(storage, user_id, day, start, end, exclude_id=shift_id)
+    return {
+        **_shift_json(storage.get_shift(user_id, shift_id), local_clock(_offset(storage, user_id))),
+        "clashes": clashes,
+    }
+
+
+@router.delete("/shifts/{shift_id}", status_code=204)
+async def delete_shift(
+    shift_id: int, request: Request, authorization: str | None = Header(default=None)
+) -> Response:
+    storage, user_id = _authed_user(request, authorization)
+    if not storage.delete_shift(user_id, shift_id):
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return Response(status_code=204)
+
+
+@router.get("/search")
+async def search_shifts(
+    q: str, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    keyword = q.strip()
+    if not keyword:
+        return {"query": "", "shifts": []}
+    now = local_clock(_offset(storage, user_id))
+    records = storage.search_shifts(user_id, keyword)
+    return {"query": keyword, "shifts": [_shift_json(r, now) for r in records]}
 
 
 @router.get("/events")
 async def events(request: Request, authorization: str | None = Header(default=None)) -> dict:
     storage, user_id = _authed_user(request, authorization)
+    now = local_clock(_offset(storage, user_id))
     summaries = storage.event_summaries(user_id)
+    all_records = storage.list_shifts(user_id)
+    first_days: dict[str, date_cls] = {}
+    for record in all_records:
+        key = record.event.lower()
+        first_days[key] = min(first_days.get(key, record.day), record.day)
     return {
+        "currency": storage.get_config(user_id).currency,
+        "all_time": _all_time_json(all_records, now),
         "events": [
             {
                 "event": s.event,
@@ -469,6 +747,7 @@ async def events(request: Request, authorization: str | None = Header(default=No
                 "hours": str(s.hours),
                 "pay": _num(s.pay),
                 "currency": s.currency,
+                "first_day": first_days[s.event.lower()].isoformat(),
             }
             for s in summaries
         ]
@@ -504,22 +783,77 @@ def _calendar_url(request: Request, storage: Storage, user_id: int) -> str | Non
     return f"{base_url.rstrip('/')}/{token}.ics"
 
 
+def _webcal_url(calendar_url: str | None) -> str | None:
+    """webcal:// hands the URL straight to the OS's Calendar app for subscribing,
+    instead of the browser just downloading the file."""
+    if not calendar_url:
+        return None
+    return re.sub(r"^https?://", "webcal://", calendar_url)
+
+
+@router.get("/export/csv")
+async def export_csv(request: Request, authorization: str | None = Header(default=None)) -> Response:
+    """Downloads every logged shift in a spreadsheet-friendly CSV file."""
+    storage, user_id = _authed_user(request, authorization)
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "Shift ID",
+            "Date",
+            "Start",
+            "End",
+            "Event",
+            "Location",
+            "Hours",
+            "Break hours",
+            "Paid break",
+            "Pay",
+            "Currency",
+        ]
+    )
+    for record in storage.list_shifts(user_id):
+        writer.writerow(
+            [
+                record.id,
+                record.day.isoformat(),
+                record.start.strftime("%H:%M"),
+                record.end.strftime("%H:%M"),
+                record.event,
+                record.location,
+                str(record.hours),
+                str(record.break_hours),
+                "Yes" if record.break_paid else "No",
+                _num(record.pay),
+                record.currency,
+            ]
+        )
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="howmuch-shifts.csv"'},
+    )
+
+
 def _settings_json(request: Request, storage: Storage, user_id: int) -> dict:
     config = storage.get_config(user_id)
     reminder = storage.get_reminder(user_id)
     send_at = reminder.send_at if reminder else time_cls.fromisoformat(DEFAULT_SEND_AT)
     offset = reminder.utc_offset_minutes if reminder else DEFAULT_UTC_OFFSET_MINUTES
+    calendar_url = _calendar_url(request, storage, user_id)
     return {
         "display_name": config.display_name,
         "default_rate": _num(config.default_rate),
         "currency": config.currency,
+        "has_custom_avatar": storage.get_avatar(user_id) is not None,
         "reminders": {
             "enabled": bool(reminder.enabled) if reminder else False,
             "send_at": send_at.strftime("%H:%M"),
             "utc_offset_minutes": offset,
             "utc_offset_label": format_offset(offset),
         },
-        "calendar_url": _calendar_url(request, storage, user_id),
+        "calendar_url": calendar_url,
+        "webcal_url": _webcal_url(calendar_url),
     }
 
 
@@ -587,4 +921,5 @@ async def rotate_calendar_link(
     if not base_url:
         raise HTTPException(status_code=503, detail="The calendar feed isn't set up")
     token = issue_token(storage, user_id, refresh=True)
-    return {"calendar_url": f"{base_url.rstrip('/')}/{token}.ics"}
+    calendar_url = f"{base_url.rstrip('/')}/{token}.ics"
+    return {"calendar_url": calendar_url, "webcal_url": _webcal_url(calendar_url)}
