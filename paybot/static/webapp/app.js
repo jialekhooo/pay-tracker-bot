@@ -62,6 +62,7 @@
   let settingsData = null; // fetched lazily the first time the Settings tab is opened
   let settingsSection = null; // null | "profile" | "pay" | "reminders" | "calendar" | "export" — drill-down within Settings
   let telegramFirstName = ""; // fallback greeting name when no display name is set
+  let telegramUsername = ""; // @handle, shown under the name in Settings (absent for users without one)
   let telegramPhotoUrl = ""; // Telegram profile photo, shown in the avatar when available
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
@@ -90,6 +91,7 @@
     // swipe-to-collapse/close gesture, dragging the whole app instead of scrolling the list.
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
+    if (user && user.username) telegramUsername = user.username;
     if (user && user.first_name) {
       telegramFirstName = user.first_name;
       updateGreeting();
@@ -843,8 +845,8 @@
   }
 
   const SETTINGS_SECTIONS = [
-    { key: "profile", icon: ICONS.user, label: "Profile & Avatar" },
-    { key: "pay", icon: ICONS.wallet, label: "Pay & Rates" },
+    { key: "profile", icon: ICONS.user, label: "Account Settings" },
+    { key: "pay", icon: ICONS.wallet, label: "Pay Rate" },
     { key: "reminders", icon: ICONS.bell, label: "Reminders" },
     { key: "calendar", icon: ICONS.calendar, label: "Calendar Sync" },
     { key: "export", icon: ICONS.download, label: "Export shifts" },
@@ -893,6 +895,11 @@
         <div class="avatar avatar-lg" id="settings-avatar-preview">${avatarPreviewHtml()}</div>
         <div class="profile-card-info">
           <div class="profile-card-name">${escapeHtml(name)}</div>
+          ${
+            telegramUsername
+              ? `<div class="profile-card-sub">@${escapeHtml(telegramUsername)}</div>`
+              : ""
+          }
         </div>
       </div>
       <div class="card-list">${rows}</div>
