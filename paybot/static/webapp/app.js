@@ -843,12 +843,11 @@
     return {
       head: "",
       body: `
-      <div class="profile-card" data-settings-section="profile">
+      <div class="profile-card">
         <div class="avatar avatar-lg" id="settings-avatar-preview">${avatarPreviewHtml()}</div>
         <div class="profile-card-info">
           <div class="profile-card-name">${escapeHtml(name)}</div>
         </div>
-        <div class="chevron">\u203a</div>
       </div>
       <div class="card-list">${rows}</div>
     `,

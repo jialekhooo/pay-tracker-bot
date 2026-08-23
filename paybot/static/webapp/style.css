@@ -1144,11 +1144,6 @@ main {
   border-radius: 16px;
   padding: 14px;
   margin-bottom: 16px;
-  cursor: pointer;
-}
-
-.profile-card:active {
-  background: var(--secondary-bg);
 }
 
 .profile-card-info {
@@ -1323,4 +1318,3 @@ main {
 .switch input:checked + .slider::before {
   transform: translateX(20px);
 }
-
