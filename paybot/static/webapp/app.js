@@ -54,6 +54,7 @@
 
   let summaryData = null;
   let view = "dashboard"; // dashboard | summary | calendar | settings
+  let dashboardDetail = null; // null | "worked" | "upcoming" — drill-down from the Overview cards
   let scope = "today"; // which quick action is selected within the Earnings workspace
   let monthDetail = null; // set when drilled into a month from the "Months" view
   let eventsData = null; // fetched lazily the first time the Events tab is opened
@@ -427,19 +428,49 @@
       head: heroBlock(month, data.currency),
       body: `
         <div class="dashboard-glance">
-          <div class="dashboard-stat">
+          <div class="dashboard-stat" data-dashboard-stat="worked">
             <span>Worked this month</span>
             <strong>${hours(month.hours)}</strong>
+            <div class="chevron">\u203a</div>
           </div>
-          <div class="dashboard-stat">
+          <div class="dashboard-stat" data-dashboard-stat="upcoming">
             <span>Upcoming shifts</span>
             <strong>${planned}</strong>
+            <div class="chevron">\u203a</div>
           </div>
         </div>
         <div class="section-title">Tomorrow · ${escapeHtml(tomorrowLabel)}</div>
         ${tomorrowBody}
       `,
     };
+  }
+
+  function dashboardDetailView(data) {
+    const back = `<div class="back-row" id="back-to-overview">\u2039 Overview</div>`;
+    if (dashboardDetail === "worked") {
+      const worked = data.month.shifts
+        .filter((s) => s.state !== "upcoming")
+        .sort(
+          (left, right) =>
+            right.day.localeCompare(left.day) || right.start.localeCompare(left.start)
+        );
+      const rows = worked
+        .map((s) => shiftRow(s, data.currency, { state: s.state, earnedPay: s.earned_pay }))
+        .join("");
+      return {
+        head: back + heroBlock(data.month, data.currency),
+        body: `
+          <div class="section-title">Worked this month</div>
+          ${
+            worked.length
+              ? `<div class="card-list">${rows}</div>`
+              : `<div class="empty">No shifts worked this month yet.</div>`
+          }`,
+      };
+    }
+
+    const upcoming = upcomingView(data, { excludeDone: true });
+    return { head: back + upcoming.head, body: upcoming.body };
   }
 
   function overviewView(data) {
@@ -637,13 +668,23 @@
     return `<div class="range-toggle">${buttons}</div>`;
   }
 
-  function upcomingView(data) {
+  function upcomingView(data, { excludeDone = false } = {}) {
+    const visibleShifts = (shifts) =>
+      excludeDone ? shifts.filter((s) => s.state !== "done") : shifts;
     const toggle = upcomingRangeToggle();
     if (upcomingRange === "14") {
-      if (!data.upcoming.length) {
-        return { head: toggle, body: `<div class="empty">Nothing booked in the next 14 days.</div>` };
+      const shifts = visibleShifts(data.upcoming);
+      if (!shifts.length) {
+        return {
+          head: toggle,
+          body: `<div class="empty">${
+            excludeDone
+              ? "Nothing still to come in the next 14 days."
+              : "Nothing booked in the next 14 days."
+          }</div>`,
+        };
       }
-      const rows = data.upcoming
+      const rows = shifts
         .map((s) => shiftRow(s, data.currency, { state: s.state }))
         .join("");
       return { head: toggle, body: `<div class="card-list">${rows}</div>` };
@@ -651,13 +692,18 @@
     if (!upcomingRangeData || upcomingRangeData.scope !== upcomingRange) {
       return { head: toggle, body: `<div class="empty">Loading…</div>` };
     }
-    if (!upcomingRangeData.shifts.length) {
+    const shifts = visibleShifts(upcomingRangeData.shifts);
+    if (!shifts.length) {
       return {
         head: toggle,
-        body: `<div class="empty">Nothing booked for ${escapeHtml(upcomingRangeData.label)}.</div>`,
+        body: `<div class="empty">${
+          excludeDone
+            ? `Nothing still to come for ${escapeHtml(upcomingRangeData.label.toLowerCase())}.`
+            : `Nothing booked for ${escapeHtml(upcomingRangeData.label)}.`
+        }</div>`,
       };
     }
-    const rows = upcomingRangeData.shifts
+    const rows = shifts
       .map((s) => shiftRow(s, upcomingRangeData.currency, { state: s.state }))
       .join("");
     return { head: toggle, body: `<div class="card-list">${rows}</div>` };
@@ -1031,6 +1077,8 @@
       result = monthDetailView(monthDetail);
     } else if (eventDetail) {
       result = eventDetailView(eventDetail);
+    } else if (view === "dashboard" && dashboardDetail) {
+      result = dashboardDetailView(summaryData);
     } else if (view === "dashboard") {
       result = dashboardView(summaryData);
     } else if (view === "summary") {
@@ -1190,6 +1238,16 @@
     render();
   }
 
+  function setDashboardDetail(value) {
+    dashboardDetail = value;
+    if (value === "upcoming") upcomingRange = "14";
+    if (tg && tg.BackButton) {
+      if (value) tg.BackButton.show();
+      else tg.BackButton.hide();
+    }
+    render();
+  }
+
   async function openEvent(name) {
     if (tg && tg.BackButton) tg.BackButton.show();
     try {
@@ -1279,6 +1337,7 @@
       return;
     }
     view = next;
+    dashboardDetail = null;
     monthDetail = null;
     eventDetail = null;
     overviewMonth = null;
@@ -1981,6 +2040,16 @@
       render();
       return;
     }
+    const dashboardStat = event.target.closest("[data-dashboard-stat]");
+    if (dashboardStat) {
+      setDashboardDetail(dashboardStat.dataset.dashboardStat);
+      return;
+    }
+    const backToOverviewRow = event.target.closest("#back-to-overview");
+    if (backToOverviewRow) {
+      setDashboardDetail(null);
+      return;
+    }
     const backRow = event.target.closest("#back-to-months");
     if (backRow) {
       setMonthDetail(null);
@@ -2037,6 +2106,7 @@
     tg.BackButton.onClick(() => {
       if (eventDetail) setEventDetail(null);
       else if (monthDetail) setMonthDetail(null);
+      else if (dashboardDetail) setDashboardDetail(null);
       else if (settingsSection) setSettingsSection(null);
     });
   }

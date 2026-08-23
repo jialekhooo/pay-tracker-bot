@@ -490,10 +490,16 @@ main {
 }
 
 .dashboard-stat {
+  position: relative;
   min-width: 0;
   background: var(--section-bg);
   border-radius: 14px;
-  padding: 13px 14px;
+  padding: 13px 38px 13px 14px;
+  cursor: pointer;
+}
+
+.dashboard-stat:active {
+  background: var(--secondary-bg);
 }
 
 .dashboard-stat span {
@@ -511,6 +517,14 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dashboard-stat .chevron {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  margin: 0;
+  transform: translateY(-50%);
 }
 
 .dashboard-empty {
