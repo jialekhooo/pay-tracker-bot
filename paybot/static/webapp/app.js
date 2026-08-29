@@ -213,10 +213,6 @@
     return `${Number.isInteger(n) ? n : n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}h`;
   }
 
-  function shiftWhere(shift) {
-    return shift.location ? `${shift.event} @ ${shift.location}` : shift.event;
-  }
-
   function currentMonthKey(data) {
     return (data.now || "").slice(0, 7);
   }
@@ -334,21 +330,82 @@
   function shiftRow(shift, currency, options = {}) {
     shiftsById.set(shift.id, shift);
     const state = options.state || "done";
-    const tagText = { running: "in progress", upcoming: "Upcoming Shift" }[state] || "";
+    const tagText = { running: "In progress", upcoming: "Upcoming" }[state] || "";
     const displayPay = options.earnedPay !== undefined ? options.earnedPay : shift.pay;
     const clash = shift.clash ? '<span class="clash-badge">⚠ clash</span>' : "";
+    const when = options.hideDate ? "" : `${shift.date_label} \u00b7 `;
     return `
       <div class="row editable state-${state}" data-id="${shift.id}">
         ${eventBadge(shift.event)}
         <div class="info">
-          <div class="title">${escapeHtml(shiftWhere(shift))}${clash}</div>
-          <div class="sub">${shift.date_label} \u00b7 ${shift.start}\u2013${shift.end} \u00b7 ${hours(shift.hours)}</div>
+          <div class="title">${escapeHtml(shift.event)}${clash}</div>
+          <div class="sub">${when}${shift.start}\u2013${shift.end} \u00b7 ${hours(shift.hours)}${
+      shift.location ? ` \u00b7 ${escapeHtml(shift.location)}` : ""
+    }</div>
         </div>
         <div class="value">
-          ${money(displayPay, currency)}
-          ${tagText ? `<span class="tag">${tagText}</span>` : ""}
+          <div class="amount">${money(displayPay, currency)}</div>
+          ${tagText ? `<span class="tag tag-${state}">${tagText}</span>` : ""}
         </div>
       </div>`;
+  }
+
+  function dayHead(label, shifts, currency, payOf = (shift) => shift.pay) {
+    const pay = shifts.reduce((total, shift) => total + Number(payOf(shift)), 0);
+    const worked = shifts.reduce((total, shift) => total + Number(shift.hours), 0);
+    return `
+      <div class="day-head">
+        <span class="day-when">${escapeHtml(label)}</span>
+        <span class="day-total">${money(pay, currency)} \u00b7 ${hours(worked)}</span>
+      </div>`;
+  }
+
+  // Shifts split into one card per calendar day, headed by the day and its own total, so a
+  // long list reads as a schedule instead of a wall of repeated dates.
+  function shiftGroups(shifts, currency, options = {}) {
+    const payOf = options.payOf || ((shift) => shift.pay);
+    const days = [];
+    const byDay = new Map();
+    shifts.forEach((shift) => {
+      if (!byDay.has(shift.day)) {
+        byDay.set(shift.day, []);
+        days.push(shift.day);
+      }
+      byDay.get(shift.day).push(shift);
+    });
+    return days
+      .map((day) => {
+        const dayShifts = byDay.get(day);
+        const rows = dayShifts
+          .map((shift) =>
+            shiftRow(shift, currency, {
+              state: shift.state,
+              earnedPay: payOf(shift),
+              hideDate: true,
+            })
+          )
+          .join("");
+        return `
+      <div class="day-group">
+        ${dayHead(dayKeyLabel(day), dayShifts, currency, payOf)}
+        <div class="card-list">${rows}</div>
+      </div>`;
+      })
+      .join("");
+  }
+
+  function shiftDayCard(shifts, currency, options = {}) {
+    const payOf = options.payOf || ((shift) => shift.pay);
+    const rows = shifts
+      .map((shift) =>
+        shiftRow(shift, currency, {
+          state: shift.state,
+          earnedPay: payOf(shift),
+          hideDate: true,
+        })
+      )
+      .join("");
+    return `<div class="card-list">${rows}</div>`;
   }
 
   function heroBlock(block, currency) {
@@ -423,9 +480,7 @@
     const tomorrowShifts = data.upcoming.filter((shift) => shift.day === tomorrow);
     const tomorrowLabel = dayKeyLabel(tomorrow);
     const tomorrowBody = tomorrowShifts.length
-      ? `<div class="card-list">${tomorrowShifts
-          .map((shift) => shiftRow(shift, data.currency, { state: shift.state }))
-          .join("")}</div>`
+      ? shiftDayCard(tomorrowShifts, data.currency)
       : `<div class="dashboard-empty">Nothing booked for ${escapeHtml(tomorrowLabel)}.</div>`;
     const month = data.month;
     const planned = Number(month.to_come) > 0 ? money(month.to_come, data.currency) : "No upcoming pay";
@@ -463,16 +518,13 @@
           (left, right) =>
             right.day.localeCompare(left.day) || right.start.localeCompare(left.start)
         );
-      const rows = worked
-        .map((s) => shiftRow(s, data.currency, { state: s.state, earnedPay: s.earned_pay }))
-        .join("");
       return {
         head: back + heroBlock(data.month, data.currency),
         body: `
           <div class="section-title">Worked this month</div>
           ${
             worked.length
-              ? `<div class="card-list">${rows}</div>`
+              ? shiftGroups(worked, data.currency, { payOf: (s) => s.earned_pay })
               : `<div class="empty">No shifts worked this month yet.</div>`
           }`,
       };
@@ -516,18 +568,8 @@
 
     if (activeKey === liveKey) {
       const block = data.today;
-      const rows = block.shifts.length
-        ? block.shifts
-            .map((s) =>
-              shiftRow(s, data.currency, {
-                state: s.state,
-                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
-              })
-            )
-            .join("")
-        : "";
       const body = block.shifts.length
-        ? `<div class="card-list">${rows}</div>`
+        ? shiftDayCard(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
       const projected =
         Number(block.to_come) > 0
@@ -549,7 +591,10 @@
     if (!overviewDayData || overviewDayData.day !== activeKey) {
       return { head: bar + nav, body: `<div class="empty">Loading…</div>` };
     }
-    return { head: bar + nav + periodHero(overviewDayData), body: periodBody(overviewDayData) };
+    return {
+      head: bar + nav + periodHero(overviewDayData),
+      body: periodBody(overviewDayData, { grouped: false }),
+    };
   }
 
   function monthScopeView(data) {
@@ -560,18 +605,8 @@
 
     if (activeKey === liveKey) {
       const block = data.month;
-      const rows = block.shifts.length
-        ? block.shifts
-            .map((s) =>
-              shiftRow(s, data.currency, {
-                state: s.state,
-                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
-              })
-            )
-            .join("")
-        : "";
       const body = block.shifts.length
-        ? `<div class="card-list">${rows}</div>`
+        ? shiftGroups(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
       const projected =
         Number(block.to_come) > 0
@@ -604,18 +639,8 @@
 
     if (activeStart === liveStart) {
       const block = data.week;
-      const rows = block.shifts.length
-        ? block.shifts
-            .map((s) =>
-              shiftRow(s, data.currency, {
-                state: s.state,
-                earnedPay: s.state === "upcoming" ? s.pay : s.earned_pay,
-              })
-            )
-            .join("")
-        : "";
       const body = block.shifts.length
-        ? `<div class="card-list">${rows}</div>`
+        ? shiftGroups(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
       const projected =
         Number(block.to_come) > 0
@@ -640,6 +665,10 @@
     return { head: bar + nav + periodHero(overviewWeekData), body: periodBody(overviewWeekData) };
   }
 
+  function scopePay(shift) {
+    return shift.state === "upcoming" ? shift.pay : shift.earned_pay;
+  }
+
   // The hero card for a period detail (used once pinned above its list, and once inline).
   function periodHero(detail) {
     return `<div class="hero">
@@ -650,13 +679,13 @@
       </div>`;
   }
 
-  function periodBody(detail) {
-    const rows = detail.shifts.length
-      ? detail.shifts.map((s) => shiftRow(s, detail.currency, { state: s.state })).join("")
-      : "";
-    return detail.shifts.length
-      ? `<div class="card-list">${rows}</div>`
-      : `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
+  function periodBody(detail, { grouped = true } = {}) {
+    if (!detail.shifts.length) {
+      return `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
+    }
+    return grouped
+      ? shiftGroups(detail.shifts, detail.currency)
+      : shiftDayCard(detail.shifts, detail.currency);
   }
 
   const UPCOMING_RANGES = [
@@ -693,10 +722,7 @@
           }</div>`,
         };
       }
-      const rows = shifts
-        .map((s) => shiftRow(s, data.currency, { state: s.state }))
-        .join("");
-      return { head: toggle, body: `<div class="card-list">${rows}</div>` };
+      return { head: toggle, body: shiftGroups(shifts, data.currency) };
     }
     if (!upcomingRangeData || upcomingRangeData.scope !== upcomingRange) {
       return { head: toggle, body: `<div class="empty">Loading…</div>` };
@@ -712,10 +738,7 @@
         }</div>`,
       };
     }
-    const rows = shifts
-      .map((s) => shiftRow(s, upcomingRangeData.currency, { state: s.state }))
-      .join("");
-    return { head: toggle, body: `<div class="card-list">${rows}</div>` };
+    return { head: toggle, body: shiftGroups(shifts, upcomingRangeData.currency) };
   }
 
   function monthListRows(months) {
@@ -773,10 +796,14 @@
     const dayLabel = dayKeyLabel(selectedDay);
     const selectedShifts = shiftsByDay[selectedDay] || [];
     const selectedBody = selectedShifts.length
-      ? `<div class="card-list">${selectedShifts
-          .map((shift) => shiftRow(shift, calendarMonthData.currency, { state: shift.state }))
-          .join("")}</div>`
-      : `<div class="empty calendar-empty">Nothing booked for ${escapeHtml(dayLabel)}.</div>`;
+      ? `<div class="day-group">
+          ${dayHead(dayLabel, selectedShifts, calendarMonthData.currency)}
+          ${shiftDayCard(selectedShifts, calendarMonthData.currency)}
+        </div>`
+      : `<div class="day-group">
+          <div class="day-head"><span class="day-when">${escapeHtml(dayLabel)}</span></div>
+          <div class="empty calendar-empty">Nothing booked for ${escapeHtml(dayLabel)}.</div>
+        </div>`;
 
     return {
       head: header,
@@ -785,7 +812,6 @@
           <div class="calendar-weekdays"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
           <div class="calendar-grid">${blanks.join("")}${days.join("")}</div>
         </div>
-        <div class="section-title">${escapeHtml(dayLabel)}</div>
         ${selectedBody}
       `,
     };

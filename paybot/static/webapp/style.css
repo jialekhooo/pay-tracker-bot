@@ -30,7 +30,7 @@
     radial-gradient(80% 45% at 95% 8%, rgba(24, 148, 150, 0.8) 0%, rgba(24, 148, 150, 0) 65%),
     radial-gradient(110% 40% at 75% 64%, rgba(233, 163, 104, 0.5) 0%, rgba(233, 163, 104, 0) 72%),
     linear-gradient(180deg, #0e2a43 0%, #145268 30%, #35818a 52%, #d9ae86 72%, #f2f2f7 91%);
-  --glass: rgba(18, 22, 30, 0.34);
+  --glass: linear-gradient(165deg, #123a5c 0%, #0b2338 100%);
   --glass-border: rgba(255, 255, 255, 0.22);
 }
 
@@ -297,7 +297,7 @@ main {
 /* Not scrollable — sits above the list, unaffected by its scroll. */
 #content-head {
   flex: none;
-  padding: 6px 8px 0 16px;
+  padding: 6px 16px 0;
 }
 
 /* The only scrollable region, so the scrollbar/scroll indicator is confined to the list
@@ -308,7 +308,7 @@ main {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 6px 8px calc(var(--fab-clearance) + env(safe-area-inset-bottom, 0px)) 16px;
+  padding: 6px 16px calc(var(--fab-clearance) + env(safe-area-inset-bottom, 0px));
 }
 
 .state {
@@ -454,18 +454,12 @@ main {
   color: var(--text);
 }
 
-/* Horizontally scrollable chip row for choosing the Upcoming tab's date range */
+/* Chip row for choosing the Upcoming tab's date range; wraps so every range stays visible. */
 .range-toggle {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   padding: 2px 0 12px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.range-toggle::-webkit-scrollbar {
-  display: none;
 }
 
 .range-toggle-btn {
@@ -490,12 +484,11 @@ main {
   padding: 7px 15px;
 }
 
-/* Frosted card floating over the header artwork. */
+/* Deep card floating over the header artwork; opaque so it reads the same wherever it lands. */
 .hero {
   background: var(--glass);
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
   border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 26px -16px rgba(6, 20, 34, 0.7);
   color: #fff;
   border-radius: 18px;
   padding: 16px 18px 15px;
@@ -540,11 +533,9 @@ main {
 .dashboard-stat {
   position: relative;
   min-width: 0;
-  /* Slightly heavier towards the bottom, where the artwork behind it is at its lightest. */
-  background: linear-gradient(180deg, rgba(18, 22, 30, 0.34), rgba(18, 22, 30, 0.55));
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  background: var(--glass);
   border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 26px -16px rgba(6, 20, 34, 0.7);
   color: #fff;
   border-radius: 18px;
   padding: 13px 34px 13px 14px;
@@ -552,7 +543,7 @@ main {
 }
 
 .dashboard-stat:active {
-  background: rgba(18, 22, 30, 0.5);
+  filter: brightness(1.25);
 }
 
 .dashboard-stat span {
@@ -610,8 +601,41 @@ main {
 
 .card-list {
   background: var(--section-bg);
-  border-radius: var(--radius);
+  border-radius: 16px;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* One card per day, headed by a pill that reads on both the light page and the artwork. */
+.day-group + .day-group {
+  margin-top: 14px;
+}
+
+.day-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 2px 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.day-when {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.day-total {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5d5d63;
 }
 
 .row {
@@ -620,14 +644,13 @@ main {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-left: 3px solid transparent;
 }
 
 /* Separators are inset to the start of the text, as in iOS grouped lists. */
 .row:not(:last-child)::after {
   content: "";
   position: absolute;
-  left: 64px;
+  left: 62px;
   right: 0;
   bottom: 0;
   height: 1px;
@@ -642,22 +665,10 @@ main {
   background: var(--fill);
 }
 
-.row.state-done {
-  border-left-color: var(--done);
-}
-
-.row.state-running {
-  border-left-color: var(--running);
-}
-
-.row.state-upcoming {
-  border-left-color: var(--upcoming);
-}
-
 .row .icon {
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -697,17 +708,38 @@ main {
 
 .row .value {
   flex: none;
-  text-align: right;
-  font-size: 15px;
-  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
 }
 
+.row .value .amount {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* State reads as a small tinted pill instead of a coloured bar down the row. */
 .row .value .tag {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
   color: var(--hint);
-  margin-top: 1px;
+  background: var(--fill);
+}
+
+.row .value .tag-upcoming {
+  color: var(--upcoming);
+  background: var(--upcoming-bg);
+}
+
+.row .value .tag-running {
+  color: var(--running);
+  background: var(--running-bg);
 }
 
 .clash-badge {
@@ -796,7 +828,8 @@ main {
 
 .calendar-card {
   background: var(--section-bg);
-  border-radius: var(--radius);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   padding: 12px 10px 10px;
   box-sizing: border-box;
   width: min(100%, 560px);
@@ -807,6 +840,11 @@ main {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-grid {
+  row-gap: 2px;
+  justify-items: center;
 }
 
 .calendar-weekdays {
@@ -820,6 +858,8 @@ main {
 .calendar-day {
   position: relative;
   min-width: 0;
+  width: 100%;
+  max-width: 44px;
   aspect-ratio: 1;
   border: none;
   border-radius: 50%;
@@ -836,6 +876,7 @@ main {
 
 .calendar-day.today {
   color: var(--button);
+  background: var(--upcoming-bg);
 }
 
 .calendar-day.selected {
@@ -860,10 +901,30 @@ main {
 }
 
 .calendar-empty {
-  padding-top: 22px;
+  background: var(--section-bg);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  padding: 22px 12px;
 }
 
-/* Bottom tab bar — a floating "liquid glass" pill, inset from the edges. */
+/* Fade the scrolling list out behind and around the floating tab bar. */
+#app::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--nav-height) + 30px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    180deg,
+    rgba(242, 242, 247, 0) 0%,
+    rgba(242, 242, 247, 0.92) 45%,
+    var(--secondary-bg) 100%
+  );
+  pointer-events: none;
+  z-index: 9;
+}
+
 /* Floating pill tab bar, inset from the edges. */
 .bottom-nav {
   position: fixed;
@@ -873,7 +934,7 @@ main {
   display: flex;
   width: auto;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.6);
