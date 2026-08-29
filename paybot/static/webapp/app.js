@@ -92,8 +92,8 @@
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     // The app ships a fixed light palette, so pin Telegram's own chrome to it instead of
     // letting a dark client theme frame the app in near-black.
-    if (tg.setHeaderColor) tg.setHeaderColor("#f2f2f5");
-    if (tg.setBackgroundColor) tg.setBackgroundColor("#f2f2f5");
+    if (tg.setHeaderColor) tg.setHeaderColor("#f2f2f7");
+    if (tg.setBackgroundColor) tg.setBackgroundColor("#f2f2f7");
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (user && user.username) telegramUsername = user.username;
     if (user && user.first_name) {

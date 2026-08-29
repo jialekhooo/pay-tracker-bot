@@ -1,24 +1,27 @@
-/* Fixed palette: every user gets the same monochrome light theme, independent of the
+/* Fixed palette: every user gets the same light iOS-settings look, independent of the
    Telegram client's theme (--tg-theme-*) and of the OS dark mode preference. */
 :root {
   color-scheme: light;
   --bg: #ffffff;
-  --secondary-bg: #f2f2f5;
+  --secondary-bg: #f2f2f7;
   --section-bg: #ffffff;
-  --text: #17171a;
-  --hint: #8a8a90;
-  --link: #2f6be0;
-  --button: #1c1c1e;
+  --text: #000000;
+  --hint: #8e8e93;
+  --link: #007aff;
+  --button: #007aff;
   --button-text: #ffffff;
-  --accent: #3a3a42;
-  --destructive: #d93a3a;
-  --done: #2fa84f;
-  --done-bg: #e6f4ea;
-  --running: #c77700;
-  --running-bg: #fbeed6;
-  --upcoming: #1c1c1e;
-  --upcoming-bg: #e8e8ed;
-  --nav-height: 76px;
+  --accent: #007aff;
+  --destructive: #ff3b30;
+  --done: #34c759;
+  --done-bg: #e6f8ea;
+  --running: #ff9500;
+  --running-bg: #fff2e0;
+  --upcoming: #007aff;
+  --upcoming-bg: #e7f0ff;
+  --separator: rgba(60, 60, 67, 0.29);
+  --fill: rgba(120, 120, 128, 0.12);
+  --radius: 10px;
+  --nav-height: 68px;
   --fab-clearance: calc(var(--nav-height) + 28px);
 }
 
@@ -81,7 +84,7 @@ body {
   font-weight: 700;
   font-size: 16px;
   color: #fff;
-  background: linear-gradient(135deg, #4a4a52, #1c1c1e);
+  background: #c7c7cc;
   overflow: hidden;
 }
 
@@ -155,7 +158,7 @@ body {
   bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   background: var(--text);
   color: var(--bg);
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 12px 14px;
   display: flex;
   align-items: center;
@@ -177,8 +180,7 @@ body {
 .toast.success {
   background: var(--section-bg);
   color: var(--text);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--separator);
 }
 
 .toast.success::before {
@@ -220,9 +222,9 @@ body {
   font: inherit;
   font-weight: 500;
   color: var(--text);
-  background: var(--secondary-bg);
+  background: var(--fill);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   margin-bottom: 12px;
 }
@@ -315,7 +317,7 @@ main {
 .quick-action {
   border: none;
   background: var(--section-bg);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 12px 4px 10px;
   display: flex;
   flex-direction: column;
@@ -334,7 +336,7 @@ main {
   align-items: center;
   justify-content: center;
   font-size: 15px;
-  background: var(--secondary-bg);
+  background: var(--fill);
   color: var(--button);
 }
 
@@ -355,10 +357,10 @@ main {
 /* Segmented control for choosing how the All Time list is grouped (months vs. events) */
 .group-toggle {
   display: flex;
-  background: var(--section-bg);
-  border-radius: 12px;
-  padding: 4px;
-  gap: 4px;
+  background: var(--fill);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
   margin: 0 0 14px;
 }
 
@@ -374,8 +376,8 @@ main {
 }
 
 .group-toggle-btn.active {
-  background: var(--button);
-  color: var(--button-text);
+  background: var(--section-bg);
+  color: var(--text);
 }
 
 .event-sort {
@@ -395,10 +397,10 @@ main {
 
 .event-sort-toggle {
   display: flex;
-  padding: 3px;
-  gap: 3px;
-  background: var(--section-bg);
-  border-radius: 10px;
+  padding: 2px;
+  gap: 2px;
+  background: var(--fill);
+  border-radius: 9px;
 }
 
 .event-sort-btn {
@@ -413,7 +415,7 @@ main {
 }
 
 .event-sort-btn.active {
-  background: var(--secondary-bg);
+  background: var(--section-bg);
   color: var(--text);
 }
 
@@ -448,18 +450,22 @@ main {
   color: var(--button-text);
 }
 
+.range-toggle-btn:not(.active) {
+  border: 1px solid var(--separator);
+  padding: 7px 15px;
+}
+
 .hero {
-  background: linear-gradient(155deg, #33333b, #131317);
-  color: var(--button-text);
-  border-radius: 20px;
-  padding: 20px 20px 18px;
+  background: var(--section-bg);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 18px 16px 16px;
   margin: 10px 0 16px;
-  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.35);
 }
 
 .hero .label {
   font-size: 13px;
-  opacity: 0.85;
+  color: var(--hint);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -474,14 +480,15 @@ main {
 
 .hero .meta {
   font-size: 13px;
-  opacity: 0.9;
+  color: var(--hint);
 }
 
 .hero .projected {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
   font-size: 13px;
+  color: var(--hint);
 }
 
 .dashboard-glance {
@@ -495,13 +502,13 @@ main {
   position: relative;
   min-width: 0;
   background: var(--section-bg);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 13px 38px 13px 14px;
   cursor: pointer;
 }
 
 .dashboard-stat:active {
-  background: var(--secondary-bg);
+  background: var(--fill);
 }
 
 .dashboard-stat span {
@@ -533,7 +540,7 @@ main {
   color: var(--hint);
   text-align: center;
   background: var(--section-bg);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 24px 12px;
   font-size: 14px;
 }
@@ -555,21 +562,28 @@ main {
 
 .card-list {
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--secondary-bg);
   border-left: 3px solid transparent;
 }
 
-.row:last-child {
-  border-bottom: none;
+/* Separators are inset to the start of the text, as in iOS grouped lists. */
+.row:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 64px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--separator);
 }
 
 .row.editable {
@@ -577,7 +591,7 @@ main {
 }
 
 .row.editable:active {
-  background: var(--secondary-bg);
+  background: var(--fill);
 }
 
 .row.state-done {
@@ -602,7 +616,7 @@ main {
   justify-content: center;
   font-size: 15px;
   font-weight: 700;
-  background: var(--secondary-bg);
+  background: var(--fill);
   color: var(--hint);
 }
 
@@ -675,7 +689,7 @@ main {
   align-items: center;
   gap: 6px;
   padding: 4px 4px 10px;
-  color: var(--text);
+  color: var(--link);
   font-weight: 600;
   font-size: 14px;
 }
@@ -695,7 +709,7 @@ main {
   border: none;
   border-radius: 50%;
   background: var(--section-bg);
-  color: var(--text);
+  color: var(--link);
   font-size: 18px;
   font-weight: 700;
   display: flex;
@@ -731,7 +745,7 @@ main {
 
 .calendar-card {
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 12px 10px 10px;
   box-sizing: border-box;
   width: min(100%, 560px);
@@ -757,7 +771,7 @@ main {
   min-width: 0;
   aspect-ratio: 1;
   border: none;
-  border-radius: 12px;
+  border-radius: 50%;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -801,19 +815,15 @@ main {
 /* Bottom tab bar — a floating "liquid glass" pill, inset from the edges. */
 .bottom-nav {
   position: fixed;
-  left: 14px;
-  right: 14px;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  width: auto;
+  width: 100%;
   box-sizing: border-box;
-  background: color-mix(in srgb, var(--section-bg) 68%, transparent);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  border-radius: 26px;
-  padding: 6px;
-  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28);
+  background: var(--section-bg);
+  border-top: 1px solid var(--separator);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
   z-index: 10;
 }
 
@@ -856,7 +866,6 @@ main {
 
 .nav-btn.active {
   color: var(--button);
-  background: color-mix(in srgb, var(--button) 14%, transparent);
 }
 
 .nav-add .nav-icon {
@@ -879,7 +888,7 @@ main {
   color: var(--button-text);
   font-size: 28px;
   line-height: 1;
-  box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.3);
   z-index: 15;
 }
 
@@ -904,8 +913,8 @@ main {
 
 .modal-sheet {
   width: 100%;
-  background: var(--bg);
-  border-radius: 22px 22px 0 0;
+  background: var(--secondary-bg);
+  border-radius: 14px 14px 0 0;
   padding: 8px 20px calc(14px + env(safe-area-inset-bottom, 0px));
   max-height: 100%;
   overflow-y: auto;
@@ -916,7 +925,7 @@ main {
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: var(--secondary-bg);
+  background: var(--separator);
   margin: 4px auto 12px;
 }
 
@@ -943,8 +952,8 @@ main {
   border: none;
   border-radius: 50%;
   padding: 0;
-  color: var(--text);
-  background: var(--secondary-bg);
+  color: var(--hint);
+  background: var(--fill);
 }
 
 .sheet-close svg {
@@ -972,8 +981,8 @@ main {
   box-sizing: border-box;
   padding: 13px;
   background: var(--section-bg);
-  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  border-radius: 14px;
+  border: none;
+  border-radius: var(--radius);
 }
 
 .form-section-title {
@@ -1008,9 +1017,9 @@ main {
   font: inherit;
   font-weight: 500;
   color: var(--text);
-  background: var(--secondary-bg);
+  background: var(--fill);
   border: none;
-  border-radius: 11px;
+  border-radius: 8px;
   padding: 11px 12px;
   font-size: 15px;
   box-sizing: border-box;
@@ -1063,8 +1072,8 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--secondary-bg);
-  border-radius: 11px;
+  background: var(--fill);
+  border-radius: 8px;
   padding: 11px 12px;
   font-size: 15px;
   font-weight: 500;
@@ -1097,10 +1106,8 @@ main {
   padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
   position: sticky;
   bottom: 0;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  background: var(--secondary-bg);
+  border-top: 1px solid var(--separator);
 }
 
 .btn {
@@ -1108,7 +1115,7 @@ main {
   display: inline-block;
   box-sizing: border-box;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 12px;
   font-size: 15px;
   font-weight: 700;
@@ -1141,8 +1148,8 @@ main {
 }
 
 .btn.secondary {
-  background: var(--secondary-bg);
-  color: var(--text);
+  background: var(--fill);
+  color: var(--link);
 }
 
 .btn.destructive {
@@ -1157,7 +1164,7 @@ main {
   align-items: center;
   gap: 14px;
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 14px;
   margin-bottom: 16px;
 }
@@ -1187,7 +1194,7 @@ main {
 
 .settings-row {
   padding: 10px 0;
-  border-bottom: 1px solid var(--secondary-bg);
+  border-bottom: 1px solid var(--separator);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1226,9 +1233,9 @@ main {
   font: inherit;
   font-weight: 500;
   color: var(--text);
-  background: var(--secondary-bg);
+  background: var(--fill);
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px 12px;
   font-size: 15px;
   box-sizing: border-box;
@@ -1286,8 +1293,8 @@ main {
 .calendar-link {
   font-size: 12px;
   color: var(--text);
-  background: var(--secondary-bg);
-  border-radius: 10px;
+  background: var(--fill);
+  border-radius: 8px;
   padding: 10px 12px;
   word-break: break-all;
 }
@@ -1309,7 +1316,7 @@ main {
 .switch .slider {
   position: absolute;
   inset: 0;
-  background: var(--secondary-bg);
+  background: var(--fill);
   border-radius: 999px;
   transition: background 0.15s;
 }
@@ -1328,7 +1335,7 @@ main {
 }
 
 .switch input:checked + .slider {
-  background: var(--button);
+  background: var(--done);
 }
 
 .switch input:checked + .slider::before {
