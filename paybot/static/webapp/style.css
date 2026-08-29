@@ -1,21 +1,23 @@
+/* Fixed palette: every user gets the same monochrome light theme, independent of the
+   Telegram client's theme (--tg-theme-*) and of the OS dark mode preference. */
 :root {
-  color-scheme: light dark;
-  --bg: var(--tg-theme-bg-color, #ffffff);
-  --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f3);
-  --section-bg: var(--tg-theme-section-bg-color, #ffffff);
-  --text: var(--tg-theme-text-color, #111114);
-  --hint: var(--tg-theme-hint-color, #8e8e93);
-  --link: var(--tg-theme-link-color, #2481cc);
-  --button: var(--tg-theme-button-color, #2481cc);
-  --button-text: var(--tg-theme-button-text-color, #ffffff);
-  --accent: var(--tg-theme-accent-text-color, var(--link));
-  --destructive: var(--tg-theme-destructive-text-color, #e53935);
-  --done: #34c759;
-  --done-bg: #d9f7e2;
-  --running: #ff9500;
-  --running-bg: #ffedd1;
-  --upcoming: var(--accent);
-  --upcoming-bg: #dfeaff;
+  color-scheme: light;
+  --bg: #ffffff;
+  --secondary-bg: #f2f2f5;
+  --section-bg: #ffffff;
+  --text: #17171a;
+  --hint: #8a8a90;
+  --link: #2f6be0;
+  --button: #1c1c1e;
+  --button-text: #ffffff;
+  --accent: #3a3a42;
+  --destructive: #d93a3a;
+  --done: #2fa84f;
+  --done-bg: #e6f4ea;
+  --running: #c77700;
+  --running-bg: #fbeed6;
+  --upcoming: #1c1c1e;
+  --upcoming-bg: #e8e8ed;
   --nav-height: 76px;
   --fab-clearance: calc(var(--nav-height) + 28px);
 }
@@ -79,7 +81,7 @@ body {
   font-weight: 700;
   font-size: 16px;
   color: #fff;
-  background: linear-gradient(135deg, var(--button), var(--accent));
+  background: linear-gradient(135deg, #4a4a52, #1c1c1e);
   overflow: hidden;
 }
 
@@ -447,7 +449,7 @@ main {
 }
 
 .hero {
-  background: linear-gradient(135deg, var(--button), var(--accent));
+  background: linear-gradient(155deg, #33333b, #131317);
   color: var(--button-text);
   border-radius: 20px;
   padding: 20px 20px 18px;
@@ -673,7 +675,7 @@ main {
   align-items: center;
   gap: 6px;
   padding: 4px 4px 10px;
-  color: var(--link);
+  color: var(--text);
   font-weight: 600;
   font-size: 14px;
 }
