@@ -1498,6 +1498,35 @@
         calendarMonthData = null;
       }
     }
+    if (overviewMonthData && overviewMonth) {
+      try {
+        overviewMonthData = await api(`/webapp/api/month/${overviewMonth}`);
+      } catch (err) {
+        overviewMonthData = null;
+      }
+    }
+    if (overviewWeekData && overviewWeekStart) {
+      try {
+        overviewWeekData = await api(`/webapp/api/week/${overviewWeekStart}`);
+      } catch (err) {
+        overviewWeekData = null;
+      }
+    }
+    if (overviewDayData && overviewDay) {
+      try {
+        overviewDayData = await api(`/webapp/api/day/${overviewDay}`);
+      } catch (err) {
+        overviewDayData = null;
+      }
+    }
+    if (upcomingRangeData) {
+      try {
+        const result = await api(`/webapp/api/upcoming/${upcomingRange}`);
+        if (result.scope === upcomingRange) upcomingRangeData = result;
+      } catch (err) {
+        upcomingRangeData = null;
+      }
+    }
     if (eventsData) {
       loadEvents();
     }
