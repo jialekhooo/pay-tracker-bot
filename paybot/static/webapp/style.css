@@ -1,23 +1,37 @@
+/* Fixed palette: every user gets the same light iOS-settings look, independent of the
+   Telegram client's theme (--tg-theme-*) and of the OS dark mode preference. */
 :root {
-  color-scheme: light dark;
-  --bg: var(--tg-theme-bg-color, #ffffff);
-  --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f3);
-  --section-bg: var(--tg-theme-section-bg-color, #ffffff);
-  --text: var(--tg-theme-text-color, #111114);
-  --hint: var(--tg-theme-hint-color, #8e8e93);
-  --link: var(--tg-theme-link-color, #2481cc);
-  --button: var(--tg-theme-button-color, #2481cc);
-  --button-text: var(--tg-theme-button-text-color, #ffffff);
-  --accent: var(--tg-theme-accent-text-color, var(--link));
-  --destructive: var(--tg-theme-destructive-text-color, #e53935);
+  color-scheme: light;
+  --bg: #ffffff;
+  --secondary-bg: #f2f2f7;
+  --section-bg: #ffffff;
+  --text: #000000;
+  --hint: #8e8e93;
+  --link: #007aff;
+  --button: #007aff;
+  --button-text: #ffffff;
+  --accent: #007aff;
+  --destructive: #ff3b30;
   --done: #34c759;
-  --done-bg: #d9f7e2;
+  --done-bg: #e6f8ea;
   --running: #ff9500;
-  --running-bg: #ffedd1;
-  --upcoming: var(--accent);
-  --upcoming-bg: #dfeaff;
+  --running-bg: #fff2e0;
+  --upcoming: #007aff;
+  --upcoming-bg: #e7f0ff;
+  --separator: rgba(60, 60, 67, 0.29);
+  --fill: rgba(120, 120, 128, 0.12);
+  --radius: 14px;
   --nav-height: 76px;
   --fab-clearance: calc(var(--nav-height) + 28px);
+  /* Dusk artwork behind the header; the last stop matches --secondary-bg so the band
+     dissolves into the page instead of ending on a visible edge. */
+  --header-art:
+    radial-gradient(100% 55% at 8% 0%, rgba(11, 40, 66, 0.95) 0%, rgba(11, 40, 66, 0) 70%),
+    radial-gradient(80% 45% at 95% 8%, rgba(24, 148, 150, 0.8) 0%, rgba(24, 148, 150, 0) 65%),
+    radial-gradient(110% 40% at 75% 64%, rgba(233, 163, 104, 0.5) 0%, rgba(233, 163, 104, 0) 72%),
+    linear-gradient(180deg, #0e2a43 0%, #145268 30%, #35818a 52%, #d9ae86 72%, #f2f2f7 91%);
+  --glass: rgba(18, 22, 30, 0.34);
+  --glass-border: rgba(255, 255, 255, 0.22);
 }
 
 * {
@@ -55,11 +69,35 @@ body {
   overflow: hidden;
 }
 
+/* Header artwork, tall enough on Overview to hold the earnings card and the two stats. */
+#app::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 330px;
+  background: var(--header-art);
+  z-index: 0;
+}
+
+.topbar,
+main,
+.bottom-nav {
+  position: relative;
+  z-index: 1;
+}
+
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 16px 6px;
+  color: #fff;
+}
+
+.topbar .asof {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .who {
@@ -79,7 +117,7 @@ body {
   font-weight: 700;
   font-size: 16px;
   color: #fff;
-  background: linear-gradient(135deg, var(--button), var(--accent));
+  background: #c7c7cc;
   overflow: hidden;
 }
 
@@ -121,9 +159,11 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: none;
-  background: var(--section-bg);
-  color: var(--text);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
   font-size: 17px;
   display: flex;
   align-items: center;
@@ -153,7 +193,7 @@ body {
   bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   background: var(--text);
   color: var(--bg);
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 12px 14px;
   display: flex;
   align-items: center;
@@ -175,8 +215,7 @@ body {
 .toast.success {
   background: var(--section-bg);
   color: var(--text);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--separator);
 }
 
 .toast.success::before {
@@ -218,9 +257,9 @@ body {
   font: inherit;
   font-weight: 500;
   color: var(--text);
-  background: var(--secondary-bg);
+  background: var(--fill);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   margin-bottom: 12px;
 }
@@ -302,7 +341,7 @@ main {
   }
 }
 
-/* Quick actions — a row of pill cards, mirroring a wallet's Transfer/Deposit/... row */
+/* Quick actions — a row of pill cards, sitting just under the header artwork */
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -313,7 +352,7 @@ main {
 .quick-action {
   border: none;
   background: var(--section-bg);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 12px 4px 10px;
   display: flex;
   flex-direction: column;
@@ -332,7 +371,7 @@ main {
   align-items: center;
   justify-content: center;
   font-size: 15px;
-  background: var(--secondary-bg);
+  background: var(--fill);
   color: var(--button);
 }
 
@@ -353,10 +392,10 @@ main {
 /* Segmented control for choosing how the All Time list is grouped (months vs. events) */
 .group-toggle {
   display: flex;
-  background: var(--section-bg);
-  border-radius: 12px;
-  padding: 4px;
-  gap: 4px;
+  background: var(--fill);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
   margin: 0 0 14px;
 }
 
@@ -372,8 +411,8 @@ main {
 }
 
 .group-toggle-btn.active {
-  background: var(--button);
-  color: var(--button-text);
+  background: var(--section-bg);
+  color: var(--text);
 }
 
 .event-sort {
@@ -393,10 +432,10 @@ main {
 
 .event-sort-toggle {
   display: flex;
-  padding: 3px;
-  gap: 3px;
-  background: var(--section-bg);
-  border-radius: 10px;
+  padding: 2px;
+  gap: 2px;
+  background: var(--fill);
+  border-radius: 9px;
 }
 
 .event-sort-btn {
@@ -411,7 +450,7 @@ main {
 }
 
 .event-sort-btn.active {
-  background: var(--secondary-bg);
+  background: var(--section-bg);
   color: var(--text);
 }
 
@@ -446,18 +485,26 @@ main {
   color: var(--button-text);
 }
 
+.range-toggle-btn:not(.active) {
+  border: 1px solid var(--separator);
+  padding: 7px 15px;
+}
+
+/* Frosted card floating over the header artwork. */
 .hero {
-  background: linear-gradient(135deg, var(--button), var(--accent));
-  color: var(--button-text);
-  border-radius: 20px;
-  padding: 20px 20px 18px;
-  margin: 10px 0 16px;
-  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.35);
+  background: var(--glass);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  border-radius: 18px;
+  padding: 16px 18px 15px;
+  margin: 10px 0 12px;
 }
 
 .hero .label {
-  font-size: 13px;
-  opacity: 0.85;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -472,14 +519,15 @@ main {
 
 .hero .meta {
   font-size: 13px;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .hero .projected {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
   font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .dashboard-glance {
@@ -492,21 +540,30 @@ main {
 .dashboard-stat {
   position: relative;
   min-width: 0;
-  background: var(--section-bg);
-  border-radius: 14px;
-  padding: 13px 38px 13px 14px;
+  /* Slightly heavier towards the bottom, where the artwork behind it is at its lightest. */
+  background: linear-gradient(180deg, rgba(18, 22, 30, 0.34), rgba(18, 22, 30, 0.55));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  border-radius: 18px;
+  padding: 13px 34px 13px 14px;
   cursor: pointer;
 }
 
 .dashboard-stat:active {
-  background: var(--secondary-bg);
+  background: rgba(18, 22, 30, 0.5);
 }
 
 .dashboard-stat span {
   display: block;
-  color: var(--hint);
+  color: rgba(255, 255, 255, 0.75);
   font-size: 12px;
   font-weight: 600;
+}
+
+.dashboard-stat .chevron {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .dashboard-stat strong {
@@ -531,7 +588,7 @@ main {
   color: var(--hint);
   text-align: center;
   background: var(--section-bg);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 24px 12px;
   font-size: 14px;
 }
@@ -543,7 +600,7 @@ main {
 }
 
 .section-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -553,21 +610,28 @@ main {
 
 .card-list {
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--secondary-bg);
   border-left: 3px solid transparent;
 }
 
-.row:last-child {
-  border-bottom: none;
+/* Separators are inset to the start of the text, as in iOS grouped lists. */
+.row:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 64px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--separator);
 }
 
 .row.editable {
@@ -575,7 +639,7 @@ main {
 }
 
 .row.editable:active {
-  background: var(--secondary-bg);
+  background: var(--fill);
 }
 
 .row.state-done {
@@ -600,7 +664,7 @@ main {
   justify-content: center;
   font-size: 15px;
   font-weight: 700;
-  background: var(--secondary-bg);
+  background: var(--fill);
   color: var(--hint);
 }
 
@@ -673,7 +737,7 @@ main {
   align-items: center;
   gap: 6px;
   padding: 4px 4px 10px;
-  color: var(--link);
+  color: #fff;
   font-weight: 600;
   font-size: 14px;
 }
@@ -693,7 +757,7 @@ main {
   border: none;
   border-radius: 50%;
   background: var(--section-bg);
-  color: var(--text);
+  color: var(--link);
   font-size: 18px;
   font-weight: 700;
   display: flex;
@@ -705,11 +769,13 @@ main {
   opacity: 0.6;
 }
 
+/* Both nav labels sit inside the header artwork. */
 .month-nav-label {
   flex: 1;
   text-align: center;
   font-size: 15px;
   font-weight: 700;
+  color: #fff;
 }
 
 /* Interactive month grid for the Calendar tab. */
@@ -725,11 +791,12 @@ main {
   text-align: center;
   font-size: 17px;
   font-weight: 700;
+  color: #fff;
 }
 
 .calendar-card {
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 12px 10px 10px;
   box-sizing: border-box;
   width: min(100%, 560px);
@@ -755,7 +822,7 @@ main {
   min-width: 0;
   aspect-ratio: 1;
   border: none;
-  border-radius: 12px;
+  border-radius: 50%;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -797,21 +864,22 @@ main {
 }
 
 /* Bottom tab bar — a floating "liquid glass" pill, inset from the edges. */
+/* Floating pill tab bar, inset from the edges. */
 .bottom-nav {
   position: fixed;
-  left: 14px;
-  right: 14px;
+  left: 16px;
+  right: 16px;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   display: flex;
   width: auto;
   box-sizing: border-box;
-  background: color-mix(in srgb, var(--section-bg) 68%, transparent);
+  background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 26px;
   padding: 6px;
-  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.35);
   z-index: 10;
 }
 
@@ -853,8 +921,8 @@ main {
 }
 
 .nav-btn.active {
-  color: var(--button);
-  background: color-mix(in srgb, var(--button) 14%, transparent);
+  color: var(--text);
+  background: var(--fill);
 }
 
 .nav-add .nav-icon {
@@ -877,7 +945,7 @@ main {
   color: var(--button-text);
   font-size: 28px;
   line-height: 1;
-  box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.3);
   z-index: 15;
 }
 
@@ -902,8 +970,8 @@ main {
 
 .modal-sheet {
   width: 100%;
-  background: var(--bg);
-  border-radius: 22px 22px 0 0;
+  background: var(--secondary-bg);
+  border-radius: 14px 14px 0 0;
   padding: 8px 20px calc(14px + env(safe-area-inset-bottom, 0px));
   max-height: 100%;
   overflow-y: auto;
@@ -914,7 +982,7 @@ main {
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: var(--secondary-bg);
+  background: var(--separator);
   margin: 4px auto 12px;
 }
 
@@ -941,8 +1009,8 @@ main {
   border: none;
   border-radius: 50%;
   padding: 0;
-  color: var(--text);
-  background: var(--secondary-bg);
+  color: var(--hint);
+  background: var(--fill);
 }
 
 .sheet-close svg {
@@ -970,8 +1038,8 @@ main {
   box-sizing: border-box;
   padding: 13px;
   background: var(--section-bg);
-  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  border-radius: 14px;
+  border: none;
+  border-radius: var(--radius);
 }
 
 .form-section-title {
@@ -1006,9 +1074,9 @@ main {
   font: inherit;
   font-weight: 500;
   color: var(--text);
-  background: var(--secondary-bg);
+  background: var(--fill);
   border: none;
-  border-radius: 11px;
+  border-radius: 8px;
   padding: 11px 12px;
   font-size: 15px;
   box-sizing: border-box;
@@ -1061,8 +1129,8 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--secondary-bg);
-  border-radius: 11px;
+  background: var(--fill);
+  border-radius: 8px;
   padding: 11px 12px;
   font-size: 15px;
   font-weight: 500;
@@ -1095,10 +1163,8 @@ main {
   padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
   position: sticky;
   bottom: 0;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  background: var(--secondary-bg);
+  border-top: 1px solid var(--separator);
 }
 
 .btn {
@@ -1106,7 +1172,7 @@ main {
   display: inline-block;
   box-sizing: border-box;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 12px;
   font-size: 15px;
   font-weight: 700;
@@ -1139,8 +1205,8 @@ main {
 }
 
 .btn.secondary {
-  background: var(--secondary-bg);
-  color: var(--text);
+  background: var(--fill);
+  color: var(--link);
 }
 
 .btn.destructive {
@@ -1155,7 +1221,7 @@ main {
   align-items: center;
   gap: 14px;
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 14px;
   margin-bottom: 16px;
 }
@@ -1185,7 +1251,7 @@ main {
 
 .settings-row {
   padding: 10px 0;
-  border-bottom: 1px solid var(--secondary-bg);
+  border-bottom: 1px solid var(--separator);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1224,9 +1290,9 @@ main {
   font: inherit;
   font-weight: 500;
   color: var(--text);
-  background: var(--secondary-bg);
+  background: var(--fill);
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px 12px;
   font-size: 15px;
   box-sizing: border-box;
@@ -1284,8 +1350,8 @@ main {
 .calendar-link {
   font-size: 12px;
   color: var(--text);
-  background: var(--secondary-bg);
-  border-radius: 10px;
+  background: var(--fill);
+  border-radius: 8px;
   padding: 10px 12px;
   word-break: break-all;
 }
@@ -1307,7 +1373,7 @@ main {
 .switch .slider {
   position: absolute;
   inset: 0;
-  background: var(--secondary-bg);
+  background: var(--fill);
   border-radius: 999px;
   transition: background 0.15s;
 }
@@ -1326,7 +1392,7 @@ main {
 }
 
 .switch input:checked + .slider {
-  background: var(--button);
+  background: var(--done);
 }
 
 .switch input:checked + .slider::before {
