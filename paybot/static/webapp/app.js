@@ -90,9 +90,9 @@
     // Without this, Telegram treats vertical drags on our content as its own
     // swipe-to-collapse/close gesture, dragging the whole app instead of scrolling the list.
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
-    // The app ships a fixed light palette, so pin Telegram's own chrome to it instead of
-    // letting a dark client theme frame the app in near-black.
-    if (tg.setHeaderColor) tg.setHeaderColor("#f2f2f7");
+    // The app ships a fixed palette, so pin Telegram's own chrome to it instead of letting
+    // the client theme frame the app: the header matches the top of the header artwork.
+    if (tg.setHeaderColor) tg.setHeaderColor("#123047");
     if (tg.setBackgroundColor) tg.setBackgroundColor("#f2f2f7");
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (user && user.username) telegramUsername = user.username;
@@ -431,8 +431,10 @@
     const planned = Number(month.to_come) > 0 ? money(month.to_come, data.currency) : "No upcoming pay";
 
     return {
-      head: heroBlock(month, data.currency),
-      body: `
+      // The hero and the two stat cards sit in the head so they stay inside the header
+      // artwork while the list below them scrolls.
+      head: `
+        ${heroBlock(month, data.currency)}
         <div class="dashboard-glance">
           <div class="dashboard-stat" data-dashboard-stat="worked">
             <span>Worked this month</span>
@@ -444,7 +446,8 @@
             <strong>${planned}</strong>
             <div class="chevron">\u203a</div>
           </div>
-        </div>
+        </div>`,
+      body: `
         <div class="section-title">Tomorrow · ${escapeHtml(tomorrowLabel)}</div>
         ${tomorrowBody}
       `,

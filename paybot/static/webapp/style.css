@@ -20,9 +20,18 @@
   --upcoming-bg: #e7f0ff;
   --separator: rgba(60, 60, 67, 0.29);
   --fill: rgba(120, 120, 128, 0.12);
-  --radius: 10px;
-  --nav-height: 68px;
+  --radius: 14px;
+  --nav-height: 76px;
   --fab-clearance: calc(var(--nav-height) + 28px);
+  /* Dusk artwork behind the header; the last stop matches --secondary-bg so the band
+     dissolves into the page instead of ending on a visible edge. */
+  --header-art:
+    radial-gradient(100% 55% at 8% 0%, rgba(11, 40, 66, 0.95) 0%, rgba(11, 40, 66, 0) 70%),
+    radial-gradient(80% 45% at 95% 8%, rgba(24, 148, 150, 0.8) 0%, rgba(24, 148, 150, 0) 65%),
+    radial-gradient(110% 40% at 75% 64%, rgba(233, 163, 104, 0.5) 0%, rgba(233, 163, 104, 0) 72%),
+    linear-gradient(180deg, #0e2a43 0%, #145268 30%, #35818a 52%, #d9ae86 72%, #f2f2f7 91%);
+  --glass: rgba(18, 22, 30, 0.34);
+  --glass-border: rgba(255, 255, 255, 0.22);
 }
 
 * {
@@ -60,11 +69,35 @@ body {
   overflow: hidden;
 }
 
+/* Header artwork, tall enough on Overview to hold the earnings card and the two stats. */
+#app::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 330px;
+  background: var(--header-art);
+  z-index: 0;
+}
+
+.topbar,
+main,
+.bottom-nav {
+  position: relative;
+  z-index: 1;
+}
+
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 16px 6px;
+  color: #fff;
+}
+
+.topbar .asof {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .who {
@@ -126,9 +159,11 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: none;
-  background: var(--section-bg);
-  color: var(--text);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
   font-size: 17px;
   display: flex;
   align-items: center;
@@ -306,7 +341,7 @@ main {
   }
 }
 
-/* Quick actions — a row of pill cards, mirroring a wallet's Transfer/Deposit/... row */
+/* Quick actions — a row of pill cards, sitting just under the header artwork */
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -455,17 +490,21 @@ main {
   padding: 7px 15px;
 }
 
+/* Frosted card floating over the header artwork. */
 .hero {
-  background: var(--section-bg);
-  color: var(--text);
-  border-radius: var(--radius);
-  padding: 18px 16px 16px;
-  margin: 10px 0 16px;
+  background: var(--glass);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  border-radius: 18px;
+  padding: 16px 18px 15px;
+  margin: 10px 0 12px;
 }
 
 .hero .label {
-  font-size: 13px;
-  color: var(--hint);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -480,15 +519,15 @@ main {
 
 .hero .meta {
   font-size: 13px;
-  color: var(--hint);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .hero .projected {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--separator);
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
   font-size: 13px;
-  color: var(--hint);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .dashboard-glance {
@@ -501,21 +540,30 @@ main {
 .dashboard-stat {
   position: relative;
   min-width: 0;
-  background: var(--section-bg);
-  border-radius: var(--radius);
-  padding: 13px 38px 13px 14px;
+  /* Slightly heavier towards the bottom, where the artwork behind it is at its lightest. */
+  background: linear-gradient(180deg, rgba(18, 22, 30, 0.34), rgba(18, 22, 30, 0.55));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  border-radius: 18px;
+  padding: 13px 34px 13px 14px;
   cursor: pointer;
 }
 
 .dashboard-stat:active {
-  background: var(--fill);
+  background: rgba(18, 22, 30, 0.5);
 }
 
 .dashboard-stat span {
   display: block;
-  color: var(--hint);
+  color: rgba(255, 255, 255, 0.75);
   font-size: 12px;
   font-weight: 600;
+}
+
+.dashboard-stat .chevron {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .dashboard-stat strong {
@@ -552,7 +600,7 @@ main {
 }
 
 .section-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -689,7 +737,7 @@ main {
   align-items: center;
   gap: 6px;
   padding: 4px 4px 10px;
-  color: var(--link);
+  color: #fff;
   font-weight: 600;
   font-size: 14px;
 }
@@ -721,11 +769,13 @@ main {
   opacity: 0.6;
 }
 
+/* Both nav labels sit inside the header artwork. */
 .month-nav-label {
   flex: 1;
   text-align: center;
   font-size: 15px;
   font-weight: 700;
+  color: #fff;
 }
 
 /* Interactive month grid for the Calendar tab. */
@@ -741,6 +791,7 @@ main {
   text-align: center;
   font-size: 17px;
   font-weight: 700;
+  color: #fff;
 }
 
 .calendar-card {
@@ -813,17 +864,22 @@ main {
 }
 
 /* Bottom tab bar — a floating "liquid glass" pill, inset from the edges. */
+/* Floating pill tab bar, inset from the edges. */
 .bottom-nav {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 16px;
+  right: 16px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   display: flex;
-  width: 100%;
+  width: auto;
   box-sizing: border-box;
-  background: var(--section-bg);
-  border-top: 1px solid var(--separator);
-  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 26px;
+  padding: 6px;
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.35);
   z-index: 10;
 }
 
@@ -865,7 +921,8 @@ main {
 }
 
 .nav-btn.active {
-  color: var(--button);
+  color: var(--text);
+  background: var(--fill);
 }
 
 .nav-add .nav-icon {
