@@ -1055,9 +1055,20 @@ main {
   font-weight: 750;
 }
 
+/* The shift editor floats as an inset card rather than a full-width bottom sheet. */
+#edit-backdrop {
+  padding: 0 10px calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
 .form-sheet {
-  padding-left: 16px;
-  padding-right: 16px;
+  border-radius: 18px;
+  max-height: 86%;
+  padding: 6px 12px 12px;
+}
+
+.form-sheet .modal-handle {
+  width: 30px;
+  margin: 3px auto 6px;
 }
 
 .sheet-bar {
@@ -1068,13 +1079,13 @@ main {
   position: sticky;
   top: 0;
   z-index: 2;
-  margin: 0 -16px;
-  padding: 4px 16px 14px;
+  margin: 0 -12px;
+  padding: 2px 14px 10px;
   background: var(--secondary-bg);
 }
 
 .form-sheet h2 {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   text-align: center;
 }
@@ -1082,9 +1093,9 @@ main {
 .sheet-btn {
   border: none;
   background: none;
-  padding: 4px 0;
+  padding: 2px 0;
   font: inherit;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--link);
   justify-self: start;
@@ -1107,7 +1118,7 @@ main {
 #edit-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -1127,14 +1138,14 @@ main {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  min-height: 46px;
+  min-height: 38px;
   box-sizing: border-box;
-  padding: 8px 16px;
+  padding: 5px 13px;
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text);
   background: none;
   border: none;
@@ -1145,7 +1156,7 @@ main {
 .form-row + .form-row::before {
   content: "";
   position: absolute;
-  left: 16px;
+  left: 13px;
   right: 0;
   top: 0;
   height: 1px;
@@ -1187,7 +1198,7 @@ main {
   border: none;
   border-radius: 0;
   padding: 0;
-  font-size: 15px;
+  font-size: 14px;
   text-align: right;
   /* Android WebView ignores text-align on <select>; text-align-last moves the option text. */
   text-align-last: right;
@@ -1239,11 +1250,11 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 92px;
+  min-width: 82px;
   background: var(--fill);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 15px;
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text);
   box-sizing: border-box;
