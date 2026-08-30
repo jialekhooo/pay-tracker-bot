@@ -1055,20 +1055,19 @@ main {
   font-weight: 750;
 }
 
-/* The shift editor floats as an inset card rather than a full-width bottom sheet. */
+/* The shift editor floats inset from the screen edges over a blurred page. */
 #edit-backdrop {
-  padding: 0 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 0 8px;
+  background: rgba(60, 60, 67, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .form-sheet {
-  border-radius: 18px;
-  max-height: 86%;
-  padding: 6px 12px 12px;
-}
-
-.form-sheet .modal-handle {
-  width: 30px;
-  margin: 3px auto 6px;
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 22px 22px 0 0;
+  max-height: 88%;
+  padding: 0 12px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .sheet-bar {
@@ -1080,30 +1079,35 @@ main {
   top: 0;
   z-index: 2;
   margin: 0 -12px;
-  padding: 2px 14px 10px;
-  background: var(--secondary-bg);
+  padding: 14px 8px 12px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .form-sheet h2 {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 650;
   text-align: center;
 }
 
 .sheet-btn {
   border: none;
+  border-radius: 999px;
   background: none;
-  padding: 2px 0;
+  padding: 7px 12px;
   font: inherit;
   font-size: 14px;
   font-weight: 500;
-  color: var(--link);
+  color: var(--text);
   justify-self: start;
 }
 
 .sheet-btn.strong {
   justify-self: end;
-  font-weight: 700;
+  background: rgba(120, 120, 128, 0.14);
+  color: var(--link);
+  font-weight: 600;
 }
 
 .sheet-btn:active {
@@ -1115,11 +1119,25 @@ main {
   opacity: 0.6;
 }
 
+/* Older Android WebViews have no backdrop-filter, so nothing dims or blurs behind the
+   translucent sheet; there they get an opaque sheet over a stronger dim instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #edit-backdrop {
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .form-sheet,
+  .sheet-bar {
+    background: #ffffff;
+  }
+}
+
 #edit-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
+  padding-top: 2px;
 }
 
 .form-section {
@@ -1128,9 +1146,9 @@ main {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  background: var(--section-bg);
+  background: rgba(120, 120, 128, 0.09);
   border: none;
-  border-radius: var(--radius);
+  border-radius: 16px;
   overflow: hidden;
 }
 
@@ -1141,32 +1159,43 @@ main {
   gap: 10px;
   width: 100%;
   min-width: 0;
-  min-height: 38px;
+  min-height: 44px;
   box-sizing: border-box;
-  padding: 5px 13px;
+  padding: 6px 14px;
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
   background: none;
   border: none;
   text-align: left;
 }
 
+/* Lead row: the event name reads as the sheet's headline, without a label. */
+.form-row.lead {
+  min-height: 48px;
+}
+
+#edit-form .form-row.lead input {
+  text-align: left;
+  text-align-last: left;
+  font-size: 16px;
+}
+
 /* Hairline between rows, inset past the label like iOS grouped lists. */
 .form-row + .form-row::before {
   content: "";
   position: absolute;
-  left: 13px;
+  left: 14px;
   right: 0;
   top: 0;
   height: 1px;
-  background: var(--separator);
+  background: rgba(60, 60, 67, 0.16);
   transform: scaleY(0.5);
 }
 
 .row-label {
   flex: 0 0 auto;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text);
 }
 
@@ -1192,16 +1221,14 @@ main {
 #edit-form select {
   flex: 1 1 auto;
   font: inherit;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text);
   background: none;
   border: none;
   border-radius: 0;
   padding: 0;
-  font-size: 14px;
+  font-size: 15px;
   text-align: right;
-  /* Android WebView ignores text-align on <select>; text-align-last moves the option text. */
-  text-align-last: right;
   box-sizing: border-box;
   width: auto;
   min-width: 0;
@@ -1218,6 +1245,8 @@ main {
   flex: 0 0 auto;
   margin-left: auto;
   padding-right: 15px;
+  /* Android WebView ignores text-align on <select>; text-align-last moves the option text. */
+  text-align-last: right;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 5.2 6 1.8l3.5 3.4M2.5 8.8 6 12.2l3.5-3.4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right center;
@@ -1250,12 +1279,12 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 82px;
-  background: var(--fill);
-  border-radius: 7px;
-  padding: 4px 8px;
-  font-size: 14px;
-  font-weight: 500;
+  min-width: 84px;
+  background: rgba(120, 120, 128, 0.16);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 15px;
+  font-weight: 400;
   color: var(--text);
   box-sizing: border-box;
 }

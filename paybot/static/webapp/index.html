@@ -6,7 +6,7 @@
   <!-- Opts out of Android WebView's automatic darkening, which would recolour the fixed palette. -->
   <meta name="color-scheme" content="light" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=47" />
+  <link rel="stylesheet" href="style.css?v=49" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -83,7 +83,6 @@
 
     <div class="modal-backdrop hidden" id="edit-backdrop">
       <div class="modal-sheet form-sheet" id="edit-sheet">
-        <div class="modal-handle"></div>
         <div class="sheet-bar">
           <button type="button" class="sheet-btn" id="edit-cancel">Cancel</button>
           <h2 id="edit-title">Edit Shift</h2>
@@ -91,17 +90,13 @@
         </div>
         <form id="edit-form">
           <div class="form-section">
-            <label class="form-row">
-              <span class="row-label">Event</span>
+            <label class="form-row lead">
               <input type="text" name="event" required maxlength="120" placeholder="Event name" />
             </label>
             <label class="form-row">
               <span class="row-label">Location</span>
-              <input type="text" name="location" maxlength="120" placeholder="Optional" />
+              <input type="text" name="location" maxlength="120" placeholder="None" />
             </label>
-          </div>
-
-          <div class="form-section">
             <label class="form-row">
               <span class="row-label">Date</span>
               <span class="field-control">
@@ -129,9 +124,6 @@
                 </span>
               </span>
             </label>
-          </div>
-
-          <div class="form-section">
             <label class="form-row">
               <span class="row-label">Rate / hour</span>
               <input
@@ -168,6 +160,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=49"></script>
 </body>
 </html>
