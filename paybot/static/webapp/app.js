@@ -24,6 +24,7 @@
     editCancel: document.getElementById("edit-cancel"),
     editDuplicate: document.getElementById("edit-duplicate"),
     editDelete: document.getElementById("edit-delete"),
+    editShiftActions: document.getElementById("edit-shift-actions"),
     searchOpen: document.getElementById("search-open"),
     searchBackdrop: document.getElementById("search-backdrop"),
     searchInput: document.getElementById("search-input"),
@@ -92,8 +93,10 @@
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     // The app ships a fixed palette, so pin Telegram's own chrome to it instead of letting
     // the client theme frame the app: the header matches the top of the header artwork.
-    if (tg.setHeaderColor) tg.setHeaderColor("#123047");
-    if (tg.setBackgroundColor) tg.setBackgroundColor("#f2f2f7");
+    // Hex colours here need Bot API 6.9; older clients (mostly Android) reject the call.
+    const canPinChrome = !tg.isVersionAtLeast || tg.isVersionAtLeast("6.9");
+    if (canPinChrome && tg.setHeaderColor) tg.setHeaderColor("#123047");
+    if (canPinChrome && tg.setBackgroundColor) tg.setBackgroundColor("#f2f2f7");
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (user && user.username) telegramUsername = user.username;
     if (user && user.first_name) {
@@ -1478,8 +1481,7 @@
     els.editForm.break_paid.value = shift.break_paid ? "yes" : "no";
     syncScheduleDisplays();
     els.editError.classList.add("hidden");
-    els.editDuplicate.classList.remove("hidden");
-    els.editDelete.classList.remove("hidden");
+    els.editShiftActions.classList.remove("hidden");
     els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
   }
@@ -1489,7 +1491,7 @@
     editingShiftId = null;
     els.editForm.reset();
     els.editTitle.textContent = "Add Shift";
-    els.editSave.textContent = "Add Shift";
+    els.editSave.textContent = "Add";
     const today = ((summaryData && summaryData.now) || new Date().toISOString()).slice(0, 10);
     els.editForm.day.value = presetDay || today;
     els.editForm.start.value = "09:00";
@@ -1497,8 +1499,7 @@
     els.editForm.break_paid.value = "yes";
     syncScheduleDisplays();
     els.editError.classList.add("hidden");
-    els.editDuplicate.classList.add("hidden");
-    els.editDelete.classList.add("hidden");
+    els.editShiftActions.classList.add("hidden");
     els.editSheet.scrollTop = 0;
     els.editBackdrop.classList.remove("hidden");
   }

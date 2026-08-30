@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- Opts out of Android WebView's automatic darkening, which would recolour the fixed palette. -->
+  <meta name="color-scheme" content="light" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=44" />
+  <link rel="stylesheet" href="style.css?v=46" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -80,100 +82,92 @@
     </div>
 
     <div class="modal-backdrop hidden" id="edit-backdrop">
-      <div class="modal-sheet" id="edit-sheet">
+      <div class="modal-sheet form-sheet" id="edit-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title-row">
+        <div class="sheet-bar">
+          <button type="button" class="sheet-btn" id="edit-cancel">Cancel</button>
           <h2 id="edit-title">Edit Shift</h2>
-          <button type="button" class="sheet-close" id="edit-cancel" aria-label="Close shift editor" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          <button type="submit" class="sheet-btn strong" id="edit-save" form="edit-form">Save</button>
         </div>
         <form id="edit-form">
           <div class="form-section">
-            <div class="form-section-title">Shift details</div>
-            <label>
-              Event
-              <input type="text" name="event" required maxlength="120" placeholder="Event Name" />
+            <label class="form-row">
+              <span class="row-label">Event</span>
+              <input type="text" name="event" required maxlength="120" placeholder="Event name" />
             </label>
-            <label>
-              Location
-              <input type="text" name="location" maxlength="120" placeholder="Location" />
+            <label class="form-row">
+              <span class="row-label">Location</span>
+              <input type="text" name="location" maxlength="120" placeholder="Optional" />
             </label>
           </div>
 
           <div class="form-section">
-            <div class="form-section-title">Schedule</div>
-            <label>
-              Date
+            <label class="form-row">
+              <span class="row-label">Date</span>
               <span class="field-control">
                 <input type="date" name="day" required />
                 <span class="field-display">
                   <span class="field-value" data-field="day"></span>
-                  <span class="field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/></svg></span>
                 </span>
               </span>
             </label>
-            <div class="field-row">
-              <label>
-                Start
-                <span class="field-control">
-                  <input type="time" name="start" required />
-                  <span class="field-display">
-                    <span class="field-value" data-field="start"></span>
-                    <span class="field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
-                  </span>
+            <label class="form-row">
+              <span class="row-label">Start</span>
+              <span class="field-control">
+                <input type="time" name="start" required />
+                <span class="field-display">
+                  <span class="field-value" data-field="start"></span>
                 </span>
-              </label>
-              <label>
-                End
-                <span class="field-control">
-                  <input type="time" name="end" required />
-                  <span class="field-display">
-                    <span class="field-value" data-field="end"></span>
-                    <span class="field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
-                  </span>
+              </span>
+            </label>
+            <label class="form-row">
+              <span class="row-label">End</span>
+              <span class="field-control">
+                <input type="time" name="end" required />
+                <span class="field-display">
+                  <span class="field-value" data-field="end"></span>
                 </span>
-              </label>
-            </div>
+              </span>
+            </label>
           </div>
 
           <div class="form-section">
-            <div class="form-section-title">Pay details</div>
-            <label>
-              Rate / hour
+            <label class="form-row">
+              <span class="row-label">Rate / hour</span>
               <input
                 type="number"
                 name="rate"
                 min="0"
                 step="0.01"
                 inputmode="decimal"
-                placeholder="Enter Rate or use your saved rate"
+                placeholder="Saved rate"
               />
             </label>
-            <div class="field-row">
-              <label>
-                Break (hours)
-                <input type="number" name="break_hours" min="0" step="0.25" placeholder="0" />
-              </label>
-              <label>
-                Paid break?
-                <select name="break_paid">
-                  <option value="yes" selected>Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </label>
-            </div>
+            <label class="form-row">
+              <span class="row-label">Break (hours)</span>
+              <input type="number" name="break_hours" min="0" step="0.25" placeholder="0" />
+            </label>
+            <label class="form-row">
+              <span class="row-label">Paid break</span>
+              <select name="break_paid">
+                <option value="yes" selected>Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
           </div>
           <p class="modal-error hidden" id="edit-error"></p>
-          <button type="button" class="btn secondary hidden" id="edit-duplicate">
-            Duplicate as new shift
-          </button>
-          <button type="button" class="btn destructive hidden" id="edit-delete">Delete shift</button>
-          <div class="modal-actions">
-            <button type="submit" class="btn primary" id="edit-save">Save</button>
+          <div class="form-section hidden" id="edit-shift-actions">
+            <button type="button" class="form-row action" id="edit-duplicate">
+              Duplicate as new shift
+            </button>
+            <button type="button" class="form-row action destructive" id="edit-delete">
+              Delete shift
+            </button>
           </div>
         </form>
       </div>
     </div>
   </div>
-  <script src="app.js?v=44"></script>
+  <script src="app.js?v=46"></script>
 </body>
 </html>
