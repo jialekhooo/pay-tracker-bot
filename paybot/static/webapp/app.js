@@ -411,22 +411,34 @@
     return `<div class="card-list">${rows}</div>`;
   }
 
-  function heroBlock(block, currency) {
-    const projected =
+  // A tally block's whole-period figures, counting shifts that haven't happened yet, so a
+  // live period's hero reads the same as a browsed one (which comes from a plain totals API).
+  function tallyTotals(block) {
+    if (!Array.isArray(block.shifts)) return { hours: block.hours, count: Number(block.shifts) };
+    return {
+      hours: block.shifts.reduce((sum, shift) => sum + Number(shift.hours), 0),
+      count: block.shifts.length,
+    };
+  }
+
+  function heroBlock(block, currency, options = {}) {
+    const totals = tallyTotals(block);
+    const split =
       Number(block.to_come) > 0
-        ? `<div class="projected">+ ${money(block.to_come, currency)} upcoming \u2192 ${money(
-            block.projected,
+        ? `<div class="projected">${money(block.earned, currency)} earned \u00b7 ${money(
+            block.to_come,
             currency
-          )} projected</div>`
+          )} still to come</div>`
         : "";
+    const label = options.label === false ? "" : `<div class="label">${escapeHtml(block.label)}</div>`;
     return `
       <div class="hero">
-        <div class="label">${escapeHtml(block.label)}</div>
-        <div class="amount">${money(block.earned, currency)}</div>
-        <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
-      block.finished === 1 ? "" : "s"
+        ${label}
+        <div class="amount">${money(block.projected, currency)}</div>
+        <div class="meta">${hours(totals.hours)} \u00b7 ${totals.count} shift${
+      totals.count === 1 ? "" : "s"
     }</div>
-        ${projected}
+        ${split}
       </div>`;
   }
 
@@ -521,8 +533,16 @@
           (left, right) =>
             right.day.localeCompare(left.day) || right.start.localeCompare(left.start)
         );
+      // This drill-down is explicitly about work already done, so its hero counts what has
+      // been earned rather than the month's full booked total.
+      const earnedSoFar = {
+        ...data.month,
+        projected: data.month.earned,
+        to_come: "0",
+        shifts: worked.map((shift) => ({ hours: shift.earned_hours })),
+      };
       return {
-        head: back + heroBlock(data.month, data.currency),
+        head: back + heroBlock(earnedSoFar, data.currency),
         body: `
           <div class="section-title">Worked this month</div>
           ${
@@ -574,20 +594,7 @@
       const body = block.shifts.length
         ? shiftDayCard(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
-      const projected =
-        Number(block.to_come) > 0
-          ? `<div class="projected">+ ${money(block.to_come, data.currency)} upcoming \u2192 ${money(
-              block.projected,
-              data.currency
-            )} projected</div>`
-          : "";
-      const hero = `<div class="hero">
-          <div class="amount">${money(block.earned, data.currency)}</div>
-          <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
-        block.finished === 1 ? "" : "s"
-      }</div>
-          ${projected}
-        </div>`;
+      const hero = heroBlock(block, data.currency, { label: false });
       return { head: bar + nav + hero, body };
     }
 
@@ -611,20 +618,7 @@
       const body = block.shifts.length
         ? shiftGroups(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
-      const projected =
-        Number(block.to_come) > 0
-          ? `<div class="projected">+ ${money(block.to_come, data.currency)} upcoming \u2192 ${money(
-              block.projected,
-              data.currency
-            )} projected</div>`
-          : "";
-      const hero = `<div class="hero">
-          <div class="amount">${money(block.earned, data.currency)}</div>
-          <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
-        block.finished === 1 ? "" : "s"
-      }</div>
-          ${projected}
-        </div>`;
+      const hero = heroBlock(block, data.currency, { label: false });
       return { head: bar + nav + hero, body };
     }
 
@@ -645,20 +639,7 @@
       const body = block.shifts.length
         ? shiftGroups(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
-      const projected =
-        Number(block.to_come) > 0
-          ? `<div class="projected">+ ${money(block.to_come, data.currency)} upcoming \u2192 ${money(
-              block.projected,
-              data.currency
-            )} projected</div>`
-          : "";
-      const hero = `<div class="hero">
-          <div class="amount">${money(block.earned, data.currency)}</div>
-          <div class="meta">${hours(block.hours)} \u00b7 ${block.finished} shift${
-        block.finished === 1 ? "" : "s"
-      }</div>
-          ${projected}
-        </div>`;
+      const hero = heroBlock(block, data.currency, { label: false });
       return { head: bar + nav + hero, body };
     }
 
