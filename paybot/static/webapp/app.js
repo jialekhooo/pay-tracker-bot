@@ -76,6 +76,7 @@
   let overviewDayData = null; // fetched /day/{date} detail when overviewDay isn't the live day
   let allTimeGroupBy = "month"; // "month" | "event" — how the All Time scope's list is grouped
   let eventSort = "date"; // "date" | "alphabetical" — ordering for the All time Events list
+  let dateOrder = "asc"; // "asc" | "desc" — date order for grouped shift lists
   let upcomingRange = "tomorrow"; // "tomorrow" | "7" | "14" | "30" | "all" — the Upcoming tab's selected range
   let upcomingRangeData = null; // fetched /upcoming/{scope} detail when upcomingRange isn't the default "14"
   let calendarMonth = null; // "YYYY-MM" currently visible in Calendar
@@ -369,7 +370,7 @@
     const payOf = options.payOf || ((shift) => shift.pay);
     const days = [];
     const byDay = new Map();
-    shifts.forEach((shift) => {
+    orderedByDay(shifts).forEach((shift) => {
       if (!byDay.has(shift.day)) {
         byDay.set(shift.day, []);
         days.push(shift.day);
@@ -397,9 +398,24 @@
       .join("");
   }
 
+  function orderedByDay(shifts) {
+    const direction = dateOrder === "asc" ? 1 : -1;
+    return [...shifts].sort(
+      (left, right) =>
+        direction *
+        (left.day.localeCompare(right.day) || left.start.localeCompare(right.start))
+    );
+  }
+
+  function shiftGroupsSection(shifts, currency, options = {}) {
+    const groups = shiftGroups(shifts, currency, options);
+    const days = new Set(shifts.map((shift) => shift.day));
+    return days.size > 1 ? dateOrderToggle() + groups : groups;
+  }
+
   function shiftDayCard(shifts, currency, options = {}) {
     const payOf = options.payOf || ((shift) => shift.pay);
-    const rows = shifts
+    const rows = orderedByDay(shifts)
       .map((shift) =>
         shiftRow(shift, currency, {
           state: shift.state,
@@ -482,6 +498,21 @@
       </div>`;
   }
 
+  function dateOrderToggle() {
+    return `
+    <div class="event-sort">
+      <span>Order</span>
+      <div class="event-sort-toggle">
+        <button type="button" class="event-sort-btn${
+          dateOrder === "asc" ? " active" : ""
+        }" data-date-order="asc">Earliest first</button>
+        <button type="button" class="event-sort-btn${
+          dateOrder === "desc" ? " active" : ""
+        }" data-date-order="desc">Latest first</button>
+      </div>
+    </div>`;
+  }
+
   function sortedEvents(events) {
     return [...events].sort((left, right) => {
       if (eventSort === "alphabetical") return left.event.localeCompare(right.event);
@@ -528,11 +559,7 @@
     const back = `<div class="back-row" id="back-to-overview">\u2039 Overview</div>`;
     if (dashboardDetail === "worked") {
       const worked = data.month.shifts
-        .filter((s) => s.state !== "upcoming")
-        .sort(
-          (left, right) =>
-            right.day.localeCompare(left.day) || right.start.localeCompare(left.start)
-        );
+        .filter((s) => s.state !== "upcoming");
       // This drill-down is explicitly about work already done, so its hero counts what has
       // been earned rather than the month's full booked total.
       const earnedSoFar = {
@@ -547,7 +574,7 @@
           <div class="section-title">Worked this month</div>
           ${
             worked.length
-              ? shiftGroups(worked, data.currency, { payOf: (s) => s.earned_pay })
+              ? shiftGroupsSection(worked, data.currency, { payOf: (s) => s.earned_pay })
               : `<div class="empty">No shifts worked this month yet.</div>`
           }`,
       };
@@ -616,7 +643,7 @@
     if (activeKey === liveKey) {
       const block = data.month;
       const body = block.shifts.length
-        ? shiftGroups(block.shifts, data.currency, { payOf: scopePay })
+        ? shiftGroupsSection(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
       const hero = heroBlock(block, data.currency, { label: false });
       return { head: bar + nav + hero, body };
@@ -637,7 +664,7 @@
     if (activeStart === liveStart) {
       const block = data.week;
       const body = block.shifts.length
-        ? shiftGroups(block.shifts, data.currency, { payOf: scopePay })
+        ? shiftGroupsSection(block.shifts, data.currency, { payOf: scopePay })
         : `<div class="empty">Nothing logged yet.</div>`;
       const hero = heroBlock(block, data.currency, { label: false });
       return { head: bar + nav + hero, body };
@@ -668,7 +695,7 @@
       return `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
     }
     return grouped
-      ? shiftGroups(detail.shifts, detail.currency)
+      ? shiftGroupsSection(detail.shifts, detail.currency)
       : shiftDayCard(detail.shifts, detail.currency);
   }
 
@@ -706,7 +733,7 @@
           }</div>`,
         };
       }
-      return { head: toggle, body: shiftGroups(shifts, data.currency) };
+      return { head: toggle, body: shiftGroupsSection(shifts, data.currency) };
     }
     if (!upcomingRangeData || upcomingRangeData.scope !== upcomingRange) {
       return { head: toggle, body: `<div class="empty">Loading…</div>` };
@@ -722,7 +749,7 @@
         }</div>`,
       };
     }
-    return { head: toggle, body: shiftGroups(shifts, upcomingRangeData.currency) };
+    return { head: toggle, body: shiftGroupsSection(shifts, upcomingRangeData.currency) };
   }
 
   function monthListRows(months) {
@@ -1329,6 +1356,11 @@
 
   function selectEventSort(next) {
     eventSort = next;
+    render();
+  }
+
+  function selectDateOrder(next) {
+    dateOrder = next;
     render();
   }
 
@@ -2059,6 +2091,11 @@
     const eventSortBtn = event.target.closest("[data-event-sort]");
     if (eventSortBtn) {
       selectEventSort(eventSortBtn.dataset.eventSort);
+      return;
+    }
+    const dateOrderBtn = event.target.closest("[data-date-order]");
+    if (dateOrderBtn) {
+      selectDateOrder(dateOrderBtn.dataset.dateOrder);
       return;
     }
     const upcomingRangeBtn = event.target.closest("[data-upcoming-range]");
