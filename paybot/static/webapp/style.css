@@ -1161,7 +1161,7 @@ main {
 }
 
 .form-sheet {
-  background: linear-gradient(180deg, #f8f9fc 0%, #f3f4f8 100%);
+  background: var(--bg);
   border-radius: 26px 26px 0 0;
   max-height: 92%;
   padding: 0 16px calc(20px + env(safe-area-inset-bottom, 0px));
@@ -1177,7 +1177,7 @@ main {
   z-index: 2;
   margin: 0 -16px;
   padding: 14px 14px 12px;
-  background: rgba(248, 249, 252, 0.96);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(60, 60, 67, 0.12);
@@ -1258,11 +1258,8 @@ main {
   gap: 14px;
   width: 100%;
   min-width: 0;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid rgba(60, 60, 67, 0.12);
-  box-shadow: 0 8px 20px -20px rgba(15, 23, 42, 0.45);
+  padding: 8px 2px 18px;
+  border-bottom: 1px solid var(--separator);
 }
 
 .lead-badge {
@@ -1292,11 +1289,7 @@ main {
 .field-group {
   width: 100%;
   min-width: 0;
-  padding: 12px 12px 13px;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid rgba(60, 60, 67, 0.12);
-  box-shadow: 0 8px 20px -20px rgba(15, 23, 42, 0.45);
+  padding: 0 2px;
 }
 
 .group-label {
@@ -1349,7 +1342,7 @@ main {
 .segment {
   flex: 1 1 0;
   border: 1px solid var(--separator);
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 10px 12px;
   font: inherit;
   font-size: 14px;
@@ -1360,8 +1353,8 @@ main {
 
 .segment.active {
   color: #fff;
-  background: var(--button);
-  border-color: var(--button);
+  background: #111;
+  border-color: #111;
 }
 
 .segment {
@@ -1371,11 +1364,7 @@ main {
 .detail-rows {
   width: 100%;
   min-width: 0;
-  background: #fff;
-  border-radius: 14px;
-  border: 1px solid rgba(60, 60, 67, 0.12);
-  overflow: hidden;
-  box-shadow: 0 8px 20px -20px rgba(15, 23, 42, 0.45);
+  border-top: 1px solid var(--separator);
 }
 
 .detail-row {
@@ -1386,7 +1375,7 @@ main {
   width: 100%;
   min-width: 0;
   min-height: 50px;
-  padding: 0 12px;
+  padding: 0 2px;
   color: var(--text);
   font-size: 15px;
   text-align: left;
@@ -1396,8 +1385,8 @@ main {
 .detail-row + .detail-row::before {
   content: "";
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 2px;
+  right: 2px;
   top: 0;
   height: 1px;
   background: rgba(60, 60, 67, 0.16);
@@ -1488,9 +1477,6 @@ main {
 #edit-form .plain-row input {
   width: 100%;
   text-align: left;
-  background: var(--fill);
-  border-radius: 10px;
-  padding: 10px 12px;
 }
 
 #edit-form input:focus-visible,
@@ -1521,6 +1507,7 @@ main {
 
 .detail-row.action + .detail-row.action::before {
   left: 12px;
+  right: 12px;
 }
 
 .modal-error {
