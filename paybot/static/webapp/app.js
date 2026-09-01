@@ -371,9 +371,10 @@
   // long list reads as a schedule instead of a wall of repeated dates.
   function shiftGroups(shifts, currency, options = {}) {
     const payOf = options.payOf || ((shift) => shift.pay);
+    const ordered = (options.order || orderedByDay)(shifts);
     const days = [];
     const byDay = new Map();
-    orderedByDay(shifts).forEach((shift) => {
+    ordered.forEach((shift) => {
       if (!byDay.has(shift.day)) {
         byDay.set(shift.day, []);
         days.push(shift.day);
@@ -401,24 +402,33 @@
       .join("");
   }
 
+  function byDayDirection(direction) {
+    return (left, right) =>
+      direction *
+      (left.day.localeCompare(right.day) || left.start.localeCompare(right.start));
+  }
+
   function orderedByDay(shifts) {
-    const direction = dateOrder === "asc" ? 1 : -1;
-    return [...shifts].sort(
-      (left, right) =>
-        direction *
-        (left.day.localeCompare(right.day) || left.start.localeCompare(right.start))
-    );
+    return [...shifts].sort(byDayDirection(dateOrder === "asc" ? 1 : -1));
+  }
+
+  function chronological(shifts) {
+    return [...shifts].sort(byDayDirection(1));
   }
 
   function shiftGroupsSection(shifts, currency, options = {}) {
-    const groups = shiftGroups(shifts, currency, options);
-    const days = new Set(shifts.map((shift) => shift.day));
-    return days.size > 1 ? dateOrderToggle() + groups : groups;
+    const multiDay = new Set(shifts.map((shift) => shift.day)).size > 1;
+    const groups = shiftGroups(
+      shifts,
+      currency,
+      multiDay ? options : { ...options, order: chronological }
+    );
+    return multiDay ? dateOrderToggle() + groups : groups;
   }
 
   function shiftDayCard(shifts, currency, options = {}) {
     const payOf = options.payOf || ((shift) => shift.pay);
-    const rows = orderedByDay(shifts)
+    const rows = chronological(shifts)
       .map((shift) =>
         shiftRow(shift, currency, {
           state: shift.state,
