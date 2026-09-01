@@ -1242,26 +1242,30 @@ main {
 .amount-row {
   display: flex;
   align-items: baseline;
-  gap: 5px;
+  justify-content: flex-start;
+  gap: 6px;
   min-width: 0;
 }
 
 .amount-currency {
+  flex: 0 0 auto;
   color: var(--hint);
   font-size: 20px;
 }
 
-.amount-row input {
-  flex: 0 1 auto;
-  width: 4.5ch;
+#edit-form .amount-row input {
+  flex: 0 0 auto;
+  field-sizing: content;
+  width: 4ch;
   min-width: 2ch;
-  max-width: 60%;
-  font-size: 34px !important;
-  font-weight: 700 !important;
-  text-align: left !important;
+  max-width: none;
+  font-size: 34px;
+  font-weight: 700;
+  text-align: left;
 }
 
 .amount-suffix {
+  flex: 0 0 auto;
   color: var(--hint);
   font-size: 15px;
   white-space: nowrap;
@@ -1291,6 +1295,10 @@ main {
   border-color: #111;
 }
 
+.segment {
+  white-space: nowrap;
+}
+
 .detail-rows {
   width: 100%;
   min-width: 0;
@@ -1309,6 +1317,7 @@ main {
   color: var(--text);
   font-size: 15px;
   text-align: left;
+  white-space: nowrap;
 }
 
 .detail-row + .detail-row::before {
@@ -1392,6 +1401,7 @@ main {
   font-weight: 400;
   color: var(--text);
   box-sizing: border-box;
+  white-space: nowrap;
 }
 
 .plain-row {
@@ -1399,9 +1409,9 @@ main {
   width: 100%;
 }
 
-.plain-row input {
-  width: 100% !important;
-  text-align: left !important;
+#edit-form .plain-row input {
+  width: 100%;
+  text-align: left;
 }
 
 .detail-row.action {
