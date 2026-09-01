@@ -396,7 +396,7 @@
         return `
       <div class="day-group">
         ${dayHead(dayKeyLabel(day), dayShifts, currency, payOf)}
-        <div class="card-list">${rows}</div>
+        <div class="card-list shift-card">${rows}</div>
       </div>`;
       })
       .join("");
@@ -437,7 +437,7 @@
         })
       )
       .join("");
-    return `<div class="card-list">${rows}</div>`;
+    return `<div class="card-list shift-card">${rows}</div>`;
   }
 
   // A tally block's whole-period figures, counting shifts that haven't happened yet, so a
