@@ -30,8 +30,8 @@
     radial-gradient(80% 45% at 95% 8%, rgba(24, 148, 150, 0.8) 0%, rgba(24, 148, 150, 0) 65%),
     radial-gradient(110% 40% at 75% 64%, rgba(233, 163, 104, 0.5) 0%, rgba(233, 163, 104, 0) 72%),
     linear-gradient(180deg, #0e2a43 0%, #145268 30%, #35818a 52%, #d9ae86 72%, #f2f2f7 91%);
-  --glass: linear-gradient(165deg, #123a5c 0%, #0b2338 100%);
-  --glass-border: rgba(255, 255, 255, 0.22);
+  --glass: linear-gradient(165deg, #f7fbff 0%, #e8f2ff 100%);
+  --glass-border: rgba(89, 146, 230, 0.3);
 }
 
 * {
@@ -488,8 +488,8 @@ main {
 .hero {
   background: var(--glass);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 12px 26px -16px rgba(6, 20, 34, 0.7);
-  color: #fff;
+  box-shadow: 0 10px 24px -18px rgba(49, 98, 162, 0.45);
+  color: #10243a;
   border-radius: 18px;
   padding: 16px 18px 15px;
   margin: 10px 0 12px;
@@ -497,7 +497,7 @@ main {
 
 .hero .label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
+  color: #4f6a86;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -512,15 +512,15 @@ main {
 
 .hero .meta {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
+  color: #3c5a79;
 }
 
 .hero .projected {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-top: 1px solid rgba(89, 146, 230, 0.28);
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.82);
+  color: #3f5f80;
 }
 
 .dashboard-glance {
@@ -535,8 +535,8 @@ main {
   min-width: 0;
   background: var(--glass);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 12px 26px -16px rgba(6, 20, 34, 0.7);
-  color: #fff;
+  box-shadow: 0 10px 24px -18px rgba(49, 98, 162, 0.45);
+  color: #10243a;
   border-radius: 18px;
   padding: 13px 34px 13px 14px;
   cursor: pointer;
@@ -548,13 +548,13 @@ main {
 
 .dashboard-stat span {
   display: block;
-  color: rgba(255, 255, 255, 0.75);
+  color: #4f6a86;
   font-size: 12px;
   font-weight: 600;
 }
 
 .dashboard-stat .chevron {
-  color: rgba(255, 255, 255, 0.7);
+  color: #6a86a2;
 }
 
 .dashboard-stat strong {
@@ -1360,8 +1360,8 @@ main {
 
 .segment.active {
   color: #fff;
-  background: #111;
-  border-color: #111;
+  background: var(--button);
+  border-color: var(--button);
 }
 
 .segment {
