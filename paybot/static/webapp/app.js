@@ -3,6 +3,7 @@
 
   const tg = window.Telegram ? window.Telegram.WebApp : null;
   const els = {
+    app: document.getElementById("app"),
     avatar: document.getElementById("avatar"),
     profileButton: document.getElementById("profile-button"),
     greeting: document.getElementById("greeting"),
@@ -158,8 +159,14 @@
 
   // Keep the modal pinned above the on-screen keyboard instead of letting it cover the buttons.
   function syncAppHeight() {
-    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const vv = window.visualViewport;
+    const height = vv ? vv.height : window.innerHeight;
     document.documentElement.style.setProperty("--app-height", `${height}px`);
+    // iOS shifts the visual viewport down (without scrolling the document) to keep the
+    // focused field above the keyboard, which leaves our fixed-position #app pinned to the
+    // old layout-viewport top — offscreen or misaligned. Counter that shift so #app tracks
+    // whatever part of the page is actually visible.
+    if (els.app) els.app.style.transform = vv && vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
   }
 
   function initViewport() {
