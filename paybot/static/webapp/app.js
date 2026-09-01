@@ -158,19 +158,26 @@
   }
 
   // Keep the modal pinned above the on-screen keyboard instead of letting it cover the buttons.
+  // Telegram's own viewportHeight/viewportChanged is what actually reports the keyboard on its
+  // WebView (docs: viewportChanged's is_state_stable goes false while the keyboard animates in
+  // or out) — the generic window.visualViewport resize/scroll events aren't reliably wired up
+  // inside Telegram's WebView, so they're kept only as a fallback for testing outside Telegram.
   function syncAppHeight() {
+    const tgHeight = tg && typeof tg.viewportHeight === "number" ? tg.viewportHeight : 0;
     const vv = window.visualViewport;
-    const height = vv ? vv.height : window.innerHeight;
+    const height = tgHeight > 0 ? tgHeight : vv ? vv.height : window.innerHeight;
     document.documentElement.style.setProperty("--app-height", `${height}px`);
-    // iOS shifts the visual viewport down (without scrolling the document) to keep the
-    // focused field above the keyboard, which leaves our fixed-position #app pinned to the
-    // old layout-viewport top — offscreen or misaligned. Counter that shift so #app tracks
-    // whatever part of the page is actually visible.
-    if (els.app) els.app.style.transform = vv && vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
+    // Telegram keeps #app's own top anchored as it shrinks the viewport for the keyboard; a
+    // bare mobile browser (only reachable when testing outside Telegram) instead shifts the
+    // *visual* viewport down, leaving #app pinned to the stale top, so only compensate there.
+    if (els.app) {
+      els.app.style.transform = !tgHeight && vv && vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
+    }
   }
 
   function initViewport() {
     syncAppHeight();
+    if (tg && tg.onEvent) tg.onEvent("viewportChanged", syncAppHeight);
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", syncAppHeight);
       window.visualViewport.addEventListener("scroll", syncAppHeight);
@@ -2240,7 +2247,15 @@
     setTimeout(reveal, 300);
     // ...but the 300ms guess can fire before the viewport has actually finished shrinking
     // (longer for the full QWERTY keyboard than a numeric pad), leaving the field
-    // positioned for the pre-keyboard height; redo it once the real resize lands.
+    // positioned for the pre-keyboard height; redo it once the real resize lands, from
+    // whichever of Telegram's own event or the web visualViewport fallback fires.
+    if (tg && tg.onEvent) {
+      const onViewportChanged = () => {
+        reveal();
+        if (tg.offEvent) tg.offEvent("viewportChanged", onViewportChanged);
+      };
+      tg.onEvent("viewportChanged", onViewportChanged);
+    }
     if (window.visualViewport) {
       const onResize = () => {
         reveal();
