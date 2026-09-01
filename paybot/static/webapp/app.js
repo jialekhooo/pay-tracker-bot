@@ -18,6 +18,9 @@
     editBackdrop: document.getElementById("edit-backdrop"),
     editSheet: document.getElementById("edit-sheet"),
     editForm: document.getElementById("edit-form"),
+    editBadge: document.getElementById("edit-badge"),
+    editCurrency: document.getElementById("edit-currency"),
+    editBreakPaid: document.getElementById("edit-break-paid"),
     editTitle: document.getElementById("edit-title"),
     editError: document.getElementById("edit-error"),
     editSave: document.getElementById("edit-save"),
@@ -1478,20 +1481,36 @@
     [els.editForm.day, els.editForm.start, els.editForm.end].forEach(syncFieldDisplay);
   }
 
+  function syncEventBadge() {
+    const event = els.editForm.event.value.trim();
+    const color = event ? eventColor(event) : { bg: "var(--fill)", fg: "var(--hint)" };
+    els.editBadge.style.background = color.bg;
+    els.editBadge.style.color = color.fg;
+    els.editBadge.textContent = event ? eventInitial(event) : "+";
+  }
+
+  function setBreakPaid(value) {
+    els.editForm.break_paid.value = value;
+    els.editBreakPaid.querySelectorAll("[data-break-paid]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.breakPaid === value);
+    });
+  }
+
   function openEditor(shift) {
     if (!shift) return;
     editorMode = "edit";
     editingShiftId = shift.id;
     els.editTitle.textContent = "Edit Shift";
-    els.editSave.textContent = "Save";
     els.editForm.event.value = shift.event;
+    syncEventBadge();
     els.editForm.location.value = shift.location || "";
     els.editForm.day.value = shift.day;
     els.editForm.start.value = shift.start;
     els.editForm.end.value = shift.end;
     els.editForm.rate.value = shift.rate;
     els.editForm.break_hours.value = shift.break_hours;
-    els.editForm.break_paid.value = shift.break_paid ? "yes" : "no";
+    setBreakPaid(shift.break_paid ? "yes" : "no");
+    els.editCurrency.textContent = (summaryData && summaryData.currency) || "";
     syncScheduleDisplays();
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.remove("hidden");
@@ -1503,13 +1522,14 @@
     editorMode = "create";
     editingShiftId = null;
     els.editForm.reset();
-    els.editTitle.textContent = "Add Shift";
-    els.editSave.textContent = "Add";
+    els.editTitle.textContent = "New Shift";
+    syncEventBadge();
+    els.editCurrency.textContent = (summaryData && summaryData.currency) || "";
     const today = ((summaryData && summaryData.now) || new Date().toISOString()).slice(0, 10);
     els.editForm.day.value = presetDay || today;
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
-    els.editForm.break_paid.value = "yes";
+    setBreakPaid("yes");
     syncScheduleDisplays();
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.add("hidden");
@@ -1684,7 +1704,7 @@
     form.end.value = duplicated.end;
     form.rate.value = duplicated.rate;
     form.break_hours.value = duplicated.break_hours;
-    form.break_paid.value = duplicated.break_paid;
+    setBreakPaid(duplicated.break_paid);
     syncScheduleDisplays();
   }
 
@@ -2181,6 +2201,11 @@
     if (event.target === els.editBackdrop) closeEditor();
   });
   els.editForm.addEventListener("submit", submitEditor);
+  els.editForm.event.addEventListener("input", syncEventBadge);
+  els.editBreakPaid.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-break-paid]");
+    if (button) setBreakPaid(button.dataset.breakPaid);
+  });
   els.editForm.addEventListener("focusin", (event) => {
     // give the keyboard time to animate in before scrolling the field into view
     setTimeout(() => event.target.scrollIntoView({ block: "center", behavior: "smooth" }), 300);

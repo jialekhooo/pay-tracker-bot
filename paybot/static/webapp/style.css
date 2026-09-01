@@ -1097,19 +1097,18 @@ main {
   font-weight: 750;
 }
 
-/* The shift editor floats inset from the screen edges over a blurred page. */
 #edit-backdrop {
-  padding: 0 8px;
+  padding: 0;
   background: rgba(60, 60, 67, 0.25);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 
 .form-sheet {
-  background: rgba(255, 255, 255, 0.86);
-  border-radius: 22px 22px 0 0;
-  max-height: 88%;
-  padding: 0 12px calc(20px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-radius: 26px 26px 0 0;
+  max-height: 92%;
+  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .sheet-bar {
@@ -1120,16 +1119,14 @@ main {
   position: sticky;
   top: 0;
   z-index: 2;
-  margin: 0 -12px;
-  padding: 14px 8px 12px;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  margin: 0 -20px;
+  padding: 14px 16px 12px;
+  background: #fff;
 }
 
 .form-sheet h2 {
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -1145,10 +1142,21 @@ main {
   justify-self: start;
 }
 
-.sheet-btn.strong {
+.sheet-btn.icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 21px;
+  line-height: 1;
+}
+
+.sheet-btn.icon.strong {
   justify-self: end;
-  background: rgba(120, 120, 128, 0.14);
-  color: var(--link);
+  background: none;
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -1180,57 +1188,133 @@ main {
 #edit-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 26px;
   min-width: 0;
-  padding-top: 2px;
+  padding-top: 12px;
 }
 
-.form-section {
+.lead-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 14px;
   width: 100%;
   min-width: 0;
-  box-sizing: border-box;
-  background: rgba(120, 120, 128, 0.09);
-  border: none;
-  border-radius: 16px;
-  overflow: hidden;
+  padding: 12px 0 16px;
+  border-bottom: 1px solid rgba(60, 60, 67, 0.16);
 }
 
-.form-row {
+.lead-badge {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--hint);
+  background: var(--fill);
+}
+
+#edit-form .lead-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  text-align-last: left;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.field-group {
+  width: 100%;
+  min-width: 0;
+}
+
+.group-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--hint);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+.amount-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.amount-currency {
+  color: var(--hint);
+  font-size: 20px;
+}
+
+.amount-row input {
+  flex: 0 1 auto;
+  width: 4.5ch;
+  min-width: 2ch;
+  max-width: 60%;
+  font-size: 34px !important;
+  font-weight: 700 !important;
+  text-align: left !important;
+}
+
+.amount-suffix {
+  color: var(--hint);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.segmented {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.segment {
+  flex: 0 1 auto;
+  border: 1px solid var(--separator);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text);
+  background: #fff;
+}
+
+.segment.active {
+  color: #fff;
+  background: #111;
+  border-color: #111;
+}
+
+.detail-rows {
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+}
+
+.detail-row {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   min-width: 0;
-  min-height: 44px;
-  box-sizing: border-box;
-  padding: 6px 14px;
-  font: inherit;
-  font-size: 15px;
+  min-height: 46px;
+  padding: 0;
   color: var(--text);
-  background: none;
-  border: none;
+  font-size: 15px;
   text-align: left;
 }
 
-/* Lead row: the event name reads as the sheet's headline, without a label. */
-.form-row.lead {
-  min-height: 48px;
-}
-
-#edit-form .form-row.lead input {
-  text-align: left;
-  text-align-last: left;
-  font-size: 16px;
-}
-
-/* Hairline between rows, inset past the label like iOS grouped lists. */
-.form-row + .form-row::before {
+.detail-row + .detail-row::before {
   content: "";
   position: absolute;
-  left: 14px;
+  left: 0;
   right: 0;
   top: 0;
   height: 1px;
@@ -1240,30 +1324,17 @@ main {
 
 .row-label {
   flex: 0 0 auto;
-  font-weight: 400;
   color: var(--text);
 }
 
-.form-row.action {
-  justify-content: center;
-  color: var(--link);
-  font-weight: 500;
+.row-chev {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  color: var(--hint);
+  font-size: 17px;
 }
 
-.form-row.action.destructive {
-  color: var(--destructive);
-}
-
-.form-row.action:active {
-  background: var(--fill);
-}
-
-.form-row.action + .form-row.action::before {
-  left: 0;
-}
-
-#edit-form input,
-#edit-form select {
+#edit-form input {
   flex: 1 1 auto;
   font: inherit;
   font-weight: 400;
@@ -1286,21 +1357,12 @@ main {
   color: var(--hint);
 }
 
-#edit-form select {
-  flex: 0 0 auto;
+.detail-row > input {
+  flex: 0 1 auto;
+  width: 5ch;
   margin-left: auto;
-  padding-right: 15px;
-  /* Android WebView ignores text-align on <select>; text-align-last moves the option text. */
-  text-align-last: right;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 5.2 6 1.8l3.5 3.4M2.5 8.8 6 12.2l3.5-3.4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right center;
-  background-size: 10px 12px;
 }
 
-/* iOS Safari renders native date/time inputs full-width and centered, and ignores CSS
-   attempts to restyle that control. So the native input is kept functional (it still opens
-   the OS picker) but made invisible, and a compact pill sits on top showing the value. */
 .field-control {
   position: relative;
   display: block;
@@ -1323,15 +1385,44 @@ main {
 .field-display {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 84px;
-  background: rgba(120, 120, 128, 0.16);
-  border-radius: 999px;
-  padding: 4px 10px;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: 0;
   font-size: 15px;
   font-weight: 400;
   color: var(--text);
   box-sizing: border-box;
+}
+
+.plain-row {
+  display: block;
+  width: 100%;
+}
+
+.plain-row input {
+  width: 100% !important;
+  text-align: left !important;
+}
+
+.detail-row.action {
+  justify-content: center;
+  border: none;
+  color: var(--link);
+  font: inherit;
+  font-weight: 500;
+  background: none;
+}
+
+.detail-row.action.destructive {
+  color: var(--destructive);
+}
+
+.detail-row.action:active {
+  background: var(--fill);
+}
+
+.detail-row.action + .detail-row.action::before {
+  left: 0;
 }
 
 .modal-error {

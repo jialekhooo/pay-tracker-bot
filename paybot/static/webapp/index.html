@@ -6,7 +6,7 @@
   <!-- Opts out of Android WebView's automatic darkening, which would recolour the fixed palette. -->
   <meta name="color-scheme" content="light" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=52" />
+  <link rel="stylesheet" href="style.css?v=53" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -84,20 +84,51 @@
     <div class="modal-backdrop hidden" id="edit-backdrop">
       <div class="modal-sheet form-sheet" id="edit-sheet">
         <div class="sheet-bar">
-          <button type="button" class="sheet-btn" id="edit-cancel">Cancel</button>
+          <button type="button" class="sheet-btn icon" id="edit-cancel" aria-label="Cancel">✕</button>
           <h2 id="edit-title">Edit Shift</h2>
-          <button type="submit" class="sheet-btn strong" id="edit-save" form="edit-form">Save</button>
+          <button
+            type="submit"
+            class="sheet-btn icon strong"
+            id="edit-save"
+            form="edit-form"
+            aria-label="Save"
+          >
+            ✓
+          </button>
         </div>
         <form id="edit-form">
-          <div class="form-section">
-            <label class="form-row lead">
-              <input type="text" name="event" required maxlength="120" placeholder="Event name" />
+          <label class="lead-row">
+            <span class="lead-badge" id="edit-badge"></span>
+            <input type="text" name="event" required maxlength="120" placeholder="Name" />
+          </label>
+
+          <div class="field-group">
+            <span class="group-label">Rate</span>
+            <label class="amount-row">
+              <span class="amount-currency" id="edit-currency"></span>
+              <input
+                type="number"
+                name="rate"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="0"
+              />
+              <span class="amount-suffix">· per hour</span>
             </label>
-            <label class="form-row">
-              <span class="row-label">Location</span>
-              <input type="text" name="location" maxlength="120" placeholder="None" />
-            </label>
-            <label class="form-row">
+          </div>
+
+          <div class="field-group">
+            <span class="group-label">Break</span>
+            <div class="segmented" id="edit-break-paid">
+              <button type="button" class="segment active" data-break-paid="yes">Paid</button>
+              <button type="button" class="segment" data-break-paid="no">Unpaid</button>
+            </div>
+            <input type="hidden" name="break_paid" value="yes" />
+          </div>
+
+          <div class="detail-rows">
+            <label class="detail-row">
               <span class="row-label">Date</span>
               <span class="field-control">
                 <input type="date" name="day" required />
@@ -105,8 +136,9 @@
                   <span class="field-value" data-field="day"></span>
                 </span>
               </span>
+              <span class="row-chev">›</span>
             </label>
-            <label class="form-row">
+            <label class="detail-row">
               <span class="row-label">Start</span>
               <span class="field-control">
                 <input type="time" name="start" required />
@@ -114,8 +146,9 @@
                   <span class="field-value" data-field="start"></span>
                 </span>
               </span>
+              <span class="row-chev">›</span>
             </label>
-            <label class="form-row">
+            <label class="detail-row">
               <span class="row-label">End</span>
               <span class="field-control">
                 <input type="time" name="end" required />
@@ -123,36 +156,27 @@
                   <span class="field-value" data-field="end"></span>
                 </span>
               </span>
+              <span class="row-chev">›</span>
             </label>
-            <label class="form-row">
-              <span class="row-label">Rate / hour</span>
-              <input
-                type="number"
-                name="rate"
-                min="0"
-                step="0.01"
-                inputmode="decimal"
-                placeholder="Saved rate"
-              />
-            </label>
-            <label class="form-row">
-              <span class="row-label">Break (hours)</span>
-              <input type="number" name="break_hours" min="0" step="0.25" placeholder="0" />
-            </label>
-            <label class="form-row">
-              <span class="row-label">Paid break</span>
-              <select name="break_paid">
-                <option value="yes" selected>Yes</option>
-                <option value="no">No</option>
-              </select>
+            <label class="detail-row">
+              <span class="row-label">Break length</span>
+              <input type="number" name="break_hours" min="0" step="0.25" placeholder="0h" />
             </label>
           </div>
+
+          <div class="field-group">
+            <span class="group-label">Location (optional)</span>
+            <label class="plain-row">
+              <input type="text" name="location" maxlength="120" placeholder="Add location…" />
+            </label>
+          </div>
+
           <p class="modal-error hidden" id="edit-error"></p>
-          <div class="form-section hidden" id="edit-shift-actions">
-            <button type="button" class="form-row action" id="edit-duplicate">
+          <div class="detail-rows hidden" id="edit-shift-actions">
+            <button type="button" class="detail-row action" id="edit-duplicate">
               Duplicate as new shift
             </button>
-            <button type="button" class="form-row action destructive" id="edit-delete">
+            <button type="button" class="detail-row action destructive" id="edit-delete">
               Delete shift
             </button>
           </div>
@@ -160,6 +184,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=52"></script>
+  <script src="app.js?v=53"></script>
 </body>
 </html>
