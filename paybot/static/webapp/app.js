@@ -2234,8 +2234,20 @@
     if (button) setBreakPaid(button.dataset.breakPaid);
   });
   els.editForm.addEventListener("focusin", (event) => {
+    const target = event.target;
+    const reveal = () => target.scrollIntoView({ block: "center", behavior: "smooth" });
     // give the keyboard time to animate in before scrolling the field into view
-    setTimeout(() => event.target.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+    setTimeout(reveal, 300);
+    // ...but the 300ms guess can fire before the viewport has actually finished shrinking
+    // (longer for the full QWERTY keyboard than a numeric pad), leaving the field
+    // positioned for the pre-keyboard height; redo it once the real resize lands.
+    if (window.visualViewport) {
+      const onResize = () => {
+        reveal();
+        window.visualViewport.removeEventListener("resize", onResize);
+      };
+      window.visualViewport.addEventListener("resize", onResize);
+    }
   });
   [els.editForm.day, els.editForm.start, els.editForm.end].forEach((input) => {
     input.addEventListener("input", () => syncFieldDisplay(input));
