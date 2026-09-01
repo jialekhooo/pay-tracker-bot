@@ -368,9 +368,10 @@
   // long list reads as a schedule instead of a wall of repeated dates.
   function shiftGroups(shifts, currency, options = {}) {
     const payOf = options.payOf || ((shift) => shift.pay);
+    const ordered = (options.order || orderedByDay)(shifts);
     const days = [];
     const byDay = new Map();
-    orderedByDay(shifts).forEach((shift) => {
+    ordered.forEach((shift) => {
       if (!byDay.has(shift.day)) {
         byDay.set(shift.day, []);
         days.push(shift.day);
@@ -413,9 +414,13 @@
   }
 
   function shiftGroupsSection(shifts, currency, options = {}) {
-    const groups = shiftGroups(shifts, currency, options);
-    const days = new Set(shifts.map((shift) => shift.day));
-    return days.size > 1 ? dateOrderToggle() + groups : groups;
+    const multiDay = new Set(shifts.map((shift) => shift.day)).size > 1;
+    const groups = shiftGroups(
+      shifts,
+      currency,
+      multiDay ? options : { ...options, order: chronological }
+    );
+    return multiDay ? dateOrderToggle() + groups : groups;
   }
 
   function shiftDayCard(shifts, currency, options = {}) {
@@ -754,11 +759,7 @@
         }</div>`,
       };
     }
-    const body =
-      upcomingRange === "tomorrow"
-        ? shiftDayCard(shifts, upcomingRangeData.currency)
-        : shiftGroupsSection(shifts, upcomingRangeData.currency);
-    return { head: toggle, body };
+    return { head: toggle, body: shiftGroupsSection(shifts, upcomingRangeData.currency) };
   }
 
   function monthListRows(months) {
