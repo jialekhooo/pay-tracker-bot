@@ -398,13 +398,18 @@
       .join("");
   }
 
+  function byDayDirection(direction) {
+    return (left, right) =>
+      direction *
+      (left.day.localeCompare(right.day) || left.start.localeCompare(right.start));
+  }
+
   function orderedByDay(shifts) {
-    const direction = dateOrder === "asc" ? 1 : -1;
-    return [...shifts].sort(
-      (left, right) =>
-        direction *
-        (left.day.localeCompare(right.day) || left.start.localeCompare(right.start))
-    );
+    return [...shifts].sort(byDayDirection(dateOrder === "asc" ? 1 : -1));
+  }
+
+  function chronological(shifts) {
+    return [...shifts].sort(byDayDirection(1));
   }
 
   function shiftGroupsSection(shifts, currency, options = {}) {
@@ -415,7 +420,7 @@
 
   function shiftDayCard(shifts, currency, options = {}) {
     const payOf = options.payOf || ((shift) => shift.pay);
-    const rows = orderedByDay(shifts)
+    const rows = chronological(shifts)
       .map((shift) =>
         shiftRow(shift, currency, {
           state: shift.state,
@@ -749,7 +754,11 @@
         }</div>`,
       };
     }
-    return { head: toggle, body: shiftGroupsSection(shifts, upcomingRangeData.currency) };
+    const body =
+      upcomingRange === "tomorrow"
+        ? shiftDayCard(shifts, upcomingRangeData.currency)
+        : shiftGroupsSection(shifts, upcomingRangeData.currency);
+    return { head: toggle, body };
   }
 
   function monthListRows(months) {
