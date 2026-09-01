@@ -1256,7 +1256,6 @@ main {
 #edit-form .amount-row input {
   flex: 0 0 auto;
   field-sizing: content;
-  width: 4ch;
   min-width: 2ch;
   max-width: none;
   font-size: 34px;
