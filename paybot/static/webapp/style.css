@@ -603,7 +603,8 @@ main {
   background: var(--section-bg);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(60, 60, 67, 0.1);
+  box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.45);
 }
 
 /* One card per day, headed by a pill that reads on both the light page and the artwork. */
@@ -641,9 +642,9 @@ main {
 .row {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 13px 14px;
 }
 
 /* Separators are inset to the start of the text, as in iOS grouped lists. */
@@ -651,7 +652,7 @@ main {
   content: "";
   position: absolute;
   left: 62px;
-  right: 0;
+  right: 12px;
   bottom: 0;
   height: 1px;
   background: var(--separator);
@@ -691,7 +692,8 @@ main {
 
 .row .title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 650;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -700,10 +702,14 @@ main {
 .row .sub {
   font-size: 13px;
   color: var(--hint);
-  margin-top: 1px;
+  margin-top: 4px;
+  line-height: 1.35;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .row .value {
@@ -711,12 +717,16 @@ main {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
+  gap: 5px;
+  min-width: 92px;
+  margin-left: auto;
+  padding-top: 1px;
 }
 
 .row .value .amount {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 750;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1108,7 +1118,7 @@ main {
   background: #fff;
   border-radius: 26px 26px 0 0;
   max-height: 92%;
-  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 0 16px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .sheet-bar {
@@ -1119,9 +1129,10 @@ main {
   position: sticky;
   top: 0;
   z-index: 2;
-  margin: 0 -20px;
-  padding: 14px 16px 12px;
+  margin: 0 -16px;
+  padding: 14px 14px 12px;
   background: #fff;
+  border-bottom: 1px solid rgba(60, 60, 67, 0.12);
 }
 
 .form-sheet h2 {
@@ -1188,9 +1199,9 @@ main {
 #edit-form {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 18px;
   min-width: 0;
-  padding-top: 12px;
+  padding-top: 10px;
 }
 
 .lead-row {
@@ -1199,8 +1210,8 @@ main {
   gap: 14px;
   width: 100%;
   min-width: 0;
-  padding: 12px 0 16px;
-  border-bottom: 1px solid rgba(60, 60, 67, 0.16);
+  padding: 6px 0 2px;
+  border-bottom: none;
 }
 
 .lead-badge {
@@ -1229,13 +1240,18 @@ main {
 .field-group {
   width: 100%;
   min-width: 0;
+  padding: 12px 12px 13px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(60, 60, 67, 0.12);
 }
 
 .group-label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   color: var(--hint);
   font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.01em;
 }
 
@@ -1243,6 +1259,7 @@ main {
   display: flex;
   align-items: baseline;
   justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
 }
@@ -1272,15 +1289,15 @@ main {
 
 .segmented {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .segment {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   border: 1px solid var(--separator);
-  border-radius: 999px;
-  padding: 9px 16px;
+  border-radius: 10px;
+  padding: 10px 12px;
   font: inherit;
   font-size: 14px;
   font-weight: 550;
@@ -1302,6 +1319,9 @@ main {
   width: 100%;
   min-width: 0;
   background: #fff;
+  border-radius: 14px;
+  border: 1px solid rgba(60, 60, 67, 0.12);
+  overflow: hidden;
 }
 
 .detail-row {
@@ -1311,19 +1331,19 @@ main {
   gap: 10px;
   width: 100%;
   min-width: 0;
-  min-height: 46px;
-  padding: 0;
+  min-height: 50px;
+  padding: 0 12px;
   color: var(--text);
   font-size: 15px;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .detail-row + .detail-row::before {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 12px;
+  right: 12px;
   top: 0;
   height: 1px;
   background: rgba(60, 60, 67, 0.16);
@@ -1331,13 +1351,14 @@ main {
 }
 
 .row-label {
-  flex: 0 0 auto;
+  flex: 0 0 108px;
   color: var(--text);
+  font-weight: 500;
 }
 
 .row-chev {
   flex: 0 0 auto;
-  margin-left: 2px;
+  margin-left: 0;
   color: var(--hint);
   font-size: 17px;
 }
@@ -1373,9 +1394,11 @@ main {
 
 .field-control {
   position: relative;
-  display: block;
-  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  flex: 1 1 auto;
   margin-left: auto;
+  min-width: 0;
 }
 
 .field-control input[type="date"],
@@ -1394,10 +1417,10 @@ main {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-width: 0;
+  min-width: 80px;
   padding: 0;
   font-size: 15px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--text);
   box-sizing: border-box;
   white-space: nowrap;
@@ -1411,6 +1434,9 @@ main {
 #edit-form .plain-row input {
   width: 100%;
   text-align: left;
+  background: var(--fill);
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
 .detail-row.action {
@@ -1420,6 +1446,7 @@ main {
   font: inherit;
   font-weight: 500;
   background: none;
+  padding: 0 12px;
 }
 
 .detail-row.action.destructive {
@@ -1431,13 +1458,13 @@ main {
 }
 
 .detail-row.action + .detail-row.action::before {
-  left: 0;
+  left: 12px;
 }
 
 .modal-error {
   color: var(--destructive);
   font-size: 13px;
-  margin: -4px 0 0;
+  margin: -4px 2px 0;
 }
 
 .modal-actions {
