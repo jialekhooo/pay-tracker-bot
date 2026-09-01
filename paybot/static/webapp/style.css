@@ -828,7 +828,7 @@ main {
 
 .calendar-card {
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   padding: 12px 10px 10px;
   box-sizing: border-box;
@@ -904,7 +904,7 @@ main {
 
 .calendar-empty {
   background: var(--section-bg);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   padding: 22px 12px;
 }
@@ -1041,6 +1041,48 @@ main {
   box-sizing: border-box;
 }
 
+#search-backdrop {
+  align-items: center;
+  padding: 16px 8px;
+  background: rgba(60, 60, 67, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+#search-sheet {
+  width: min(100%, 420px);
+  max-height: 76%;
+  padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 22px;
+}
+
+#search-sheet .modal-handle {
+  margin-bottom: 14px;
+}
+
+#search-sheet h2 {
+  margin: 0 4px 12px;
+  font-size: 21px;
+  font-weight: 750;
+}
+
+#search-sheet #search-input {
+  margin: 0 4px 10px;
+  width: calc(100% - 8px);
+}
+
+#search-sheet .search-results {
+  padding: 0 4px;
+}
+
+#search-sheet .modal-actions {
+  margin: 8px -12px -12px;
+  padding: 10px 12px calc(4px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.92);
+  border-top: 1px solid var(--separator);
+}
+
 .modal-handle {
   width: 36px;
   height: 4px;
@@ -1122,12 +1164,15 @@ main {
 /* Older Android WebViews have no backdrop-filter, so nothing dims or blurs behind the
    translucent sheet; there they get an opaque sheet over a stronger dim instead. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  #edit-backdrop {
+  #edit-backdrop,
+  #search-backdrop {
     background: rgba(0, 0, 0, 0.4);
   }
 
   .form-sheet,
-  .sheet-bar {
+  .sheet-bar,
+  #search-sheet,
+  #search-sheet .modal-actions {
     background: #ffffff;
   }
 }
@@ -1360,9 +1405,10 @@ main {
   align-items: center;
   gap: 14px;
   background: var(--section-bg);
-  border-radius: var(--radius);
+  border-radius: 18px;
   padding: 14px;
   margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .profile-card-info {
