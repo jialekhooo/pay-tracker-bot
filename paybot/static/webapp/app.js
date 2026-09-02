@@ -2227,8 +2227,17 @@
     if (button) setBreakPaid(button.dataset.breakPaid);
   });
   els.editForm.addEventListener("focusin", (event) => {
-    // give the keyboard time to animate in before scrolling the field into view
-    setTimeout(() => event.target.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+    // Scroll the sheet itself after the keyboard has resized the visual viewport.
+    setTimeout(() => {
+      const field = event.target;
+      const sheet = els.editSheet;
+      const fieldTop = field.getBoundingClientRect().top;
+      const sheetTop = sheet.getBoundingClientRect().top;
+      sheet.scrollBy({
+        top: fieldTop - sheetTop - (sheet.clientHeight - field.offsetHeight) / 2,
+        behavior: "smooth",
+      });
+    }, 300);
   });
   [els.editForm.day, els.editForm.start, els.editForm.end].forEach((input) => {
     input.addEventListener("input", () => syncFieldDisplay(input));
