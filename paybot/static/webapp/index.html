@@ -6,7 +6,7 @@
   <!-- Opts out of Android WebView's automatic darkening, which would recolour the fixed palette. -->
   <meta name="color-scheme" content="light" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=60" />
+  <link rel="stylesheet" href="style.css?v=61" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -138,6 +138,7 @@
               </span>
               <span class="row-chev">›</span>
             </label>
+            <div id="edit-extra-dates"></div>
             <label class="detail-row">
               <span class="row-label">Start</span>
               <span class="field-control">
@@ -162,6 +163,12 @@
               <span class="row-label">Break length</span>
               <input type="number" name="break_hours" min="0" step="0.25" placeholder="0h" />
             </label>
+          </div>
+
+          <div class="detail-rows hidden" id="edit-bulk-dates-actions">
+            <button type="button" class="detail-row action" id="edit-add-date">
+              + Add another date for this event
+            </button>
           </div>
 
           <div class="field-group">
@@ -210,6 +217,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=60"></script>
+  <script src="app.js?v=61"></script>
 </body>
 </html>

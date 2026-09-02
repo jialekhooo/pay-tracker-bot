@@ -30,6 +30,9 @@
     editShiftActions: document.getElementById("edit-shift-actions"),
     editPaymentBadge: document.getElementById("edit-payment-status-badge"),
     editPaidRow: document.getElementById("edit-paid-row"),
+    editExtraDates: document.getElementById("edit-extra-dates"),
+    editAddDate: document.getElementById("edit-add-date"),
+    editBulkDatesActions: document.getElementById("edit-bulk-dates-actions"),
     searchOpen: document.getElementById("search-open"),
     searchBackdrop: document.getElementById("search-backdrop"),
     searchInput: document.getElementById("search-input"),
@@ -299,12 +302,16 @@
     ).padStart(2, "0")}`;
   }
 
+  function addDays(dayStr, n) {
+    const [year, month, day] = dayStr.split("-").map(Number);
+    return isoDateUTC(new Date(Date.UTC(year, month - 1, day) + n * 86400000));
+  }
+
   // Best-effort client-side preview only (matches a single shift's own day) — the real
   // default, based on the last day of the whole event, is computed server-side at save time
   // whenever the user hasn't touched this field themselves. Two weeks out, rolled to a Friday.
   function defaultPaymentDue(dayStr) {
-    const [year, month, day] = dayStr.split("-").map(Number);
-    const due = new Date(Date.UTC(year, month - 1, day) + 14 * 86400000);
+    const due = new Date(`${addDays(dayStr, 14)}T00:00:00Z`);
     const daysUntilFriday = (5 - due.getUTCDay() + 7) % 7; // Friday = 5 in getUTCDay()
     due.setUTCDate(due.getUTCDate() + daysUntilFriday);
     return isoDateUTC(due);
@@ -1633,6 +1640,39 @@
     });
   }
 
+  const MAX_BULK_DATES = 60;
+
+  function extraDateInputs() {
+    return [...els.editExtraDates.querySelectorAll("[data-extra-date]")];
+  }
+
+  function clearExtraDates() {
+    els.editExtraDates.innerHTML = "";
+  }
+
+  // One row per extra date, sharing the event/time/rate/location above it — the common
+  // case (a multi-day booking) is usually the very next day, so that's what's prefilled.
+  function addExtraDateRow(prefillDate) {
+    if (extraDateInputs().length >= MAX_BULK_DATES - 1) return;
+    const row = document.createElement("div");
+    row.className = "detail-row";
+    row.dataset.extraDateRow = "";
+    row.innerHTML = `
+      <span class="row-label">Date</span>
+      <span class="field-control">
+        <input type="date" data-extra-date />
+        <span class="field-display"><span class="field-value"></span></span>
+      </span>
+      <button type="button" class="row-remove" data-remove-date aria-label="Remove date">✕</button>
+    `;
+    const input = row.querySelector("[data-extra-date]");
+    input.value = prefillDate || "";
+    els.editExtraDates.appendChild(row);
+    syncFieldDisplay(input);
+    input.addEventListener("input", () => syncFieldDisplay(input));
+    input.addEventListener("change", () => syncFieldDisplay(input));
+  }
+
   function openEditor(shift) {
     if (!shift) return;
     editorMode = "edit";
@@ -1655,6 +1695,8 @@
     syncPaymentBadge();
     els.editCurrency.textContent = (summaryData && summaryData.currency) || "";
     syncScheduleDisplays();
+    clearExtraDates();
+    els.editBulkDatesActions.classList.add("hidden");
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.remove("hidden");
     els.editSheet.scrollTop = 0;
@@ -1681,6 +1723,8 @@
     paymentDueTouched = false;
     syncPaymentBadge();
     syncScheduleDisplays();
+    clearExtraDates();
+    els.editBulkDatesActions.classList.remove("hidden");
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.add("hidden");
     els.editSheet.scrollTop = 0;
@@ -1696,6 +1740,7 @@
     activeEditField = null;
     els.editSheet.style.paddingBottom = "";
   }
+
 
   async function refreshAfterEdit() {
     if (monthDetail) {
@@ -1756,10 +1801,13 @@
 
   async function submitCreate() {
     const form = els.editForm;
+    const extraDays = extraDateInputs()
+      .map((input) => input.value)
+      .filter(Boolean);
+    const days = Array.from(new Set([form.day.value, ...extraDays])).sort();
     const payload = {
       event: form.event.value.trim(),
       location: form.location.value.trim(),
-      day: form.day.value,
       start: form.start.value,
       end: form.end.value,
     };
@@ -1770,7 +1818,10 @@
     }
     // Left untouched — the server computes the real default from the whole event's last day.
     if (paymentDueTouched && form.payment_due.value) payload.payment_due = form.payment_due.value;
-    return api("/webapp/api/shifts", { method: "POST", body: payload });
+    if (days.length > 1) {
+      return api("/webapp/api/shifts/bulk", { method: "POST", body: { ...payload, days } });
+    }
+    return api("/webapp/api/shifts", { method: "POST", body: { ...payload, day: days[0] } });
   }
 
   async function submitUpdate() {
@@ -1824,6 +1875,9 @@
       await refreshAfterEdit();
       if (result && result.clashes && result.clashes.length) {
         showClashWarning(result.clashes);
+      }
+      if (result && result.created) {
+        showSuccessToast(`Added ${result.created.length} shifts`);
       }
     } catch (err) {
       const fallback =
@@ -2364,6 +2418,17 @@
   els.editCancel.addEventListener("click", closeEditor);
   els.editDuplicate.addEventListener("click", duplicateEditingShift);
   els.editDelete.addEventListener("click", deleteEditingShift);
+  els.editAddDate.addEventListener("click", () => {
+    const days = [els.editForm.day.value, ...extraDateInputs().map((input) => input.value)].filter(
+      Boolean
+    );
+    const lastDay = days[days.length - 1];
+    addExtraDateRow(lastDay ? addDays(lastDay, 1) : "");
+  });
+  els.editExtraDates.addEventListener("click", (event) => {
+    const removeBtn = event.target.closest("[data-remove-date]");
+    if (removeBtn) removeBtn.closest("[data-extra-date-row]").remove();
+  });
   els.editBackdrop.addEventListener("click", (event) => {
     if (event.target === els.editBackdrop) closeEditor();
   });

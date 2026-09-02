@@ -1494,6 +1494,21 @@ main {
   margin-left: auto;
 }
 
+.row-remove {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px;
+  margin-left: 2px;
+}
+
+.row-remove:active {
+  color: var(--destructive);
+}
+
 .field-control {
   position: relative;
   display: flex;

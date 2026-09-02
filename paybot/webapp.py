@@ -280,6 +280,21 @@ class ShiftCreate(BaseModel):
     payment_due: str | None = None
 
 
+class ShiftBulkCreate(BaseModel):
+    """Several shifts for the same event logged in one go — same time/rate/location,
+    one row per date, so a multi-day booking doesn't mean retyping everything each time."""
+
+    event: str
+    location: str = ""
+    days: list[str]
+    start: str
+    end: str
+    rate: str | None = None
+    break_hours: str | None = None
+    break_paid: bool = False
+    payment_due: str | None = None
+
+
 class SettingsUpdate(BaseModel):
     """A partial edit from the mini app's Settings tab — unset fields are left alone."""
 
@@ -323,7 +338,15 @@ def _next_friday_on_or_after(day: date_cls) -> date_cls:
 def _default_payment_due(storage: Storage, user_id: int, event: str, day: date_cls) -> date_cls:
     """Two weeks after the last day of this same event, rounded forward to the nearest
     Friday — payouts are almost always weekly, on a Friday, after the whole gig wraps up."""
-    last_day = max([day] + [r.day for r in storage.shifts_for_event(user_id, event)])
+    return _default_payment_due_for_days(storage, user_id, event, [day])
+
+
+def _default_payment_due_for_days(
+    storage: Storage, user_id: int, event: str, days: list[date_cls]
+) -> date_cls:
+    """Same as ``_default_payment_due``, but for a batch of shifts created together — the
+    due date is anchored to whichever of them (new or already booked) falls last."""
+    last_day = max(days + [r.day for r in storage.shifts_for_event(user_id, event)])
     return _next_friday_on_or_after(last_day + timedelta(days=14))
 
 
@@ -764,6 +787,99 @@ async def create_shift(
         **_shift_json(storage.get_shift(user_id, shift_id), local_clock(_offset(storage, user_id))),
         "clashes": clashes,
     }
+
+
+_BULK_CREATE_MAX_DAYS = 60
+
+
+@router.post("/shifts/bulk")
+async def create_shifts_bulk(
+    payload: ShiftBulkCreate, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    config = storage.get_config(user_id)
+
+    event = payload.event.strip()
+    if not event:
+        raise HTTPException(status_code=400, detail="Event name can't be empty")
+
+    unique_days = sorted(set(payload.days))
+    if not unique_days:
+        raise HTTPException(status_code=400, detail="Pick at least one date")
+    if len(unique_days) > _BULK_CREATE_MAX_DAYS:
+        raise HTTPException(
+            status_code=400, detail=f"Too many dates at once (max {_BULK_CREATE_MAX_DAYS})"
+        )
+    try:
+        days = [date_cls.fromisoformat(value) for value in unique_days]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date, expected YYYY-MM-DD") from exc
+
+    try:
+        start = parse_time(payload.start)
+        end = parse_time(payload.end)
+    except ParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if payload.break_hours is not None:
+        try:
+            break_hours = Decimal(payload.break_hours)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid break hours") from exc
+        break_paid = payload.break_paid
+    else:
+        break_hours = config.default_break_hours
+        break_paid = config.default_break_paid
+    if break_hours < 0:
+        raise HTTPException(status_code=400, detail="Break hours can't be negative")
+
+    if payload.payment_due is not None:
+        try:
+            payment_due = date_cls.fromisoformat(payload.payment_due)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid date, expected YYYY-MM-DD"
+            ) from exc
+    else:
+        # left unset — two weeks after the last day of the whole batch, on a Friday
+        payment_due = _default_payment_due_for_days(storage, user_id, event, days)
+
+    rate_override = None
+    if payload.rate:
+        try:
+            rate_override = Decimal(payload.rate)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid rate") from exc
+        if rate_override < 0:
+            raise HTTPException(status_code=400, detail="Rate can't be negative")
+
+    now = local_clock(_offset(storage, user_id))
+    created: list[dict] = []
+    clashes: list[dict] = []
+    for day in days:
+        begins, ends = span(day, start, end)
+        worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
+        if not break_paid:
+            worked -= break_hours
+        hours = max(worked, Decimal("0"))
+        pay = calculate_pay(float(hours), event, config, rate_override)
+        shift_id = storage.add_shift(
+            user_id=user_id,
+            day=day,
+            start=start,
+            end=end,
+            event=event,
+            location=payload.location.strip(),
+            break_hours=break_hours,
+            break_paid=break_paid,
+            hours=hours,
+            pay=pay,
+            currency=config.currency,
+            payment_due=payment_due,
+        )
+        created.append(_shift_json(storage.get_shift(user_id, shift_id), now))
+        clashes.extend(_clash_summaries(storage, user_id, day, start, end, exclude_id=shift_id))
+    return {"created": created, "clashes": clashes}
 
 
 @router.delete("/shifts/{shift_id}", status_code=204)
