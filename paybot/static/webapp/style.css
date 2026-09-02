@@ -1494,21 +1494,6 @@ main {
   margin-left: auto;
 }
 
-.row-remove {
-  flex: none;
-  border: none;
-  background: none;
-  color: var(--hint);
-  font-size: 15px;
-  line-height: 1;
-  padding: 4px;
-  margin-left: 2px;
-}
-
-.row-remove:active {
-  color: var(--destructive);
-}
-
 .field-control {
   position: relative;
   display: flex;
@@ -1605,6 +1590,85 @@ main {
 
 .detail-row.action + .detail-row.action::before {
   left: 12px;
+}
+
+/* Extra dates in the bulk-create sheet: one card per day, evenly spaced, never nested
+   inside another card. */
+#edit-extra-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+#edit-extra-dates:not(:empty) {
+  margin-top: -4px;
+}
+
+.add-date-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  border: 1.5px dashed rgba(0, 122, 255, 0.4);
+  border-radius: 14px;
+  background: rgba(0, 122, 255, 0.06);
+  color: var(--link);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 13px;
+}
+
+.add-date-btn:active {
+  background: rgba(0, 122, 255, 0.12);
+}
+
+.add-date-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--link);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.row-remove {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--hint);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.row-remove:active {
+  background: rgba(255, 59, 48, 0.14);
+  color: var(--destructive);
+}
+
+.detail-rows.has-error {
+  border-color: rgba(255, 59, 48, 0.4);
+}
+
+.date-overlap-error {
+  color: var(--destructive);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 2px 0;
 }
 
 .modal-error {

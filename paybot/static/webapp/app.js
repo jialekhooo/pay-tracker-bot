@@ -32,7 +32,7 @@
     editPaidRow: document.getElementById("edit-paid-row"),
     editExtraDates: document.getElementById("edit-extra-dates"),
     editAddDate: document.getElementById("edit-add-date"),
-    editBulkDatesActions: document.getElementById("edit-bulk-dates-actions"),
+    editDateOverlapError: document.getElementById("edit-date-overlap-error"),
     searchOpen: document.getElementById("search-open"),
     searchBackdrop: document.getElementById("search-backdrop"),
     searchInput: document.getElementById("search-input"),
@@ -78,6 +78,7 @@
   let editorMode = null; // "edit" | "create"
   let editingShiftSnapshot = null; // the shift currently open for editing, for live badge sync
   let paymentDueTouched = false; // true once the user edits the due-date field themselves
+  let hasDateOverlap = false; // true while any two bulk-create dates overlap in time
   let activeEditField = null; // focused input inside the edit sheet, while the keyboard is up
   let overviewMonth = null; // "YYYY-MM" shown by the Month quick action; null = the live current month
   let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
@@ -1651,8 +1652,58 @@
     }));
   }
 
+  function spanMs(dayStr, startStr, endStr) {
+    if (!dayStr || !startStr || !endStr) return null;
+    const start = new Date(`${dayStr}T${startStr}:00Z`).getTime();
+    let end = new Date(`${dayStr}T${endStr}:00Z`).getTime();
+    if (end <= start) end += 86400000; // an overnight shift rolls into the next day
+    return [start, end];
+  }
+
+  // Flags any two dates in the bulk-create sheet (main + extras) whose times overlap,
+  // outlining the offending cards in red instead of letting the save silently double-book.
+  function updateDateOverlapWarnings() {
+    const form = els.editForm;
+    const entries = [
+      { ...spanAndCard(form.day.value, form.start.value, form.end.value, form.day.closest(".detail-rows")) },
+      ...extraDateGroups().map((g) =>
+        spanAndCard(g.day.value, g.start.value, g.end.value, g.row.querySelector(".detail-rows"))
+      ),
+    ];
+    const overlapping = new Set();
+    for (let i = 0; i < entries.length; i += 1) {
+      if (!entries[i].span) continue;
+      for (let j = i + 1; j < entries.length; j += 1) {
+        if (!entries[j].span) continue;
+        const [aStart, aEnd] = entries[i].span;
+        const [bStart, bEnd] = entries[j].span;
+        if (aStart < bEnd && bStart < aEnd) {
+          overlapping.add(i);
+          overlapping.add(j);
+        }
+      }
+    }
+    entries.forEach((entry, index) => {
+      if (entry.card) entry.card.classList.toggle("has-error", overlapping.has(index));
+    });
+    hasDateOverlap = overlapping.size > 0;
+    if (els.editDateOverlapError) {
+      els.editDateOverlapError.classList.toggle("hidden", !hasDateOverlap);
+      if (hasDateOverlap) {
+        const labels = [...overlapping].sort((a, b) => a - b).map((i) => `Day ${i + 1}`);
+        els.editDateOverlapError.textContent = `${labels.join(" and ")} overlap \u2014 adjust their times.`;
+      }
+    }
+  }
+
+  function spanAndCard(day, start, end, card) {
+    return { span: spanMs(day, start, end), card };
+  }
+
   function clearExtraDates() {
     els.editExtraDates.innerHTML = "";
+    hasDateOverlap = false;
+    if (els.editDateOverlapError) els.editDateOverlapError.classList.add("hidden");
   }
 
   function renumberExtraDates() {
@@ -1710,10 +1761,17 @@
     els.editExtraDates.appendChild(row);
     [dayInput, startInput, endInput].forEach((input) => {
       syncFieldDisplay(input);
-      input.addEventListener("input", () => syncFieldDisplay(input));
-      input.addEventListener("change", () => syncFieldDisplay(input));
+      input.addEventListener("input", () => {
+        syncFieldDisplay(input);
+        updateDateOverlapWarnings();
+      });
+      input.addEventListener("change", () => {
+        syncFieldDisplay(input);
+        updateDateOverlapWarnings();
+      });
     });
     renumberExtraDates();
+    updateDateOverlapWarnings();
   }
 
 
@@ -1740,7 +1798,7 @@
     els.editCurrency.textContent = (summaryData && summaryData.currency) || "";
     syncScheduleDisplays();
     clearExtraDates();
-    els.editBulkDatesActions.classList.add("hidden");
+    els.editAddDate.classList.add("hidden");
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.remove("hidden");
     els.editSheet.scrollTop = 0;
@@ -1768,7 +1826,7 @@
     syncPaymentBadge();
     syncScheduleDisplays();
     clearExtraDates();
-    els.editBulkDatesActions.classList.remove("hidden");
+    els.editAddDate.classList.remove("hidden");
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.add("hidden");
     els.editSheet.scrollTop = 0;
@@ -1915,6 +1973,14 @@
 
   async function submitEditor(event) {
     event.preventDefault();
+    if (editorMode === "create") {
+      updateDateOverlapWarnings();
+      if (hasDateOverlap) {
+        els.editError.textContent = "Fix the overlapping dates before saving.";
+        els.editError.classList.remove("hidden");
+        return;
+      }
+    }
     els.editSave.disabled = true;
     els.editError.classList.add("hidden");
     try {
@@ -2484,6 +2550,7 @@
     if (removeBtn) {
       removeBtn.closest("[data-extra-date-row]").remove();
       renumberExtraDates();
+      updateDateOverlapWarnings();
     }
   });
   els.editBackdrop.addEventListener("click", (event) => {
@@ -2515,8 +2582,14 @@
   });
   [els.editForm.day, els.editForm.start, els.editForm.end, els.editForm.payment_due].forEach(
     (input) => {
-      input.addEventListener("input", () => syncFieldDisplay(input));
-      input.addEventListener("change", () => syncFieldDisplay(input));
+      input.addEventListener("input", () => {
+        syncFieldDisplay(input);
+        updateDateOverlapWarnings();
+      });
+      input.addEventListener("change", () => {
+        syncFieldDisplay(input);
+        updateDateOverlapWarnings();
+      });
     }
   );
   els.editForm.paid.addEventListener("change", syncPaymentBadge);

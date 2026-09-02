@@ -839,6 +839,14 @@ async def create_shifts_bulk(
     if not entries:
         raise HTTPException(status_code=400, detail="Pick at least one date")
 
+    spans = [span(day, start, end) for day, start, end in entries]
+    for i, (a_start, a_end) in enumerate(spans):
+        for b_start, b_end in spans[i + 1 :]:
+            if a_start < b_end and b_start < a_end:
+                raise HTTPException(
+                    status_code=400, detail="Two of these dates overlap — adjust their times"
+                )
+
     if payload.break_hours is not None:
         try:
             break_hours = Decimal(payload.break_hours)
