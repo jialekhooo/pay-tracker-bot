@@ -1494,13 +1494,17 @@ main {
   padding: 10px 12px;
 }
 
-#edit-form input:focus-visible,
 .segment:focus-visible,
 .sheet-btn:focus-visible,
 .btn:focus-visible,
 .month-nav-btn:focus-visible {
   outline: 2px solid rgba(0, 122, 255, 0.45);
   outline-offset: 1px;
+}
+
+#edit-form input:focus,
+#edit-form input:focus-visible {
+  outline: none;
 }
 
 .detail-row.action {
