@@ -1642,36 +1642,80 @@
 
   const MAX_BULK_DATES = 60;
 
-  function extraDateInputs() {
-    return [...els.editExtraDates.querySelectorAll("[data-extra-date]")];
+  function extraDateGroups() {
+    return [...els.editExtraDates.querySelectorAll("[data-extra-date-row]")].map((row) => ({
+      row,
+      day: row.querySelector("[data-extra-date]"),
+      start: row.querySelector("[data-extra-start]"),
+      end: row.querySelector("[data-extra-end]"),
+    }));
   }
 
   function clearExtraDates() {
     els.editExtraDates.innerHTML = "";
   }
 
-  // One row per extra date, sharing the event/time/rate/location above it — the common
-  // case (a multi-day booking) is usually the very next day, so that's what's prefilled.
-  function addExtraDateRow(prefillDate) {
-    if (extraDateInputs().length >= MAX_BULK_DATES - 1) return;
+  function renumberExtraDates() {
+    extraDateGroups().forEach(({ row }, index) => {
+      const label = row.querySelector(".group-label");
+      if (label) label.textContent = `Day ${index + 2}`;
+    });
+  }
+
+  // One group per extra date, each with its own Date/Start/End — different days of the
+  // same event often run at different times, so nothing here is locked to the first day.
+  function addExtraDateRow(prefillDate, prefillStart, prefillEnd) {
+    if (extraDateGroups().length >= MAX_BULK_DATES - 1) return;
     const row = document.createElement("div");
-    row.className = "detail-row";
+    row.className = "field-group";
     row.dataset.extraDateRow = "";
     row.innerHTML = `
-      <span class="row-label">Date</span>
-      <span class="field-control">
-        <input type="date" data-extra-date />
-        <span class="field-display"><span class="field-value"></span></span>
-      </span>
-      <button type="button" class="row-remove" data-remove-date aria-label="Remove date">✕</button>
+      <div class="group-label-row">
+        <span class="group-label"></span>
+        <button type="button" class="row-remove" data-remove-date aria-label="Remove date">✕</button>
+      </div>
+      <div class="detail-rows">
+        <label class="detail-row">
+          <span class="row-label">Date</span>
+          <span class="field-control">
+            <input type="date" data-extra-date />
+            <span class="field-display"><span class="field-value"></span></span>
+          </span>
+          <span class="row-chev">›</span>
+        </label>
+        <label class="detail-row">
+          <span class="row-label">Start</span>
+          <span class="field-control">
+            <input type="time" data-extra-start />
+            <span class="field-display"><span class="field-value"></span></span>
+          </span>
+          <span class="row-chev">›</span>
+        </label>
+        <label class="detail-row">
+          <span class="row-label">End</span>
+          <span class="field-control">
+            <input type="time" data-extra-end />
+            <span class="field-display"><span class="field-value"></span></span>
+          </span>
+          <span class="row-chev">›</span>
+        </label>
+      </div>
     `;
-    const input = row.querySelector("[data-extra-date]");
-    input.value = prefillDate || "";
+    const dayInput = row.querySelector("[data-extra-date]");
+    const startInput = row.querySelector("[data-extra-start]");
+    const endInput = row.querySelector("[data-extra-end]");
+    dayInput.value = prefillDate || "";
+    startInput.value = prefillStart || "";
+    endInput.value = prefillEnd || "";
     els.editExtraDates.appendChild(row);
-    syncFieldDisplay(input);
-    input.addEventListener("input", () => syncFieldDisplay(input));
-    input.addEventListener("change", () => syncFieldDisplay(input));
+    [dayInput, startInput, endInput].forEach((input) => {
+      syncFieldDisplay(input);
+      input.addEventListener("input", () => syncFieldDisplay(input));
+      input.addEventListener("change", () => syncFieldDisplay(input));
+    });
+    renumberExtraDates();
   }
+
 
   function openEditor(shift) {
     if (!shift) return;
@@ -1801,15 +1845,24 @@
 
   async function submitCreate() {
     const form = els.editForm;
-    const extraDays = extraDateInputs()
-      .map((input) => input.value)
-      .filter(Boolean);
-    const days = Array.from(new Set([form.day.value, ...extraDays])).sort();
+    const seen = new Set();
+    const shifts = [
+      { day: form.day.value, start: form.start.value, end: form.end.value },
+      ...extraDateGroups().map(({ day, start, end }) => ({
+        day: day.value,
+        start: start.value,
+        end: end.value,
+      })),
+    ].filter(({ day, start, end }) => {
+      if (!day || !start || !end) return false;
+      const key = `${day}|${start}|${end}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     const payload = {
       event: form.event.value.trim(),
       location: form.location.value.trim(),
-      start: form.start.value,
-      end: form.end.value,
     };
     if (form.rate.value) payload.rate = form.rate.value;
     if (form.break_hours.value) {
@@ -1818,10 +1871,10 @@
     }
     // Left untouched — the server computes the real default from the whole event's last day.
     if (paymentDueTouched && form.payment_due.value) payload.payment_due = form.payment_due.value;
-    if (days.length > 1) {
-      return api("/webapp/api/shifts/bulk", { method: "POST", body: { ...payload, days } });
+    if (shifts.length > 1) {
+      return api("/webapp/api/shifts/bulk", { method: "POST", body: { ...payload, shifts } });
     }
-    return api("/webapp/api/shifts", { method: "POST", body: { ...payload, day: days[0] } });
+    return api("/webapp/api/shifts", { method: "POST", body: { ...payload, ...shifts[0] } });
   }
 
   async function submitUpdate() {
@@ -2419,15 +2472,19 @@
   els.editDuplicate.addEventListener("click", duplicateEditingShift);
   els.editDelete.addEventListener("click", deleteEditingShift);
   els.editAddDate.addEventListener("click", () => {
-    const days = [els.editForm.day.value, ...extraDateInputs().map((input) => input.value)].filter(
-      Boolean
-    );
-    const lastDay = days[days.length - 1];
-    addExtraDateRow(lastDay ? addDays(lastDay, 1) : "");
+    const groups = extraDateGroups();
+    const last = groups[groups.length - 1];
+    const lastDay = last ? last.day.value : els.editForm.day.value;
+    const lastStart = last ? last.start.value : els.editForm.start.value;
+    const lastEnd = last ? last.end.value : els.editForm.end.value;
+    addExtraDateRow(lastDay ? addDays(lastDay, 1) : "", lastStart, lastEnd);
   });
   els.editExtraDates.addEventListener("click", (event) => {
     const removeBtn = event.target.closest("[data-remove-date]");
-    if (removeBtn) removeBtn.closest("[data-extra-date-row]").remove();
+    if (removeBtn) {
+      removeBtn.closest("[data-extra-date-row]").remove();
+      renumberExtraDates();
+    }
   });
   els.editBackdrop.addEventListener("click", (event) => {
     if (event.target === els.editBackdrop) closeEditor();

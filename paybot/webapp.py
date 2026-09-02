@@ -280,15 +280,22 @@ class ShiftCreate(BaseModel):
     payment_due: str | None = None
 
 
+class ShiftBulkEntry(BaseModel):
+    """One date within a bulk create — each can have its own timing."""
+
+    day: str
+    start: str
+    end: str
+
+
 class ShiftBulkCreate(BaseModel):
-    """Several shifts for the same event logged in one go — same time/rate/location,
-    one row per date, so a multi-day booking doesn't mean retyping everything each time."""
+    """Several shifts for the same event logged in one go — same rate/location, one row
+    per date (each with its own timing), so a multi-day booking doesn't mean retyping
+    everything each time."""
 
     event: str
     location: str = ""
-    days: list[str]
-    start: str
-    end: str
+    shifts: list[ShiftBulkEntry]
     rate: str | None = None
     break_hours: str | None = None
     break_paid: bool = False
@@ -803,23 +810,34 @@ async def create_shifts_bulk(
     if not event:
         raise HTTPException(status_code=400, detail="Event name can't be empty")
 
-    unique_days = sorted(set(payload.days))
-    if not unique_days:
+    if not payload.shifts:
         raise HTTPException(status_code=400, detail="Pick at least one date")
-    if len(unique_days) > _BULK_CREATE_MAX_DAYS:
+    if len(payload.shifts) > _BULK_CREATE_MAX_DAYS:
         raise HTTPException(
             status_code=400, detail=f"Too many dates at once (max {_BULK_CREATE_MAX_DAYS})"
         )
-    try:
-        days = [date_cls.fromisoformat(value) for value in unique_days]
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid date, expected YYYY-MM-DD") from exc
 
-    try:
-        start = parse_time(payload.start)
-        end = parse_time(payload.end)
-    except ParseError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    entries: list[tuple[date_cls, time_cls, time_cls]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for entry in payload.shifts:
+        key = (entry.day, entry.start, entry.end)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            day = date_cls.fromisoformat(entry.day)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid date, expected YYYY-MM-DD"
+            ) from exc
+        try:
+            start = parse_time(entry.start)
+            end = parse_time(entry.end)
+        except ParseError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        entries.append((day, start, end))
+    if not entries:
+        raise HTTPException(status_code=400, detail="Pick at least one date")
 
     if payload.break_hours is not None:
         try:
@@ -842,7 +860,9 @@ async def create_shifts_bulk(
             ) from exc
     else:
         # left unset — two weeks after the last day of the whole batch, on a Friday
-        payment_due = _default_payment_due_for_days(storage, user_id, event, days)
+        payment_due = _default_payment_due_for_days(
+            storage, user_id, event, [day for day, _, _ in entries]
+        )
 
     rate_override = None
     if payload.rate:
@@ -856,7 +876,7 @@ async def create_shifts_bulk(
     now = local_clock(_offset(storage, user_id))
     created: list[dict] = []
     clashes: list[dict] = []
-    for day in days:
+    for day, start, end in entries:
         begins, ends = span(day, start, end)
         worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
         if not break_paid:
