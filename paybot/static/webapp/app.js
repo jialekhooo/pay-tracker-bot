@@ -71,6 +71,7 @@
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
+  let activeEditField = null; // focused input inside the edit sheet, while the keyboard is up
   let overviewMonth = null; // "YYYY-MM" shown by the Month quick action; null = the live current month
   let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
   let overviewWeekStart = null; // Monday (YYYY-MM-DD) shown by the Week quick action; null = the live week
@@ -162,10 +163,27 @@
     document.documentElement.style.setProperty("--app-height", `${height}px`);
   }
 
+  // The keyboard shrinks the visual viewport but not the sheet's own scroll content, so a
+  // field near the bottom of the form has nowhere to scroll to once the keyboard covers it.
+  // Pad the sheet by the keyboard's height so every field can still scroll clear of it.
+  function adjustForKeyboard() {
+    const sheet = els.editSheet;
+    const viewport = window.visualViewport;
+    if (!sheet || !viewport) return;
+    const keyboardHeight = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    sheet.style.paddingBottom = keyboardHeight ? `${keyboardHeight + 24}px` : "";
+    if (activeEditField) {
+      activeEditField.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+
   function initViewport() {
     syncAppHeight();
     if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", syncAppHeight);
+      window.visualViewport.addEventListener("resize", () => {
+        syncAppHeight();
+        adjustForKeyboard();
+      });
       window.visualViewport.addEventListener("scroll", syncAppHeight);
     } else {
       window.addEventListener("resize", syncAppHeight);
@@ -1559,6 +1577,8 @@
     els.editBackdrop.classList.add("hidden");
     editingShiftId = null;
     editorMode = null;
+    activeEditField = null;
+    els.editSheet.style.paddingBottom = "";
   }
 
   async function refreshAfterEdit() {
@@ -2227,17 +2247,21 @@
     if (button) setBreakPaid(button.dataset.breakPaid);
   });
   els.editForm.addEventListener("focusin", (event) => {
-    // Scroll the sheet itself after the keyboard has resized the visual viewport.
+    activeEditField = event.target;
+    // Run once immediately (helps on Android, where the viewport often resizes right away)
+    // and again after the iOS keyboard has finished animating in.
+    adjustForKeyboard();
+    setTimeout(adjustForKeyboard, 320);
+  });
+  els.editForm.addEventListener("focusout", (event) => {
+    // Defer clearing so a click that moves focus to another field in the same form doesn't
+    // momentarily reset the sheet's padding before the new field's focusin fires.
     setTimeout(() => {
-      const field = event.target;
-      const sheet = els.editSheet;
-      const fieldTop = field.getBoundingClientRect().top;
-      const sheetTop = sheet.getBoundingClientRect().top;
-      sheet.scrollBy({
-        top: fieldTop - sheetTop - (sheet.clientHeight - field.offsetHeight) / 2,
-        behavior: "smooth",
-      });
-    }, 300);
+      if (!els.editForm.contains(document.activeElement)) {
+        activeEditField = null;
+        els.editSheet.style.paddingBottom = "";
+      }
+    }, 0);
   });
   [els.editForm.day, els.editForm.start, els.editForm.end].forEach((input) => {
     input.addEventListener("input", () => syncFieldDisplay(input));
