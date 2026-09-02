@@ -305,6 +305,28 @@ def _payment_status(state: str, paid: bool) -> str:
     return "payment_completed" if paid else "pending_payment"
 
 
+def _event_payment_status(shifts_json: list[dict]) -> str:
+    """One status for a whole event: completed once nothing finished is left unpaid."""
+    statuses = {s["payment_status"] for s in shifts_json}
+    if statuses <= {"upcoming"}:
+        return "upcoming"
+    if "pending_payment" in statuses:
+        return "pending_payment"
+    return "payment_completed"
+
+
+def _next_friday_on_or_after(day: date_cls) -> date_cls:
+    """Rolls a date forward to the next Friday, or leaves it if it's already one."""
+    return day + timedelta(days=(4 - day.weekday()) % 7)
+
+
+def _default_payment_due(storage: Storage, user_id: int, event: str, day: date_cls) -> date_cls:
+    """Two weeks after the last day of this same event, rounded forward to the nearest
+    Friday — payouts are almost always weekly, on a Friday, after the whole gig wraps up."""
+    last_day = max([day] + [r.day for r in storage.shifts_for_event(user_id, event)])
+    return _next_friday_on_or_after(last_day + timedelta(days=14))
+
+
 def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
     data = {
         "id": record.id,
@@ -704,8 +726,8 @@ async def create_shift(
                 status_code=400, detail="Invalid date, expected YYYY-MM-DD"
             ) from exc
     else:
-        # left unset — payment is expected two weeks after the shift by default
-        payment_due = day + timedelta(days=14)
+        # left unset — two weeks after the last day of this same event, on a Friday
+        payment_due = _default_payment_due(storage, user_id, event, day)
 
     begins, ends = span(day, start, end)
     worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
@@ -817,14 +839,29 @@ async def event_shifts(
     now = local_clock(_offset(storage, user_id))
     pay = sum((r.pay for r in records), Decimal("0"))
     hours = sum((r.hours for r in records), Decimal("0"))
+    shifts_json = [_shift_json(r, now) for r in records]
     return {
         "event": records[0].event,
         "label": records[0].event,
         "currency": records[0].currency,
         "pay": _num(pay),
         "hours": str(hours),
-        "shifts": [_shift_json(r, now) for r in records],
+        "payment_status": _event_payment_status(shifts_json),
+        "shifts": shifts_json,
     }
+
+
+@router.post("/event/{event}/mark-paid")
+async def mark_event_paid(
+    event: str, request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    """Marks every shift for this event as paid in one action — most gigs pay out as a
+    single lump sum for the whole booking, not shift by shift."""
+    storage, user_id = _authed_user(request, authorization)
+    updated = storage.mark_event_paid(user_id, event)
+    if not updated:
+        raise HTTPException(status_code=404, detail="No shifts logged for this event")
+    return {"event": event, "updated": updated}
 
 
 def _calendar_url(request: Request, storage: Storage, user_id: int) -> str | None:

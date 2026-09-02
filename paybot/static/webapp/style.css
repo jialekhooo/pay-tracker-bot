@@ -817,6 +817,35 @@ main {
   background: var(--done-bg);
 }
 
+/* The whole-event payment status shown on an event's own page, next to the bulk action. */
+.event-payment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 2px 14px;
+}
+
+.event-payment-row .tag {
+  font-size: 11px;
+  padding: 5px 10px 5px 8px;
+}
+
+.event-mark-paid-btn {
+  flex: none;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--button-text);
+  background: var(--done);
+}
+
+.event-mark-paid-btn:active {
+  opacity: 0.8;
+}
+
 .clash-badge {
   display: inline-block;
   margin-left: 6px;

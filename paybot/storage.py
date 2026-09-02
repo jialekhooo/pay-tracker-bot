@@ -487,6 +487,16 @@ class Storage:
         )
         return [_to_record(row) for row in rows]
 
+    def mark_event_paid(self, user_id: int, event: str) -> int:
+        """Marks every shift for this event as paid in one go — gigs are almost always
+        paid out as a lump sum per event, not shift by shift."""
+        cursor = self._conn.execute(
+            "UPDATE shifts SET paid = 1 WHERE user_id = ? AND lower(event) = lower(?)",
+            (user_id, event),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
     def update_shift(self, user_id: int, shift_id: int, **fields: object) -> bool:
         """Overwrite the given columns of one shift."""
         allowed = {

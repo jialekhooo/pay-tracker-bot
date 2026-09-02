@@ -74,6 +74,7 @@
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
   let editingShiftSnapshot = null; // the shift currently open for editing, for live badge sync
+  let paymentDueTouched = false; // true once the user edits the due-date field themselves
   let activeEditField = null; // focused input inside the edit sheet, while the keyboard is up
   let overviewMonth = null; // "YYYY-MM" shown by the Month quick action; null = the live current month
   let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
@@ -298,10 +299,15 @@
     ).padStart(2, "0")}`;
   }
 
-  // A shift's payment is expected two weeks after it happens unless the user picks otherwise.
+  // Best-effort client-side preview only (matches a single shift's own day) — the real
+  // default, based on the last day of the whole event, is computed server-side at save time
+  // whenever the user hasn't touched this field themselves. Two weeks out, rolled to a Friday.
   function defaultPaymentDue(dayStr) {
     const [year, month, day] = dayStr.split("-").map(Number);
-    return isoDateUTC(new Date(Date.UTC(year, month - 1, day) + 14 * 86400000));
+    const due = new Date(Date.UTC(year, month - 1, day) + 14 * 86400000);
+    const daysUntilFriday = (5 - due.getUTCDay() + 7) % 7; // Friday = 5 in getUTCDay()
+    due.setUTCDate(due.getUTCDate() + daysUntilFriday);
+    return isoDateUTC(due);
   }
 
   function mondayOf(dateStr) {
@@ -943,8 +949,20 @@
   }
 
   function eventDetailView(detail) {
+    const status = detail.payment_status || "upcoming";
+    const meta = PAYMENT_STATUS_META[status] || PAYMENT_STATUS_META.pending_payment;
+    const markPaidButton =
+      status === "payment_completed"
+        ? ""
+        : `<button type="button" class="event-mark-paid-btn" data-mark-event-paid="${encodeURIComponent(
+            detail.event
+          )}">Mark event as paid</button>`;
     return {
-      head: `<div class="back-row" id="back-to-events">\u2039 Events</div>${periodHero(detail)}`,
+      head: `<div class="back-row" id="back-to-events">\u2039 Events</div>${periodHero(detail)}
+        <div class="event-payment-row">
+          <span class="tag ${meta.cls}">${meta.label}</span>
+          ${markPaidButton}
+        </div>`,
       body: periodBody(detail),
     };
   }
@@ -1379,6 +1397,22 @@
     render();
   }
 
+  // Gigs are almost always paid out as one lump sum, not shift by shift — one click marks
+  // every shift for this event as paid instead of opening each one individually.
+  async function markEventPaid(eventName) {
+    const confirmed = await confirmDialog(`Mark every shift for "${eventName}" as paid?`);
+    if (!confirmed) return;
+    try {
+      await api(`/webapp/api/event/${encodeURIComponent(eventName)}/mark-paid`, {
+        method: "POST",
+      });
+      await refreshAfterEdit();
+      showSuccessToast("Marked as paid");
+    } catch (err) {
+      showToast(err.detail || "Couldn't mark as paid — try again.");
+    }
+  }
+
   function setSettingsSection(value) {
     settingsSection = value;
     if (tg && tg.BackButton) {
@@ -1617,6 +1651,7 @@
     els.editForm.payment_due.value = shift.payment_due || defaultPaymentDue(shift.day);
     els.editForm.paid.checked = Boolean(shift.paid);
     els.editPaidRow.classList.remove("hidden");
+    paymentDueTouched = false;
     syncPaymentBadge();
     els.editCurrency.textContent = (summaryData && summaryData.currency) || "";
     syncScheduleDisplays();
@@ -1643,6 +1678,7 @@
     els.editForm.payment_due.value = defaultPaymentDue(els.editForm.day.value);
     els.editForm.paid.checked = false;
     els.editPaidRow.classList.add("hidden");
+    paymentDueTouched = false;
     syncPaymentBadge();
     syncScheduleDisplays();
     els.editError.classList.add("hidden");
@@ -1732,7 +1768,8 @@
       payload.break_hours = form.break_hours.value;
       payload.break_paid = form.break_paid.value === "yes";
     }
-    if (form.payment_due.value) payload.payment_due = form.payment_due.value;
+    // Left untouched — the server computes the real default from the whole event's last day.
+    if (paymentDueTouched && form.payment_due.value) payload.payment_due = form.payment_due.value;
     return api("/webapp/api/shifts", { method: "POST", body: payload });
   }
 
@@ -2223,6 +2260,11 @@
       if (handler) handler(actionBtn);
       return;
     }
+    const markEventPaidBtn = event.target.closest("[data-mark-event-paid]");
+    if (markEventPaidBtn) {
+      markEventPaid(decodeURIComponent(markEventPaidBtn.dataset.markEventPaid));
+      return;
+    }
     const scopeBtn = event.target.closest("[data-scope]");
     if (scopeBtn) {
       selectScope(scopeBtn.dataset.scope);
@@ -2356,6 +2398,9 @@
     }
   );
   els.editForm.paid.addEventListener("change", syncPaymentBadge);
+  els.editForm.payment_due.addEventListener("input", () => {
+    paymentDueTouched = true;
+  });
 
   if (tg && tg.BackButton) {
     tg.BackButton.onClick(() => {
