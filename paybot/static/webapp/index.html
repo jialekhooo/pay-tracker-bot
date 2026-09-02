@@ -6,7 +6,7 @@
   <!-- Opts out of Android WebView's automatic darkening, which would recolour the fixed palette. -->
   <meta name="color-scheme" content="light" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=58" />
+  <link rel="stylesheet" href="style.css?v=59" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -171,6 +171,32 @@
             </label>
           </div>
 
+          <div class="field-group">
+            <div class="group-label-row">
+              <span class="group-label">Payment</span>
+              <span class="tag" id="edit-payment-status-badge"></span>
+            </div>
+            <div class="detail-rows">
+              <label class="detail-row">
+                <span class="row-label">Due date</span>
+                <span class="field-control">
+                  <input type="date" name="payment_due" />
+                  <span class="field-display">
+                    <span class="field-value" data-field="payment_due"></span>
+                  </span>
+                </span>
+                <span class="row-chev">›</span>
+              </label>
+              <div class="detail-row hidden" id="edit-paid-row">
+                <span class="row-label">Payment received</span>
+                <label class="switch">
+                  <input type="checkbox" name="paid" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <p class="modal-error hidden" id="edit-error"></p>
           <div class="detail-rows hidden" id="edit-shift-actions">
             <button type="button" class="detail-row action" id="edit-duplicate">
@@ -184,6 +210,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=58"></script>
+  <script src="app.js?v=59"></script>
 </body>
 </html>

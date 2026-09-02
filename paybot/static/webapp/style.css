@@ -18,6 +18,8 @@
   --running-bg: #fff2e0;
   --upcoming: #007aff;
   --upcoming-bg: #e7f0ff;
+  --pending: #b45309;
+  --pending-bg: #fef3c7;
   --separator: rgba(60, 60, 67, 0.29);
   --fill: rgba(120, 120, 128, 0.12);
   --radius: 14px;
@@ -776,16 +778,28 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-/* State reads as a small tinted pill instead of a coloured bar down the row. */
+/* State reads as a small tinted pill with a leading status dot, instead of a bare label. */
 .row .value .tag {
-  font-size: 10px;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  padding: 2px 7px;
+  padding: 4px 9px 4px 7px;
   border-radius: 999px;
   color: var(--hint);
   background: var(--fill);
+}
+
+.row .value .tag::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .row .value .tag-upcoming {
@@ -793,9 +807,14 @@ main {
   background: var(--upcoming-bg);
 }
 
-.row .value .tag-running {
-  color: var(--running);
-  background: var(--running-bg);
+.row .value .tag-pending {
+  color: var(--pending);
+  background: var(--pending-bg);
+}
+
+.row .value .tag-paid {
+  color: var(--done);
+  background: var(--done-bg);
 }
 
 .clash-badge {
@@ -1483,6 +1502,21 @@ main {
 .plain-row {
   display: block;
   width: 100%;
+}
+
+.group-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.group-label-row .group-label {
+  margin-bottom: 0;
+}
+
+.detail-row .switch {
+  margin-left: auto;
 }
 
 #edit-form .plain-row input {

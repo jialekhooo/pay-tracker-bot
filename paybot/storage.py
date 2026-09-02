@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS shifts (
     hours TEXT NOT NULL,
     pay TEXT NOT NULL,
     currency TEXT NOT NULL,
+    payment_due TEXT,
+    paid INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -86,6 +88,8 @@ class ShiftRecord:
     hours: Decimal
     pay: Decimal
     currency: str
+    payment_due: date | None
+    paid: bool
 
 
 @dataclass(frozen=True)
@@ -139,6 +143,8 @@ class Storage:
                 "break_hours": "TEXT NOT NULL DEFAULT '0'",
                 "break_paid": "INTEGER NOT NULL DEFAULT 0",
                 "ref": "INTEGER",
+                "payment_due": "TEXT",
+                "paid": "INTEGER NOT NULL DEFAULT 0",
             },
         }
         for table, columns in additions.items():
@@ -262,6 +268,8 @@ class Storage:
         pay: Decimal,
         currency: str,
         location: str = "",
+        payment_due: date | None = None,
+        paid: bool = False,
     ) -> int:
         ref = int(
             self._conn.execute(
@@ -271,8 +279,8 @@ class Storage:
         self._conn.execute(
             """
             INSERT INTO shifts (ref, user_id, day, start_time, end_time, event, location,
-                                break_hours, break_paid, hours, pay, currency)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                break_hours, break_paid, hours, pay, currency, payment_due, paid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ref,
@@ -287,6 +295,8 @@ class Storage:
                 str(hours),
                 str(pay),
                 currency,
+                payment_due.isoformat() if payment_due else None,
+                int(paid),
             ),
         )
         self._conn.commit()
@@ -489,6 +499,8 @@ class Storage:
             "pay",
             "break_hours",
             "break_paid",
+            "payment_due",
+            "paid",
         }
         unknown = set(fields) - allowed
         if unknown:
@@ -500,6 +512,18 @@ class Storage:
         )
         self._conn.commit()
         return cursor.rowcount > 0
+
+    def due_payments(self, user_id: int, today: date) -> list[ShiftRecord]:
+        """Unpaid shifts whose payment due date has arrived, earliest due first."""
+        rows = self._conn.execute(
+            """
+            SELECT * FROM shifts
+            WHERE user_id = ? AND paid = 0 AND payment_due IS NOT NULL AND payment_due <= ?
+            ORDER BY payment_due ASC, day ASC
+            """,
+            (user_id, today.isoformat()),
+        )
+        return [_to_record(row) for row in rows]
 
     def delete_shift(self, user_id: int, shift_id: int) -> bool:
         cursor = self._conn.execute(
@@ -545,4 +569,6 @@ def _to_record(row: sqlite3.Row) -> ShiftRecord:
         hours=Decimal(row["hours"]),
         pay=Decimal(row["pay"]),
         currency=row["currency"],
+        payment_due=date.fromisoformat(row["payment_due"]) if row["payment_due"] else None,
+        paid=bool(row["paid"]),
     )

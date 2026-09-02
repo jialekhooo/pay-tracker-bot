@@ -262,6 +262,8 @@ class ShiftUpdate(BaseModel):
     day: str | None = None
     break_hours: str | None = None
     break_paid: bool | None = None
+    payment_due: str | None = None
+    paid: bool | None = None
 
 
 class ShiftCreate(BaseModel):
@@ -275,6 +277,7 @@ class ShiftCreate(BaseModel):
     rate: str | None = None
     break_hours: str | None = None
     break_paid: bool = False
+    payment_due: str | None = None
 
 
 class SettingsUpdate(BaseModel):
@@ -293,6 +296,15 @@ class ReminderUpdate(BaseModel):
     utc_offset: str | None = None
 
 
+def _payment_status(state: str, paid: bool) -> str:
+    """A shift's payment status is only ever "pending"/"completed" once it has actually
+    happened — a shift that hasn't started (or is still running) is always "upcoming",
+    whatever a stale ``paid`` flag might say."""
+    if state != "done":
+        return "upcoming"
+    return "payment_completed" if paid else "pending_payment"
+
+
 def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
     data = {
         "id": record.id,
@@ -309,9 +321,13 @@ def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
         "currency": record.currency,
         "break_hours": str(record.break_hours),
         "break_paid": record.break_paid,
+        "payment_due": record.payment_due.isoformat() if record.payment_due else None,
+        "paid": record.paid,
     }
     if now is not None:
-        data["state"] = worked_by(record, now).state
+        state = worked_by(record, now).state
+        data["state"] = state
+        data["payment_status"] = _payment_status(state, record.paid)
     return data
 
 
@@ -330,6 +346,7 @@ def _tally_json(label: str, records: list[ShiftRecord], now) -> dict:
             {
                 **_shift_json(item.record),
                 "state": item.state,
+                "payment_status": _payment_status(item.state, item.record.paid),
                 "earned_hours": str(item.hours),
                 "earned_pay": _num(item.pay),
             }
@@ -614,6 +631,17 @@ async def update_shift(
         old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
         fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
 
+    if payload.payment_due is not None:
+        try:
+            fields["payment_due"] = date_cls.fromisoformat(payload.payment_due).isoformat()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid date, expected YYYY-MM-DD"
+            ) from exc
+
+    if payload.paid is not None:
+        fields["paid"] = int(payload.paid)
+
     if not fields:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
@@ -668,6 +696,17 @@ async def create_shift(
     if break_hours < 0:
         raise HTTPException(status_code=400, detail="Break hours can't be negative")
 
+    if payload.payment_due is not None:
+        try:
+            payment_due = date_cls.fromisoformat(payload.payment_due)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid date, expected YYYY-MM-DD"
+            ) from exc
+    else:
+        # left unset — payment is expected two weeks after the shift by default
+        payment_due = day + timedelta(days=14)
+
     begins, ends = span(day, start, end)
     worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
     if not break_paid:
@@ -696,6 +735,7 @@ async def create_shift(
         hours=hours,
         pay=pay,
         currency=config.currency,
+        payment_due=payment_due,
     )
     clashes = _clash_summaries(storage, user_id, day, start, end, exclude_id=shift_id)
     return {
@@ -712,6 +752,18 @@ async def delete_shift(
     if not storage.delete_shift(user_id, shift_id):
         raise HTTPException(status_code=404, detail="Shift not found")
     return Response(status_code=204)
+
+
+@router.get("/payments/due")
+async def payments_due(
+    request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    """Unpaid shifts whose payment due date has arrived — surfaced by the mini app so it
+    can prompt the user to confirm marking them as paid."""
+    storage, user_id = _authed_user(request, authorization)
+    now = local_clock(_offset(storage, user_id))
+    records = storage.due_payments(user_id, now.date())
+    return {"shifts": [_shift_json(r, now) for r in records]}
 
 
 @router.get("/search")

@@ -461,7 +461,7 @@ def _record(shift_id, day, start, end, event="Gig"):
     return ShiftRecord(
         id=shift_id, day=day, start=start, end=end, event=event, location="",
         break_hours=Decimal("0"), break_paid=False, hours=Decimal("8"),
-        pay=Decimal("100"), currency="SGD",
+        pay=Decimal("100"), currency="SGD", payment_due=None, paid=False,
     )
 
 

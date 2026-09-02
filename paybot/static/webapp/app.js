@@ -28,6 +28,8 @@
     editDuplicate: document.getElementById("edit-duplicate"),
     editDelete: document.getElementById("edit-delete"),
     editShiftActions: document.getElementById("edit-shift-actions"),
+    editPaymentBadge: document.getElementById("edit-payment-status-badge"),
+    editPaidRow: document.getElementById("edit-paid-row"),
     searchOpen: document.getElementById("search-open"),
     searchBackdrop: document.getElementById("search-backdrop"),
     searchInput: document.getElementById("search-input"),
@@ -71,6 +73,7 @@
   const shiftsById = new Map(); // repopulated on every render, keyed by shift id
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
+  let editingShiftSnapshot = null; // the shift currently open for editing, for live badge sync
   let activeEditField = null; // focused input inside the edit sheet, while the keyboard is up
   let overviewMonth = null; // "YYYY-MM" shown by the Month quick action; null = the live current month
   let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
@@ -295,6 +298,12 @@
     ).padStart(2, "0")}`;
   }
 
+  // A shift's payment is expected two weeks after it happens unless the user picks otherwise.
+  function defaultPaymentDue(dayStr) {
+    const [year, month, day] = dayStr.split("-").map(Number);
+    return isoDateUTC(new Date(Date.UTC(year, month - 1, day) + 14 * 86400000));
+  }
+
   function mondayOf(dateStr) {
     const [year, month, day] = dateStr.split("-").map(Number);
     const utc = Date.UTC(year, month - 1, day);
@@ -319,6 +328,27 @@
   }
 
   const STATE_ICON = { done: "✓", running: "⏳", upcoming: "📅" };
+
+  // Every shift is always in exactly one of these three payment states.
+  const PAYMENT_STATUS_META = {
+    upcoming: { label: "Upcoming", cls: "tag-upcoming" },
+    pending_payment: { label: "Pending payment", cls: "tag-pending" },
+    payment_completed: { label: "Payment completed", cls: "tag-paid" },
+  };
+
+  // Falls back to computing the status client-side for shifts fetched before this field
+  // existed, or wherever a caller only has a bare {state, paid} pair to hand.
+  function paymentStatusOf(shift, state) {
+    if (shift.payment_status) return shift.payment_status;
+    const effectiveState = state || shift.state;
+    if (effectiveState && effectiveState !== "done") return "upcoming";
+    return shift.paid ? "payment_completed" : "pending_payment";
+  }
+
+  function paymentStatusBadge(status) {
+    const meta = PAYMENT_STATUS_META[status] || PAYMENT_STATUS_META.pending_payment;
+    return `<span class="tag ${meta.cls}">${meta.label}</span>`;
+  }
 
   // A consistent color per event name, so the same gig always looks the same in every list.
   const EVENT_COLORS = [
@@ -355,7 +385,7 @@
   function shiftRow(shift, currency, options = {}) {
     shiftsById.set(shift.id, shift);
     const state = options.state || "done";
-    const tagText = { running: "In progress", upcoming: "Upcoming" }[state] || "";
+    const status = paymentStatusOf(shift, state);
     const displayPay = options.earnedPay !== undefined ? options.earnedPay : shift.pay;
     const clash = shift.clash ? '<span class="clash-badge">⚠ clash</span>' : "";
     const when = options.hideDate ? "" : `${shift.date_label} \u00b7 `;
@@ -370,7 +400,7 @@
         </div>
         <div class="value">
           <div class="amount">${money(displayPay, currency)}</div>
-          ${tagText ? `<span class="tag tag-${state}">${tagText}</span>` : ""}
+          ${paymentStatusBadge(status)}
         </div>
       </div>`;
   }
@@ -1474,8 +1504,34 @@
       els.loading.classList.add("hidden");
       els.contentWrap.classList.remove("hidden");
       render();
+      checkDuePayments();
     } catch (err) {
       showError(err);
+    }
+  }
+
+  // Session-only — a shift skipped this way is asked about again next time the app opens,
+  // as long as it's still unpaid and its due date has passed.
+  const dismissedPaymentPrompts = new Set();
+
+  // Surfaces unpaid shifts whose payment due date has arrived, one at a time, so the user
+  // can confirm marking each as paid instead of it silently flipping on its own.
+  async function checkDuePayments() {
+    try {
+      const result = await api("/webapp/api/payments/due");
+      const next = result.shifts.find((s) => !dismissedPaymentPrompts.has(s.id));
+      if (!next) return;
+      dismissedPaymentPrompts.add(next.id);
+      const confirmed = await confirmDialog(
+        `Mark "${next.event}" (${next.date_label}) as paid — ${money(next.pay, next.currency)}?`
+      );
+      if (confirmed) {
+        await api(`/webapp/api/shifts/${next.id}`, { method: "PATCH", body: { paid: true } });
+        await refreshAfterEdit();
+      }
+      checkDuePayments();
+    } catch (err) {
+      // a background nicety — silently skip if it fails, the shift will surface again next load
     }
   }
 
@@ -1506,7 +1562,20 @@
   }
 
   function syncScheduleDisplays() {
-    [els.editForm.day, els.editForm.start, els.editForm.end].forEach(syncFieldDisplay);
+    [els.editForm.day, els.editForm.start, els.editForm.end, els.editForm.payment_due].forEach(
+      syncFieldDisplay
+    );
+  }
+
+  // Reflects the paid checkbox and the shift's own state (upcoming shifts are never
+  // "pending"/"completed", however the paid flag happens to be set) as a nicer status pill.
+  function syncPaymentBadge() {
+    if (!els.editPaymentBadge) return;
+    const state = editingShiftSnapshot ? editingShiftSnapshot.state : "upcoming";
+    const status = paymentStatusOf({ paid: els.editForm.paid.checked }, state);
+    const meta = PAYMENT_STATUS_META[status] || PAYMENT_STATUS_META.pending_payment;
+    els.editPaymentBadge.className = `tag ${meta.cls}`;
+    els.editPaymentBadge.textContent = meta.label;
   }
 
   function syncEventBadge() {
@@ -1534,6 +1603,7 @@
     if (!shift) return;
     editorMode = "edit";
     editingShiftId = shift.id;
+    editingShiftSnapshot = shift;
     els.editTitle.textContent = "Edit Shift";
     els.editForm.event.value = shift.event;
     syncEventBadge();
@@ -1544,6 +1614,10 @@
     els.editForm.rate.value = shift.rate;
     els.editForm.break_hours.value = shift.break_hours;
     setBreakPaid(shift.break_paid ? "yes" : "no");
+    els.editForm.payment_due.value = shift.payment_due || defaultPaymentDue(shift.day);
+    els.editForm.paid.checked = Boolean(shift.paid);
+    els.editPaidRow.classList.remove("hidden");
+    syncPaymentBadge();
     els.editCurrency.textContent = (summaryData && summaryData.currency) || "";
     syncScheduleDisplays();
     els.editError.classList.add("hidden");
@@ -1556,6 +1630,7 @@
   function openCreator(presetDay) {
     editorMode = "create";
     editingShiftId = null;
+    editingShiftSnapshot = null;
     els.editForm.reset();
     els.editTitle.textContent = "New Shift";
     syncEventBadge();
@@ -1565,6 +1640,10 @@
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
     setBreakPaid("yes");
+    els.editForm.payment_due.value = defaultPaymentDue(els.editForm.day.value);
+    els.editForm.paid.checked = false;
+    els.editPaidRow.classList.add("hidden");
+    syncPaymentBadge();
     syncScheduleDisplays();
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.add("hidden");
@@ -1577,6 +1656,7 @@
     els.editBackdrop.classList.add("hidden");
     editingShiftId = null;
     editorMode = null;
+    editingShiftSnapshot = null;
     activeEditField = null;
     els.editSheet.style.paddingBottom = "";
   }
@@ -1652,6 +1732,7 @@
       payload.break_hours = form.break_hours.value;
       payload.break_paid = form.break_paid.value === "yes";
     }
+    if (form.payment_due.value) payload.payment_due = form.payment_due.value;
     return api("/webapp/api/shifts", { method: "POST", body: payload });
   }
 
@@ -1671,6 +1752,10 @@
       payload.break_hours = form.break_hours.value || "0";
     const breakPaid = form.break_paid.value === "yes";
     if (breakPaid !== shift.break_paid) payload.break_paid = breakPaid;
+    const currentPaymentDue = shift.payment_due || defaultPaymentDue(shift.day);
+    if (form.payment_due.value && form.payment_due.value !== currentPaymentDue)
+      payload.payment_due = form.payment_due.value;
+    if (form.paid.checked !== Boolean(shift.paid)) payload.paid = form.paid.checked;
     if (!Object.keys(payload).length) return null;
     return api(`/webapp/api/shifts/${shift.id}`, { method: "PATCH", body: payload });
   }
@@ -1743,6 +1828,7 @@
     form.rate.value = duplicated.rate;
     form.break_hours.value = duplicated.break_hours;
     setBreakPaid(duplicated.break_paid);
+    form.payment_due.value = defaultPaymentDue(form.day.value);
     syncScheduleDisplays();
     syncRateWidth();
   }
@@ -2263,10 +2349,13 @@
       }
     }, 0);
   });
-  [els.editForm.day, els.editForm.start, els.editForm.end].forEach((input) => {
-    input.addEventListener("input", () => syncFieldDisplay(input));
-    input.addEventListener("change", () => syncFieldDisplay(input));
-  });
+  [els.editForm.day, els.editForm.start, els.editForm.end, els.editForm.payment_due].forEach(
+    (input) => {
+      input.addEventListener("input", () => syncFieldDisplay(input));
+      input.addEventListener("change", () => syncFieldDisplay(input));
+    }
+  );
+  els.editForm.paid.addEventListener("change", syncPaymentBadge);
 
   if (tg && tg.BackButton) {
     tg.BackButton.onClick(() => {
