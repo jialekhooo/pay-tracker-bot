@@ -310,11 +310,11 @@
 
   // Best-effort client-side preview only (matches a single shift's own day) — the real
   // default, based on the last day of the whole event, is computed server-side at save time
-  // whenever the user hasn't touched this field themselves. Two weeks out, rolled to a Friday.
+  // whenever the user hasn't touched this field themselves. Friday of the week two weeks out.
   function defaultPaymentDue(dayStr) {
     const due = new Date(`${addDays(dayStr, 14)}T00:00:00Z`);
-    const daysUntilFriday = (5 - due.getUTCDay() + 7) % 7; // Friday = 5 in getUTCDay()
-    due.setUTCDate(due.getUTCDate() + daysUntilFriday);
+    const mondayBasedWeekday = (due.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+    due.setUTCDate(due.getUTCDate() + (4 - mondayBasedWeekday)); // Friday index is 4
     return isoDateUTC(due);
   }
 

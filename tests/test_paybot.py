@@ -862,6 +862,20 @@ def test_webapp_create_shift_uses_saved_rate_when_none_given(tmp_path):
     storage.close()
 
 
+def test_webapp_create_shift_defaults_payment_due_to_friday_of_week_two_weeks_after_event(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"event": "Roadshow", "day": "2026-08-16", "start": "09:00", "end": "17:00"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["payment_due"] == "2026-08-28"
+    storage.close()
+
+
 def test_webapp_create_shift_rejects_empty_event(tmp_path):
     storage = Storage(tmp_path / "webapp.sqlite3")
     client = _webapp_client(storage)
@@ -1784,4 +1798,3 @@ def test_webapp_settings_reports_has_custom_avatar(tmp_path):
     after = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN"))
     assert after.json()["has_custom_avatar"] is True
     storage.close()
-

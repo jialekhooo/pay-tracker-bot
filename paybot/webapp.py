@@ -337,14 +337,13 @@ def _event_payment_status(shifts_json: list[dict]) -> str:
     return "payment_completed"
 
 
-def _next_friday_on_or_after(day: date_cls) -> date_cls:
-    """Rolls a date forward to the next Friday, or leaves it if it's already one."""
-    return day + timedelta(days=(4 - day.weekday()) % 7)
+def _friday_of_same_week(day: date_cls) -> date_cls:
+    """Friday in the same Monday-to-Sunday week as ``day``."""
+    return day + timedelta(days=4 - day.weekday())
 
 
 def _default_payment_due(storage: Storage, user_id: int, event: str, day: date_cls) -> date_cls:
-    """Two weeks after the last day of this same event, rounded forward to the nearest
-    Friday — payouts are almost always weekly, on a Friday, after the whole gig wraps up."""
+    """Friday of the week two weeks after the last day of this same event."""
     return _default_payment_due_for_days(storage, user_id, event, [day])
 
 
@@ -354,7 +353,7 @@ def _default_payment_due_for_days(
     """Same as ``_default_payment_due``, but for a batch of shifts created together — the
     due date is anchored to whichever of them (new or already booked) falls last."""
     last_day = max(days + [r.day for r in storage.shifts_for_event(user_id, event)])
-    return _next_friday_on_or_after(last_day + timedelta(days=14))
+    return _friday_of_same_week(last_day + timedelta(days=14))
 
 
 def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
