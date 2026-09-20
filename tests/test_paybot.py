@@ -151,6 +151,15 @@ def test_inline_rate_override():
     )
 
 
+def test_inline_fixed_pay_override():
+    shift = parse_shift("13/8 8.30am - 8pm $200 flat Hermes Private Sale", today=TODAY)
+    assert shift.day == date(2026, 8, 13)
+    assert shift.end == time(20, 0)
+    assert shift.event == "Hermes Private Sale"
+    assert shift.rate_override == Decimal("200")
+    assert shift.pay_is_fixed is True
+
+
 def test_parse_multiple_lines():
     text = """13/8 8.30am - 8pm 15/h Hermes Private Sale
 14/8 9am - 8pm 15/h Hermes Private Sale
@@ -246,22 +255,24 @@ def test_location_after_at_word_and_without_one():
 
 
 @pytest.mark.parametrize(
-    "text, location, rate",
+    "text, location, rate, pay_is_fixed",
     [
-        ("Hermes 13/8 9am-8pm @ MBS 15/h", "MBS", Decimal("15")),
-        ("Hermes 13/8 9am-8pm @ MBS SGD 15/h", "MBS", Decimal("15")),
-        ("Hermes 13/8 9am-8pm @ MBS $15 per hour", "MBS", Decimal("15")),
-        ("Hermes @ MBS 13/8 9am-8pm", "MBS", None),
-        ("Hermes @ Level 3 Takashimaya 13/8 9am-8pm 15/h", "Level 3 Takashimaya", Decimal("15")),
-        ("Hermes 13/8 9am-8pm @313 Somerset", "313 Somerset", None),
-        ("Hermes 13/8 9am-8pm @ MBS, Level 2", "MBS, Level 2", None),
+        ("Hermes 13/8 9am-8pm @ MBS 15/h", "MBS", Decimal("15"), False),
+        ("Hermes 13/8 9am-8pm @ MBS SGD 15/h", "MBS", Decimal("15"), False),
+        ("Hermes 13/8 9am-8pm @ MBS $15 per hour", "MBS", Decimal("15"), False),
+        ("Hermes 13/8 9am-8pm @ MBS $200 flat", "MBS", Decimal("200"), True),
+        ("Hermes @ MBS 13/8 9am-8pm", "MBS", None, False),
+        ("Hermes @ Level 3 Takashimaya 13/8 9am-8pm 15/h", "Level 3 Takashimaya", Decimal("15"), False),
+        ("Hermes 13/8 9am-8pm @313 Somerset", "313 Somerset", None, False),
+        ("Hermes 13/8 9am-8pm @ MBS, Level 2", "MBS, Level 2", None, False),
     ],
 )
-def test_location_is_read_wherever_the_at_sign_appears(text, location, rate):
+def test_location_is_read_wherever_the_at_sign_appears(text, location, rate, pay_is_fixed):
     shift = parse_shift(text, today=TODAY)
     assert shift.event == "Hermes"
     assert shift.location == location
     assert shift.rate_override == rate
+    assert shift.pay_is_fixed is pay_is_fixed
     assert shift.hours == 11
 
 
@@ -371,6 +382,7 @@ def test_parse_edit_reads_field_target_and_value():
         "rate", "Hermes Private Sale", "18",
     )
     assert parse_edit("rate #12 to $20/h") == ("rate", "#12", "20")
+    assert parse_edit("pay #12 200 flat") == ("rate", "#12", "200 flat")
     assert parse_edit("name Hermes Private Sale = Hermes PS") == (
         "name", "Hermes Private Sale", "Hermes PS",
     )
@@ -395,6 +407,20 @@ def test_edit_record_recalculates_pay_for_rate_and_time(tmp_path):
     assert retimed["end_time"] == "20:00"
     assert retimed["hours"] == "11"
     assert retimed["pay"] == "165.00"
+
+
+def test_edit_record_supports_fixed_pay_and_keeps_it_when_retimed(tmp_path):
+    storage = _sale_storage(tmp_path)
+    config = storage.get_config(1)
+    record = storage.find_shifts(1, "Wedding gig")[0]
+
+    fixed = _edit_record(record, "rate", "200 flat", config)
+    assert fixed == {"pay": "200.00", "pay_is_fixed": 1}
+
+    fixed_record = replace(record, pay=Decimal("200"), pay_is_fixed=True)
+    retimed = _edit_record(fixed_record, "time", "9am-8pm", config)
+    assert retimed["hours"] == "11"
+    assert retimed["pay"] == "200"
 
 
 def test_every_command_is_listed_and_unique():
@@ -539,6 +565,7 @@ def test_storage_roundtrip(tmp_path):
     records = storage.list_shifts(1, month="2026-08")
     assert [r.id for r in records] == [shift_id]
     assert records[0].pay == Decimal("135.00")
+    assert records[0].pay_is_fixed is False
     assert records[0].break_hours == Decimal("1")
     assert records[0].break_paid is False
     assert storage.delete_shift(1, shift_id) is True
@@ -662,6 +689,61 @@ def test_webapp_update_shift_applies_new_rate(tmp_path):
     )
     assert response.status_code == 200
     assert response.json()["pay"] == "160.00"
+    storage.close()
+
+
+def test_webapp_update_shift_can_switch_to_lump_sum(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD", pay_is_fixed=False,
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"pay_is_fixed": True, "rate": "200"},
+    )
+    assert response.status_code == 200
+    assert response.json()["pay"] == "200.00"
+    assert response.json()["rate"] == "200.00"
+    assert response.json()["pay_is_fixed"] is True
+    storage.close()
+
+
+def test_webapp_update_fixed_lump_sum_keeps_pay_when_hours_change(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("200"), "SGD", pay_is_fixed=True,
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"start": "10:00", "end": "20:00"},
+    )
+    assert response.status_code == 200
+    assert response.json()["hours"] == "10"
+    assert response.json()["pay"] == "200.00"
+    assert response.json()["pay_is_fixed"] is True
+    storage.close()
+
+
+def test_webapp_update_fixed_shift_switching_back_to_hourly_requires_rate(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("200"), "SGD", pay_is_fixed=True,
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"pay_is_fixed": False},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Hourly rate is required when switching from lump sum"
     storage.close()
 
 
@@ -835,6 +917,7 @@ def test_webapp_create_shift_with_explicit_rate(tmp_path):
             "start": "18:00",
             "end": "23:30",
             "rate": "25",
+            "pay_is_fixed": False,
         },
     )
     assert response.status_code == 200
@@ -843,6 +926,51 @@ def test_webapp_create_shift_with_explicit_rate(tmp_path):
     assert body["location"] == "MBS"
     assert body["hours"] == "5.5"
     assert body["pay"] == "137.50"
+    assert body["pay_is_fixed"] is False
+    storage.close()
+
+
+def test_webapp_create_shift_with_lump_sum(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Wedding gig",
+            "location": "MBS",
+            "day": "2026-08-25",
+            "start": "18:00",
+            "end": "23:30",
+            "rate": "250",
+            "pay_is_fixed": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hours"] == "5.5"
+    assert body["pay"] == "250.00"
+    assert body["rate"] == "250.00"
+    assert body["pay_is_fixed"] is True
+    storage.close()
+
+
+def test_webapp_create_lump_sum_shift_requires_amount(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Wedding gig",
+            "day": "2026-08-25",
+            "start": "18:00",
+            "end": "23:30",
+            "pay_is_fixed": True,
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Lump sum amount is required"
     storage.close()
 
 
@@ -1784,4 +1912,3 @@ def test_webapp_settings_reports_has_custom_avatar(tmp_path):
     after = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN"))
     assert after.json()["has_custom_avatar"] is True
     storage.close()
-
