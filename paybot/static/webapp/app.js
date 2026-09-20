@@ -20,6 +20,8 @@
     editForm: document.getElementById("edit-form"),
     editBadge: document.getElementById("edit-badge"),
     editCurrency: document.getElementById("edit-currency"),
+    editAmountType: document.getElementById("edit-amount-type"),
+    editAmountSuffix: document.getElementById("edit-amount-suffix"),
     editBreakPaid: document.getElementById("edit-break-paid"),
     editTitle: document.getElementById("edit-title"),
     editError: document.getElementById("edit-error"),
@@ -1628,10 +1630,23 @@
     els.editBadge.textContent = event ? eventInitial(event) : "+";
   }
 
-  function syncRateWidth() {
-    const input = els.editForm.rate;
+  function syncAmountWidth() {
+    const input = els.editForm.amount;
     const shown = input.value || input.placeholder || "0";
     input.style.width = `${Math.max(shown.length, 1) + 0.5}ch`;
+  }
+
+  function setAmountType(value) {
+    const kind = value === "fixed" ? "fixed" : "hourly";
+    els.editForm.amount_type.value = kind;
+    if (els.editAmountSuffix) {
+      els.editAmountSuffix.textContent = kind === "fixed" ? "· fixed amount" : "· per hour";
+    }
+    if (els.editAmountType) {
+      els.editAmountType.querySelectorAll("[data-amount-type]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.amountType === kind);
+      });
+    }
   }
 
   function setBreakPaid(value) {
@@ -1787,7 +1802,8 @@
     els.editForm.day.value = shift.day;
     els.editForm.start.value = shift.start;
     els.editForm.end.value = shift.end;
-    els.editForm.rate.value = shift.rate;
+    setAmountType(shift.amount_type || "hourly");
+    els.editForm.amount.value = shift.amount || shift.rate;
     els.editForm.break_hours.value = shift.break_hours;
     setBreakPaid(shift.break_paid ? "yes" : "no");
     els.editForm.payment_due.value = shift.payment_due || defaultPaymentDue(shift.day);
@@ -1802,7 +1818,7 @@
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.remove("hidden");
     els.editSheet.scrollTop = 0;
-    syncRateWidth();
+    syncAmountWidth();
     els.editBackdrop.classList.remove("hidden");
   }
 
@@ -1818,6 +1834,7 @@
     els.editForm.day.value = presetDay || today;
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
+    setAmountType("hourly");
     setBreakPaid("yes");
     els.editForm.payment_due.value = defaultPaymentDue(els.editForm.day.value);
     els.editForm.paid.checked = false;
@@ -1830,7 +1847,7 @@
     els.editError.classList.add("hidden");
     els.editShiftActions.classList.add("hidden");
     els.editSheet.scrollTop = 0;
-    syncRateWidth();
+    syncAmountWidth();
     els.editBackdrop.classList.remove("hidden");
   }
 
@@ -1922,7 +1939,8 @@
       event: form.event.value.trim(),
       location: form.location.value.trim(),
     };
-    if (form.rate.value) payload.rate = form.rate.value;
+    payload.amount_type = form.amount_type.value || "hourly";
+    if (form.amount.value) payload.amount = form.amount.value;
     if (form.break_hours.value) {
       payload.break_hours = form.break_hours.value;
       payload.break_paid = form.break_paid.value === "yes";
@@ -1946,7 +1964,10 @@
     if (form.day.value !== shift.day) payload.day = form.day.value;
     if (form.start.value !== shift.start) payload.start = form.start.value;
     if (form.end.value !== shift.end) payload.end = form.end.value;
-    if (form.rate.value !== shift.rate) payload.rate = form.rate.value;
+    const currentAmountType = shift.amount_type || "hourly";
+    const currentAmount = shift.amount || shift.rate;
+    if (form.amount_type.value !== currentAmountType) payload.amount_type = form.amount_type.value;
+    if (form.amount.value !== currentAmount) payload.amount = form.amount.value;
     if (form.break_hours.value !== shift.break_hours)
       payload.break_hours = form.break_hours.value || "0";
     const breakPaid = form.break_paid.value === "yes";
@@ -2012,7 +2033,7 @@
 
   // Prefills the create-shift form from the shift currently open for editing, advancing the
   // date by a day, so logging the same event across several days doesn't mean retyping
-  // the location/time/rate each time.
+  // the location/time/amount each time.
   function duplicateEditingShift() {
     if (editorMode !== "edit" || !editingShiftId) return;
     const form = els.editForm;
@@ -2022,7 +2043,8 @@
       day: form.day.value,
       start: form.start.value,
       end: form.end.value,
-      rate: form.rate.value,
+      amount: form.amount.value,
+      amount_type: form.amount_type.value,
       break_hours: form.break_hours.value,
       break_paid: form.break_paid.value,
     };
@@ -2035,12 +2057,13 @@
     }
     form.start.value = duplicated.start;
     form.end.value = duplicated.end;
-    form.rate.value = duplicated.rate;
+    setAmountType(duplicated.amount_type);
+    form.amount.value = duplicated.amount;
     form.break_hours.value = duplicated.break_hours;
     setBreakPaid(duplicated.break_paid);
     form.payment_due.value = defaultPaymentDue(form.day.value);
     syncScheduleDisplays();
-    syncRateWidth();
+    syncAmountWidth();
   }
 
   async function deleteEditingShift() {
@@ -2119,7 +2142,8 @@
             day: shift.day,
             start: shift.start,
             end: shift.end,
-            rate: shift.rate,
+            amount_type: shift.amount_type || "hourly",
+            amount: shift.amount || shift.rate,
             break_hours: shift.break_hours,
             break_paid: shift.break_paid,
           },
@@ -2558,7 +2582,14 @@
   });
   els.editForm.addEventListener("submit", submitEditor);
   els.editForm.event.addEventListener("input", syncEventBadge);
-  els.editForm.rate.addEventListener("input", syncRateWidth);
+  els.editForm.amount.addEventListener("input", syncAmountWidth);
+  if (els.editAmountType) {
+    els.editAmountType.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-amount-type]");
+      if (!button) return;
+      setAmountType(button.dataset.amountType);
+    });
+  }
   els.editBreakPaid.addEventListener("click", (event) => {
     const button = event.target.closest("[data-break-paid]");
     if (button) setBreakPaid(button.dataset.breakPaid);

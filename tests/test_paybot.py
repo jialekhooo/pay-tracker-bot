@@ -461,7 +461,7 @@ def _record(shift_id, day, start, end, event="Gig"):
     return ShiftRecord(
         id=shift_id, day=day, start=start, end=end, event=event, location="",
         break_hours=Decimal("0"), break_paid=False, hours=Decimal("8"),
-        pay=Decimal("100"), currency="SGD", payment_due=None, paid=False,
+        pay=Decimal("100"), pay_is_fixed=False, currency="SGD", payment_due=None, paid=False,
     )
 
 
@@ -665,6 +665,36 @@ def test_webapp_update_shift_applies_new_rate(tmp_path):
     storage.close()
 
 
+def test_webapp_update_fixed_amount_keeps_pay_when_time_changes(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42,
+        date(2026, 8, 18),
+        time(9, 0),
+        time(17, 0),
+        "Test gig",
+        Decimal("0"),
+        False,
+        Decimal("8"),
+        Decimal("250"),
+        "SGD",
+        pay_is_fixed=True,
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"start": "10:00", "end": "20:00"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hours"] == "10"
+    assert body["pay"] == "250.00"
+    assert body["amount_type"] == "fixed"
+    assert body["amount"] == "250.00"
+    storage.close()
+
+
 def test_webapp_update_shift_rejects_invalid_rate(tmp_path):
     storage = Storage(tmp_path / "webapp.sqlite3")
     shift_id = storage.add_shift(
@@ -843,6 +873,30 @@ def test_webapp_create_shift_with_explicit_rate(tmp_path):
     assert body["location"] == "MBS"
     assert body["hours"] == "5.5"
     assert body["pay"] == "137.50"
+    storage.close()
+
+
+def test_webapp_create_shift_with_fixed_amount(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Wedding gig",
+            "location": "MBS",
+            "day": "2026-08-25",
+            "start": "18:00",
+            "end": "23:30",
+            "amount_type": "fixed",
+            "amount": "300",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pay"] == "300.00"
+    assert body["amount_type"] == "fixed"
+    assert body["amount"] == "300.00"
     storage.close()
 
 

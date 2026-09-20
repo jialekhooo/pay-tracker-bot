@@ -103,18 +103,23 @@
           </label>
 
           <div class="field-group">
-            <span class="group-label">Rate</span>
+            <span class="group-label">Amount</span>
+            <div class="segmented" id="edit-amount-type">
+              <button type="button" class="segment active" data-amount-type="hourly">Hourly</button>
+              <button type="button" class="segment" data-amount-type="fixed">Lump sum</button>
+            </div>
+            <input type="hidden" name="amount_type" value="hourly" />
             <label class="amount-row">
               <span class="amount-currency" id="edit-currency"></span>
               <input
                 type="number"
-                name="rate"
+                name="amount"
                 min="0"
                 step="0.01"
                 inputmode="decimal"
                 placeholder="0"
               />
-              <span class="amount-suffix">· per hour</span>
+              <span class="amount-suffix" id="edit-amount-suffix">· per hour</span>
             </label>
           </div>
 
