@@ -103,7 +103,12 @@
           </label>
 
           <div class="field-group">
-            <span class="group-label">Rate</span>
+            <span class="group-label">Pay</span>
+            <div class="segmented" id="edit-pay-mode">
+              <button type="button" class="segment active" data-pay-mode="hourly">Hourly</button>
+              <button type="button" class="segment" data-pay-mode="fixed">Lump sum</button>
+            </div>
+            <input type="hidden" name="pay_is_fixed" value="no" />
             <label class="amount-row">
               <span class="amount-currency" id="edit-currency"></span>
               <input
@@ -114,7 +119,7 @@
                 inputmode="decimal"
                 placeholder="0"
               />
-              <span class="amount-suffix">· per hour</span>
+              <span class="amount-suffix" id="edit-amount-suffix">· per hour</span>
             </label>
           </div>
 

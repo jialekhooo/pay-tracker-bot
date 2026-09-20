@@ -539,6 +539,7 @@ def test_storage_roundtrip(tmp_path):
     records = storage.list_shifts(1, month="2026-08")
     assert [r.id for r in records] == [shift_id]
     assert records[0].pay == Decimal("135.00")
+    assert records[0].pay_is_fixed is False
     assert records[0].break_hours == Decimal("1")
     assert records[0].break_paid is False
     assert storage.delete_shift(1, shift_id) is True
@@ -662,6 +663,44 @@ def test_webapp_update_shift_applies_new_rate(tmp_path):
     )
     assert response.status_code == 200
     assert response.json()["pay"] == "160.00"
+    storage.close()
+
+
+def test_webapp_update_shift_can_switch_to_lump_sum(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD", pay_is_fixed=False,
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"pay_is_fixed": True, "rate": "200"},
+    )
+    assert response.status_code == 200
+    assert response.json()["pay"] == "200.00"
+    assert response.json()["rate"] == "200.00"
+    assert response.json()["pay_is_fixed"] is True
+    storage.close()
+
+
+def test_webapp_update_fixed_lump_sum_keeps_pay_when_hours_change(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("200"), "SGD", pay_is_fixed=True,
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"start": "10:00", "end": "20:00"},
+    )
+    assert response.status_code == 200
+    assert response.json()["hours"] == "10"
+    assert response.json()["pay"] == "200.00"
+    assert response.json()["pay_is_fixed"] is True
     storage.close()
 
 
@@ -843,6 +882,51 @@ def test_webapp_create_shift_with_explicit_rate(tmp_path):
     assert body["location"] == "MBS"
     assert body["hours"] == "5.5"
     assert body["pay"] == "137.50"
+    assert body["pay_is_fixed"] is False
+    storage.close()
+
+
+def test_webapp_create_shift_with_lump_sum(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Wedding gig",
+            "location": "MBS",
+            "day": "2026-08-25",
+            "start": "18:00",
+            "end": "23:30",
+            "rate": "250",
+            "pay_is_fixed": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hours"] == "5.5"
+    assert body["pay"] == "250.00"
+    assert body["rate"] == "250.00"
+    assert body["pay_is_fixed"] is True
+    storage.close()
+
+
+def test_webapp_create_lump_sum_shift_requires_amount(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Wedding gig",
+            "day": "2026-08-25",
+            "start": "18:00",
+            "end": "23:30",
+            "pay_is_fixed": True,
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Lump sum amount is required"
     storage.close()
 
 
@@ -1784,4 +1868,3 @@ def test_webapp_settings_reports_has_custom_avatar(tmp_path):
     after = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN"))
     assert after.json()["has_custom_avatar"] is True
     storage.close()
-

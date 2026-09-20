@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS shifts (
     break_paid INTEGER NOT NULL DEFAULT 0,
     hours TEXT NOT NULL,
     pay TEXT NOT NULL,
+    pay_is_fixed INTEGER NOT NULL DEFAULT 0,
     currency TEXT NOT NULL,
     payment_due TEXT,
     paid INTEGER NOT NULL DEFAULT 0,
@@ -87,6 +88,7 @@ class ShiftRecord:
     break_paid: bool
     hours: Decimal
     pay: Decimal
+    pay_is_fixed: bool
     currency: str
     payment_due: date | None
     paid: bool
@@ -143,6 +145,7 @@ class Storage:
                 "break_hours": "TEXT NOT NULL DEFAULT '0'",
                 "break_paid": "INTEGER NOT NULL DEFAULT 0",
                 "ref": "INTEGER",
+                "pay_is_fixed": "INTEGER NOT NULL DEFAULT 0",
                 "payment_due": "TEXT",
                 "paid": "INTEGER NOT NULL DEFAULT 0",
             },
@@ -270,6 +273,7 @@ class Storage:
         location: str = "",
         payment_due: date | None = None,
         paid: bool = False,
+        pay_is_fixed: bool = False,
     ) -> int:
         ref = int(
             self._conn.execute(
@@ -279,8 +283,9 @@ class Storage:
         self._conn.execute(
             """
             INSERT INTO shifts (ref, user_id, day, start_time, end_time, event, location,
-                                break_hours, break_paid, hours, pay, currency, payment_due, paid)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                break_hours, break_paid, hours, pay, pay_is_fixed, currency,
+                                payment_due, paid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ref,
@@ -294,6 +299,7 @@ class Storage:
                 int(break_paid),
                 str(hours),
                 str(pay),
+                int(pay_is_fixed),
                 currency,
                 payment_due.isoformat() if payment_due else None,
                 int(paid),
@@ -507,6 +513,7 @@ class Storage:
             "location",
             "hours",
             "pay",
+            "pay_is_fixed",
             "break_hours",
             "break_paid",
             "payment_due",
@@ -578,6 +585,7 @@ def _to_record(row: sqlite3.Row) -> ShiftRecord:
         break_paid=bool(row["break_paid"]),
         hours=Decimal(row["hours"]),
         pay=Decimal(row["pay"]),
+        pay_is_fixed=bool(row["pay_is_fixed"]),
         currency=row["currency"],
         payment_due=date.fromisoformat(row["payment_due"]) if row["payment_due"] else None,
         paid=bool(row["paid"]),

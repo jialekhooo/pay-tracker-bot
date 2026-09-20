@@ -20,6 +20,8 @@
     editForm: document.getElementById("edit-form"),
     editBadge: document.getElementById("edit-badge"),
     editCurrency: document.getElementById("edit-currency"),
+    editPayMode: document.getElementById("edit-pay-mode"),
+    editAmountSuffix: document.getElementById("edit-amount-suffix"),
     editBreakPaid: document.getElementById("edit-break-paid"),
     editTitle: document.getElementById("edit-title"),
     editError: document.getElementById("edit-error"),
@@ -1634,6 +1636,15 @@
     input.style.width = `${Math.max(shown.length, 1) + 0.5}ch`;
   }
 
+  function setPayMode(mode) {
+    const fixed = mode === "fixed";
+    els.editForm.pay_is_fixed.value = fixed ? "yes" : "no";
+    els.editAmountSuffix.textContent = fixed ? "· lump sum" : "· per hour";
+    els.editPayMode.querySelectorAll("[data-pay-mode]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.payMode === mode);
+    });
+  }
+
   function setBreakPaid(value) {
     els.editForm.break_paid.value = value;
     els.editBreakPaid.querySelectorAll("[data-break-paid]").forEach((button) => {
@@ -1787,6 +1798,7 @@
     els.editForm.day.value = shift.day;
     els.editForm.start.value = shift.start;
     els.editForm.end.value = shift.end;
+    setPayMode(shift.pay_is_fixed ? "fixed" : "hourly");
     els.editForm.rate.value = shift.rate;
     els.editForm.break_hours.value = shift.break_hours;
     setBreakPaid(shift.break_paid ? "yes" : "no");
@@ -1818,6 +1830,7 @@
     els.editForm.day.value = presetDay || today;
     els.editForm.start.value = "09:00";
     els.editForm.end.value = "17:00";
+    setPayMode("hourly");
     setBreakPaid("yes");
     els.editForm.payment_due.value = defaultPaymentDue(els.editForm.day.value);
     els.editForm.paid.checked = false;
@@ -1921,6 +1934,7 @@
     const payload = {
       event: form.event.value.trim(),
       location: form.location.value.trim(),
+      pay_is_fixed: form.pay_is_fixed.value === "yes",
     };
     if (form.rate.value) payload.rate = form.rate.value;
     if (form.break_hours.value) {
@@ -1946,6 +1960,8 @@
     if (form.day.value !== shift.day) payload.day = form.day.value;
     if (form.start.value !== shift.start) payload.start = form.start.value;
     if (form.end.value !== shift.end) payload.end = form.end.value;
+    const payIsFixed = form.pay_is_fixed.value === "yes";
+    if (payIsFixed !== Boolean(shift.pay_is_fixed)) payload.pay_is_fixed = payIsFixed;
     if (form.rate.value !== shift.rate) payload.rate = form.rate.value;
     if (form.break_hours.value !== shift.break_hours)
       payload.break_hours = form.break_hours.value || "0";
@@ -2023,6 +2039,7 @@
       start: form.start.value,
       end: form.end.value,
       rate: form.rate.value,
+      pay_is_fixed: form.pay_is_fixed.value,
       break_hours: form.break_hours.value,
       break_paid: form.break_paid.value,
     };
@@ -2035,6 +2052,7 @@
     }
     form.start.value = duplicated.start;
     form.end.value = duplicated.end;
+    setPayMode(duplicated.pay_is_fixed === "yes" ? "fixed" : "hourly");
     form.rate.value = duplicated.rate;
     form.break_hours.value = duplicated.break_hours;
     setBreakPaid(duplicated.break_paid);
@@ -2120,6 +2138,7 @@
             start: shift.start,
             end: shift.end,
             rate: shift.rate,
+            pay_is_fixed: Boolean(shift.pay_is_fixed),
             break_hours: shift.break_hours,
             break_paid: shift.break_paid,
           },
@@ -2559,6 +2578,10 @@
   els.editForm.addEventListener("submit", submitEditor);
   els.editForm.event.addEventListener("input", syncEventBadge);
   els.editForm.rate.addEventListener("input", syncRateWidth);
+  els.editPayMode.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-pay-mode]");
+    if (button) setPayMode(button.dataset.payMode);
+  });
   els.editBreakPaid.addEventListener("click", (event) => {
     const button = event.target.closest("[data-break-paid]");
     if (button) setBreakPaid(button.dataset.breakPaid);

@@ -127,6 +127,14 @@ def _hourly(record: ShiftRecord) -> Decimal:
     return record.pay / record.hours if record.hours else Decimal("0")
 
 
+def _pay_detail(record: ShiftRecord, pay: Decimal | None = None, hours: str | None = None) -> str:
+    shown_pay = record.pay if pay is None else pay
+    if record.pay_is_fixed:
+        return f"{_amount(shown_pay)} flat"
+    worked = format_hours(record.hours) if hours is None else hours
+    return f"{worked}h × {_amount(_hourly(record))} = {_amount(shown_pay)}"
+
+
 def _where(event: str, location: str) -> str:
     return f"{event} @ {location}" if location else event
 
@@ -151,8 +159,7 @@ def _shift_table(records: list[ShiftRecord]) -> str:
         for record in records
     ]
     details = [
-        f"{format_hours(record.hours)}h × {_amount(_hourly(record))} "
-        f"= {_amount(record.pay)}"
+        _pay_detail(record)
         for record in records
     ]
     return _block(_entries(heads, details, right=set()))
@@ -324,6 +331,7 @@ def _store_shift(
         break_paid=shift.rest.paid,
         hours=hours,
         pay=pay,
+        pay_is_fixed=False,
         currency=config.currency,
     )
     return shift_id, hours, pay, rate
@@ -897,9 +905,7 @@ def _breakdown_table(shifts: list[Worked]) -> list[str]:
                 _where(record.event, record.location),
             )
         )
-        details.append(
-            f"{hours}h × {_amount(_hourly(record))} = {_amount(earned)}{tags[item.state]}"
-        )
+        details.append(f"{_pay_detail(record, earned, hours)}{tags[item.state]}")
     return _entries(heads, details, right=set())
 
 
@@ -1044,6 +1050,7 @@ async def undo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 hours=record.hours,
                 pay=record.pay,
                 currency=record.currency,
+                pay_is_fixed=record.pay_is_fixed,
             ),
         )
         for record in records

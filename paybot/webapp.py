@@ -257,6 +257,7 @@ class ShiftUpdate(BaseModel):
     event: str | None = None
     location: str | None = None
     rate: str | None = None
+    pay_is_fixed: bool | None = None
     start: str | None = None
     end: str | None = None
     day: str | None = None
@@ -275,6 +276,7 @@ class ShiftCreate(BaseModel):
     start: str
     end: str
     rate: str | None = None
+    pay_is_fixed: bool = False
     break_hours: str | None = None
     break_paid: bool = False
     payment_due: str | None = None
@@ -297,6 +299,7 @@ class ShiftBulkCreate(BaseModel):
     location: str = ""
     shifts: list[ShiftBulkEntry]
     rate: str | None = None
+    pay_is_fixed: bool = False
     break_hours: str | None = None
     break_paid: bool = False
     payment_due: str | None = None
@@ -369,7 +372,10 @@ def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
         "location": record.location,
         "hours": str(record.hours),
         "pay": _num(record.pay),
-        "rate": _num(record.pay / record.hours) if record.hours else "0.00",
+        "rate": _num(record.pay if record.pay_is_fixed else record.pay / record.hours)
+        if record.hours or record.pay_is_fixed
+        else "0.00",
+        "pay_is_fixed": record.pay_is_fixed,
         "currency": record.currency,
         "break_hours": str(record.break_hours),
         "break_paid": record.break_paid,
@@ -637,6 +643,9 @@ async def update_shift(
         if break_hours < 0:
             raise HTTPException(status_code=400, detail="Break hours can't be negative")
     break_paid = record.break_paid if payload.break_paid is None else payload.break_paid
+    pay_is_fixed = record.pay_is_fixed if payload.pay_is_fixed is None else payload.pay_is_fixed
+    if payload.pay_is_fixed is not None and payload.pay_is_fixed != record.pay_is_fixed:
+        fields["pay_is_fixed"] = int(payload.pay_is_fixed)
 
     hours = record.hours
     durational_change = (
@@ -677,9 +686,19 @@ async def update_shift(
             raise HTTPException(status_code=400, detail="Invalid rate") from exc
         if rate < 0:
             raise HTTPException(status_code=400, detail="Rate can't be negative")
-        fields["pay"] = str(calculate_pay(float(hours), event, config, rate))
+        fields["pay"] = (
+            str(round_money(rate))
+            if pay_is_fixed
+            else str(calculate_pay(float(hours), event, config, rate))
+        )
     elif "hours" in fields:
-        # the time or break changed but not the rate — keep the same hourly rate, new hours
+        if pay_is_fixed:
+            fields["pay"] = str(record.pay)
+        else:
+            # the time or break changed but not the rate — keep the same hourly rate, new hours
+            old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
+            fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
+    elif pay_is_fixed != record.pay_is_fixed and not pay_is_fixed:
         old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
         fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
 
@@ -773,8 +792,12 @@ async def create_shift(
             raise HTTPException(status_code=400, detail="Invalid rate") from exc
         if rate_override < 0:
             raise HTTPException(status_code=400, detail="Rate can't be negative")
+    elif payload.pay_is_fixed:
+        raise HTTPException(status_code=400, detail="Lump sum amount is required")
 
-    pay = calculate_pay(float(hours), event, config, rate_override)
+    pay = round_money(rate_override) if payload.pay_is_fixed else calculate_pay(
+        float(hours), event, config, rate_override
+    )
     shift_id = storage.add_shift(
         user_id=user_id,
         day=day,
@@ -786,6 +809,7 @@ async def create_shift(
         break_paid=break_paid,
         hours=hours,
         pay=pay,
+        pay_is_fixed=payload.pay_is_fixed,
         currency=config.currency,
         payment_due=payment_due,
     )
@@ -880,6 +904,8 @@ async def create_shifts_bulk(
             raise HTTPException(status_code=400, detail="Invalid rate") from exc
         if rate_override < 0:
             raise HTTPException(status_code=400, detail="Rate can't be negative")
+    elif payload.pay_is_fixed:
+        raise HTTPException(status_code=400, detail="Lump sum amount is required")
 
     now = local_clock(_offset(storage, user_id))
     created: list[dict] = []
@@ -890,7 +916,9 @@ async def create_shifts_bulk(
         if not break_paid:
             worked -= break_hours
         hours = max(worked, Decimal("0"))
-        pay = calculate_pay(float(hours), event, config, rate_override)
+        pay = round_money(rate_override) if payload.pay_is_fixed else calculate_pay(
+            float(hours), event, config, rate_override
+        )
         shift_id = storage.add_shift(
             user_id=user_id,
             day=day,
@@ -902,6 +930,7 @@ async def create_shifts_bulk(
             break_paid=break_paid,
             hours=hours,
             pay=pay,
+            pay_is_fixed=payload.pay_is_fixed,
             currency=config.currency,
             payment_due=payment_due,
         )
