@@ -1412,6 +1412,13 @@ main {
   border-color: var(--button);
 }
 
+/* -webkit-tap-highlight-color is disabled app-wide, so every other tappable control defines
+   its own :active feedback; without one here a tap gave no visible response until release,
+   making the segment look unpressable on touch devices. */
+.segment:active {
+  opacity: 0.6;
+}
+
 .segment {
   white-space: nowrap;
 }
