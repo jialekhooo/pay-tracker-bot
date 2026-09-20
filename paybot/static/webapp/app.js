@@ -1645,19 +1645,23 @@
     });
   }
 
-  function impliedHourlyRate(shift) {
-    const hours = Number(shift && shift.hours);
-    return hours ? (Number(shift.pay) / hours).toFixed(2) : "";
+  function currentFormHours() {
+    const span = spanMs(els.editForm.day.value, els.editForm.start.value, els.editForm.end.value);
+    if (!span) return 0;
+    let hours = (span[1] - span[0]) / 3600000;
+    if (els.editForm.break_paid.value !== "yes") {
+      hours -= Number(els.editForm.break_hours.value || 0);
+    }
+    return Math.max(hours, 0);
   }
 
   function changePayMode(mode) {
-    const shift = editingShiftSnapshot;
-    if (shift && els.editForm.rate.value === shift.rate) {
-      if (mode === "fixed" && !shift.pay_is_fixed) {
-        els.editForm.rate.value = shift.pay;
-      } else if (mode === "hourly" && shift.pay_is_fixed) {
-        els.editForm.rate.value = impliedHourlyRate(shift);
-      }
+    const wasFixed = els.editForm.pay_is_fixed.value === "yes";
+    if (mode === "fixed" && !wasFixed && els.editForm.rate.value) {
+      els.editForm.rate.value = (Number(els.editForm.rate.value) * currentFormHours()).toFixed(2);
+    } else if (mode === "hourly" && wasFixed && els.editForm.rate.value) {
+      const hours = currentFormHours();
+      els.editForm.rate.value = hours ? (Number(els.editForm.rate.value) / hours).toFixed(2) : "";
     }
     setPayMode(mode);
     syncRateWidth();
