@@ -14,12 +14,15 @@ Roadshow today 9am to 5pm
 ```
 
 Without a rate in the line, the stored rate for that event (or your default) is used.
+For a fixed payout instead of an hourly one, write an amount like `$200 flat` or
+`SGD 200 lump sum` in the line.
 A location is anything after `@` or `at`; it shows up in listings and the CSV export.
 To fix up shifts you already logged, use `/add <field> <event or #id> <value>`:
 
 ```
 /add location Hermes Private Sale @ MBS
 /add rate Hermes Private Sale 18
+/add pay Hermes Private Sale 200 flat
 /add name Hermes Private Sale = Hermes PS
 /add time Hermes Private Sale 9am-8pm
 /add time #12 9am-8pm          # just that one shift
@@ -35,7 +38,8 @@ Shifts ending after midnight (e.g. `10pm - 2am`) roll over to the next day.
 ## Batches and inline rates
 
 Send one shift per line to log them all in one message; `15/h` (or `$15 per hour`)
-in a line overrides the stored rate for that shift only:
+overrides the stored hourly rate for that shift only, and `$200 flat` gives that
+shift a fixed payout:
 
 ```
 13/8 8.30am - 8pm 15/h Hermes Private Sale
@@ -124,7 +128,7 @@ command menu on startup. Unknown commands get a nudge back to `/commands`.
 | `/help` | How to log shifts (alias `/start`) |
 | `/log <shift>` | Log a shift (or just send it as a plain message) |
 | `/app` | Open the pay dashboard mini app (aliases `/dashboard`, `/stats`) |
-| `/add <field> <event> <value>` | Backfill location/rate/name/time (alias `/set`) |
+| `/add <field> <event> <value>` | Backfill location/rate/pay/name/time (alias `/set`) |
 | `/rate` | Show current rates |
 | `/rate 25` | Set the default hourly rate |
 | `/rate wedding gig 30` | Rate for a specific event name |

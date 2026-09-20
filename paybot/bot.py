@@ -59,6 +59,9 @@ Wedding gig 12/8 6pm-11.30pm 25/h @ Marina Bay Sands
 ```
 → 5.5h × SGD 25 = SGD 137.50
 
+Or log a fixed payout instead of an hourly rate:
+`Wedding gig 12/8 6pm-11.30pm $200 flat @ Marina Bay Sands`
+
 Location is optional — write it after `@` or `at`.
 
 The order doesn't matter and the rate is optional (your saved rate is used):
@@ -68,7 +71,7 @@ The order doesn't matter and the rate is optional (your saved rate is used):
 `28/9 0700 - 1900 SuperReturn @ MBS 20/h`
 
 Send several lines at once to log a batch, and add `15/h` in a line to
-override the rate for that shift:
+override the hourly rate for that shift:
 ```
 13/8 8.30am - 8pm 15/h Hermes Private Sale
 14/8 9am - 8pm 15/h Hermes Private Sale
@@ -314,12 +317,10 @@ def _store_shift(
     storage: Storage, user_id: int, shift: Shift, config: RateConfig
 ) -> tuple[int, Decimal, Decimal, Decimal]:
     hours = Decimal(str(shift.hours))
-    rate = (
-        shift.rate_override
-        if shift.rate_override is not None
-        else config.rate_for(shift.event)
+    rate = shift.rate_override if shift.rate_override is not None else config.rate_for(shift.event)
+    pay = round_money(rate) if shift.pay_is_fixed else calculate_pay(
+        shift.hours, shift.event, config, shift.rate_override
     )
-    pay = calculate_pay(shift.hours, shift.event, config, shift.rate_override)
     shift_id = storage.add_shift(
         user_id=user_id,
         day=shift.day,
@@ -331,7 +332,7 @@ def _store_shift(
         break_paid=shift.rest.paid,
         hours=hours,
         pay=pay,
-        pay_is_fixed=False,
+        pay_is_fixed=shift.pay_is_fixed,
         currency=config.currency,
     )
     return shift_id, hours, pay, rate
@@ -363,7 +364,23 @@ def _summarise(
         f"{shift.start.strftime('%H:%M')}–{shift.end.strftime('%H:%M')}",
         what,
     )
+    if shift.pay_is_fixed:
+        return head, f"{_amount(pay)} flat"
     return head, f"{format_hours(hours)}h × {_amount(rate)} = {_amount(pay)}"
+
+
+def _edited_pay(value: str) -> tuple[Decimal, bool]:
+    match = re.fullmatch(
+        r"\s*(?:\$|\b(?-i:[A-Z]{3})\s*)?(?P<amount>\d+(?:\.\d+)?)"
+        r"\s*(?P<mode>(?:/\s*h(?:r|our)?|per\s+hour)|flat|fixed|lump(?:\s+|-)?sum)?\s*",
+        value,
+        re.IGNORECASE,
+    )
+    if match is None:
+        raise InvalidOperation
+    amount = Decimal(match.group("amount"))
+    mode = (match.group("mode") or "").lower()
+    return amount, mode in {"flat", "fixed", "lump sum", "lump-sum"}
 
 
 async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -452,7 +469,7 @@ _EDIT_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "rate": (
         re.compile(
             r"^(?P<target>.+?)\s*(?:=|\bto\b)?\s*(?:\$|\b(?-i:[A-Z]{3})\s*)?"
-            r"(?P<value>\d+(?:\.\d+)?)\s*(?:/\s*h(?:r|our)?|per\s+hour)?$",
+            r"(?P<value>\d+(?:\.\d+)?(?:\s*(?:/\s*h(?:r|our)?|per\s+hour|flat|fixed|lump(?:\s+|-)?sum))?)$",
             re.IGNORECASE,
         ),
     ),
@@ -475,6 +492,7 @@ EDIT_USAGE = (
     "Backfill details on shifts you already logged:\n"
     "`/add location Hermes Private Sale @ MBS`\n"
     "`/add rate Hermes Private Sale 18`\n"
+    "`/add pay Hermes Private Sale 200 flat`\n"
     "`/add name Hermes Private Sale = Hermes PS`\n"
     "`/add time Hermes Private Sale 9am-8pm`\n"
     "Use a shift number to change just one: `/add time #12 9am-8pm`."
@@ -493,6 +511,8 @@ def parse_edit(text: str) -> tuple[str, str, str] | None:
             continue
         target = match.group("target").strip(" ,;=-")
         value = match.group("value").strip()
+        if field == "rate" and not re.search(r"\b(?:flat|fixed|lump(?:\s+|-)?sum)\b", value, re.IGNORECASE):
+            value = re.sub(r"\s*(?:/\s*h(?:r|our)?|per\s+hour)\s*$", "", value, flags=re.IGNORECASE)
         if target and value:
             return field, target, value
     return None
@@ -516,18 +536,27 @@ def _edit_record(
     if field == "name":
         return {"event": value}
     if field == "rate":
-        rate = Decimal(value)
-        return {"pay": str(calculate_pay(float(record.hours), record.event, config, rate))}
+        amount, pay_is_fixed = _edited_pay(value)
+        if pay_is_fixed:
+            return {"pay": str(round_money(amount)), "pay_is_fixed": 1}
+        return {
+            "pay": str(calculate_pay(float(record.hours), record.event, config, amount)),
+            "pay_is_fixed": 0,
+        }
     parts = re.split(r"\s*(?:-|–|—|to|till|until)\s*", value, maxsplit=1)
     start, end = parse_time(parts[0]), parse_time(parts[1])
     hours = _rehours(record, start, end)
-    old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
-    return {
+    changes = {
         "start_time": start.isoformat(timespec="minutes"),
         "end_time": end.isoformat(timespec="minutes"),
         "hours": format_hours(hours),
-        "pay": str(calculate_pay(float(hours), record.event, config, round_money(old_rate))),
     }
+    if record.pay_is_fixed:
+        changes["pay"] = str(record.pay)
+        return changes
+    old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
+    changes["pay"] = str(calculate_pay(float(hours), record.event, config, round_money(old_rate)))
+    return changes
 
 
 async def add_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1376,7 +1405,7 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
                 "Log a shift (or just send it as a message)", log_shift,
             ),
             Command(
-                ("add", "set", "edit"), "/add location|rate|name|time <event> <value>",
+                ("add", "set", "edit"), "/add location|rate|pay|name|time <event> <value>",
                 "Backfill a detail on every shift of an event", add_detail,
             ),
             Command(

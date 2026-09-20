@@ -35,6 +35,7 @@ class Shift:
     rest: Break = NO_BREAK
     break_specified: bool = False
     rate_override: Decimal | None = None
+    pay_is_fixed: bool = False
 
     @property
     def gross_hours(self) -> float:
@@ -195,6 +196,28 @@ _RATE_RE = re.compile(
 )
 
 
+_FIXED_PAY_RE = re.compile(
+    r"""
+    (?:\$|\b(?-i:[A-Z]{3})\s*)?
+    (?P<amount>\d+(?:\.\d+)?)
+    \s*(?:flat|fixed|lump(?:\s+|-)?sum)\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def extract_fixed_pay(text: str) -> tuple[str, Decimal | None]:
+    """Pull an inline lump-sum amount (e.g. "$200 flat") out of the message."""
+    match = _FIXED_PAY_RE.search(text)
+    if not match:
+        return text, None
+    try:
+        amount = Decimal(match.group("amount"))
+    except InvalidOperation:
+        return text, None
+    return text[: match.start()] + " " + text[match.end() :], amount
+
+
 def extract_rate(text: str) -> tuple[str, Decimal | None]:
     """Pull an inline hourly rate (e.g. "15/h", "$20 per hour") out of the message."""
     match = _RATE_RE.search(text)
@@ -217,9 +240,19 @@ _TRAILING_RATE_RE = re.compile(
 )
 
 
-def _rate_starts_at(place: str) -> int:
-    """Where a rate written after a location begins, e.g. the " 15/h" of "MBS 15/h"."""
-    match = _TRAILING_RATE_RE.search(place)
+_TRAILING_FIXED_PAY_RE = re.compile(
+    r"""
+    \s*(?P<currency>\$|\b(?-i:[A-Z]{3})\s*)?
+    (?P<amount>\d+(?:\.\d+)?)
+    \s*(?:flat|fixed|lump(?:\s+|-)?sum)\s*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _pay_starts_at(place: str) -> int:
+    """Where a pay expression written after a location begins."""
+    match = _TRAILING_RATE_RE.search(place) or _TRAILING_FIXED_PAY_RE.search(place)
     if match is None:
         return len(place)
     if match.group("currency") and not place[: match.start()].strip():
@@ -273,7 +306,7 @@ def _parse_anywhere(text: str, today: date) -> tuple[date, time, time, str]:
             if event:
                 return day, start, end, event
     raise ParseError(
-        "Send it as: <event> <date> <start>-<end> <rate>, "
+        "Send it as: <event> <date> <start>-<end> <rate or amount>, "
         "e.g. `Wedding gig 12/8 6pm-11.30pm 25/h`."
     )
 
@@ -284,7 +317,7 @@ def extract_location(text: str) -> tuple[str, str]:
     if not match:
         return text, ""
     place = match.group("place")
-    rate_at = _rate_starts_at(place)
+    rate_at = _pay_starts_at(place)
     body, rate_text = place[:rate_at], place[rate_at:]
     cut = min(
         (
@@ -310,7 +343,9 @@ def parse_shift(
     today = today or date.today()
     text, rest = extract_break(text, default_paid=default_break_paid)
     text, location = extract_location(text)
-    text, rate_override = extract_rate(text)
+    text, fixed_pay = extract_fixed_pay(text)
+    pay_is_fixed = fixed_pay is not None
+    text, rate_override = extract_rate(text) if fixed_pay is None else (text, fixed_pay)
     tokens = _split_tokens(text)
     day: date | None = None
     start: time | None = None
@@ -333,6 +368,7 @@ def parse_shift(
         event=event,
         location=location,
         rate_override=rate_override,
+        pay_is_fixed=pay_is_fixed,
     )
     return shift if rest is None else shift.with_break(rest)
 
