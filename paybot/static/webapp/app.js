@@ -2039,7 +2039,7 @@
       start: form.start.value,
       end: form.end.value,
       rate: form.rate.value,
-      pay_is_fixed: form.pay_is_fixed.value,
+      pay_is_fixed: form.pay_is_fixed.value === "yes",
       break_hours: form.break_hours.value,
       break_paid: form.break_paid.value,
     };
@@ -2052,7 +2052,7 @@
     }
     form.start.value = duplicated.start;
     form.end.value = duplicated.end;
-    setPayMode(duplicated.pay_is_fixed === "yes" ? "fixed" : "hourly");
+    setPayMode(duplicated.pay_is_fixed ? "fixed" : "hourly");
     form.rate.value = duplicated.rate;
     form.break_hours.value = duplicated.break_hours;
     setBreakPaid(duplicated.break_paid);
