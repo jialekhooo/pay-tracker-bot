@@ -1641,7 +1641,9 @@
     els.editForm.pay_is_fixed.value = fixed ? "yes" : "no";
     els.editAmountSuffix.textContent = fixed ? "· lump sum" : "· per hour";
     els.editPayMode.querySelectorAll("[data-pay-mode]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.payMode === mode);
+      const active = button.dataset.payMode === mode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-checked", active ? "true" : "false");
     });
   }
 
@@ -1661,7 +1663,7 @@
       els.editForm.rate.value = (Number(els.editForm.rate.value) * currentFormHours()).toFixed(2);
     } else if (mode === "hourly" && wasFixed && els.editForm.rate.value) {
       const hours = currentFormHours();
-      els.editForm.rate.value = hours ? (Number(els.editForm.rate.value) / hours).toFixed(2) : "";
+      if (hours) els.editForm.rate.value = (Number(els.editForm.rate.value) / hours).toFixed(2);
     }
     setPayMode(mode);
     syncRateWidth();
@@ -1984,7 +1986,9 @@
     if (form.end.value !== shift.end) payload.end = form.end.value;
     const payIsFixed = form.pay_is_fixed.value === "yes";
     if (payIsFixed !== Boolean(shift.pay_is_fixed)) payload.pay_is_fixed = payIsFixed;
-    if (form.rate.value !== shift.rate) payload.rate = form.rate.value;
+    if (form.rate.value !== shift.rate || (!payIsFixed && payIsFixed !== Boolean(shift.pay_is_fixed))) {
+      payload.rate = form.rate.value;
+    }
     if (form.break_hours.value !== shift.break_hours)
       payload.break_hours = form.break_hours.value || "0";
     const breakPaid = form.break_paid.value === "yes";

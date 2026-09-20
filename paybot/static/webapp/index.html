@@ -104,9 +104,25 @@
 
           <div class="field-group">
             <span class="group-label">Pay</span>
-            <div class="segmented" id="edit-pay-mode">
-              <button type="button" class="segment active" data-pay-mode="hourly">Hourly</button>
-              <button type="button" class="segment" data-pay-mode="fixed">Lump sum</button>
+            <div class="segmented" id="edit-pay-mode" role="radiogroup" aria-label="Pay mode">
+              <button
+                type="button"
+                class="segment active"
+                data-pay-mode="hourly"
+                role="radio"
+                aria-checked="true"
+              >
+                Hourly
+              </button>
+              <button
+                type="button"
+                class="segment"
+                data-pay-mode="fixed"
+                role="radio"
+                aria-checked="false"
+              >
+                Lump sum
+              </button>
             </div>
             <input type="hidden" name="pay_is_fixed" value="no" />
             <label class="amount-row">
