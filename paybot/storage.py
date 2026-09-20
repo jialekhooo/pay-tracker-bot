@@ -88,10 +88,10 @@ class ShiftRecord:
     break_paid: bool
     hours: Decimal
     pay: Decimal
-    pay_is_fixed: bool
     currency: str
     payment_due: date | None
     paid: bool
+    pay_is_fixed: bool = False
 
 
 @dataclass(frozen=True)
