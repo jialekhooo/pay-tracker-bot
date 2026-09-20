@@ -704,6 +704,23 @@ def test_webapp_update_fixed_lump_sum_keeps_pay_when_hours_change(tmp_path):
     storage.close()
 
 
+def test_webapp_update_fixed_shift_switching_back_to_hourly_requires_rate(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("200"), "SGD", pay_is_fixed=True,
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"pay_is_fixed": False},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Hourly rate is required when switching from lump sum"
+    storage.close()
+
+
 def test_webapp_update_shift_rejects_invalid_rate(tmp_path):
     storage = Storage(tmp_path / "webapp.sqlite3")
     shift_id = storage.add_shift(
@@ -874,6 +891,7 @@ def test_webapp_create_shift_with_explicit_rate(tmp_path):
             "start": "18:00",
             "end": "23:30",
             "rate": "25",
+            "pay_is_fixed": False,
         },
     )
     assert response.status_code == 200

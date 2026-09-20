@@ -699,8 +699,9 @@ async def update_shift(
             old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
             fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
     elif pay_is_fixed != record.pay_is_fixed and not pay_is_fixed:
-        old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
-        fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
+        raise HTTPException(
+            status_code=400, detail="Hourly rate is required when switching from lump sum"
+        )
 
     if payload.payment_due is not None:
         try:

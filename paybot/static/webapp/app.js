@@ -1645,6 +1645,24 @@
     });
   }
 
+  function impliedHourlyRate(shift) {
+    const hours = Number(shift && shift.hours);
+    return hours ? (Number(shift.pay) / hours).toFixed(2) : "";
+  }
+
+  function changePayMode(mode) {
+    const shift = editingShiftSnapshot;
+    if (shift && els.editForm.rate.value === shift.rate) {
+      if (mode === "fixed" && !shift.pay_is_fixed) {
+        els.editForm.rate.value = shift.pay;
+      } else if (mode === "hourly" && shift.pay_is_fixed) {
+        els.editForm.rate.value = impliedHourlyRate(shift);
+      }
+    }
+    setPayMode(mode);
+    syncRateWidth();
+  }
+
   function setBreakPaid(value) {
     els.editForm.break_paid.value = value;
     els.editBreakPaid.querySelectorAll("[data-break-paid]").forEach((button) => {
@@ -2580,7 +2598,7 @@
   els.editForm.rate.addEventListener("input", syncRateWidth);
   els.editPayMode.addEventListener("click", (event) => {
     const button = event.target.closest("[data-pay-mode]");
-    if (button) setPayMode(button.dataset.payMode);
+    if (button) changePayMode(button.dataset.payMode);
   });
   els.editBreakPaid.addEventListener("click", (event) => {
     const button = event.target.closest("[data-break-paid]");
