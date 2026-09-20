@@ -1985,8 +1985,9 @@
     if (form.start.value !== shift.start) payload.start = form.start.value;
     if (form.end.value !== shift.end) payload.end = form.end.value;
     const payIsFixed = form.pay_is_fixed.value === "yes";
-    if (payIsFixed !== Boolean(shift.pay_is_fixed)) payload.pay_is_fixed = payIsFixed;
-    if (form.rate.value !== shift.rate || (!payIsFixed && payIsFixed !== Boolean(shift.pay_is_fixed))) {
+    const payModeChanged = payIsFixed !== Boolean(shift.pay_is_fixed);
+    if (payModeChanged) payload.pay_is_fixed = payIsFixed;
+    if (form.rate.value !== shift.rate || payModeChanged) {
       payload.rate = form.rate.value;
     }
     if (form.break_hours.value !== shift.break_hours)
