@@ -1,0 +1,201 @@
+Metadata-Version: 2.4
+Name: paybot
+Version: 0.1.0
+Summary: Telegram bot that logs work shifts, calculates pay and syncs them to your calendar
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: python-telegram-bot[job-queue]==21.6
+Requires-Dist: fastapi==0.115.0
+Requires-Dist: uvicorn==0.30.6
+
+# Pay tracker Telegram bot
+
+Log a shift in Telegram and the bot calculates the pay and stores it in SQLite.
+
+To log, key in the event name, the date and time, and (optionally) the location
+and pay rate — in any order:
+
+```
+Wedding gig 12/8 6pm-11.30pm 25/h @ Marina Bay Sands
+12/8 6pm-11.30pm Wedding gig
+2026-08-12 18:00 23:30 Wedding gig
+Roadshow today 9am to 5pm
+28/9 0700 - 1900 SuperReturn @ MBS 20/h
+```
+
+Without a rate in the line, the stored rate for that event (or your default) is used.
+For a fixed payout instead of an hourly one, write an amount like `$200 flat` or
+`SGD 200 lump sum` in the line.
+A location is anything after `@` or `at`; it shows up in listings and the CSV export.
+To fix up shifts you already logged, use `/add <field> <event or #id> <value>`:
+
+```
+/add location Hermes Private Sale @ MBS
+/add rate Hermes Private Sale 18
+/add pay Hermes Private Sale 200 flat
+/add name Hermes Private Sale = Hermes PS
+/add time Hermes Private Sale 9am-8pm
+/add time #12 9am-8pm          # just that one shift
+```
+
+Event names match ignoring case, and a fragment (`hermes`) matches too. Changing
+the rate or the times recalculates that shift's pay, keeping its break.
+
+Reply: `Logged #3: Wedding gig — 5.5h @ SGD 25.00/h — Pay: SGD 137.50`
+
+Shifts ending after midnight (e.g. `10pm - 2am`) roll over to the next day.
+
+## Batches and inline rates
+
+Send one shift per line to log them all in one message; `15/h` (or `$15 per hour`)
+overrides the stored hourly rate for that shift only, and `$200 flat` gives that
+shift a fixed payout:
+
+```
+13/8 8.30am - 8pm 15/h Hermes Private Sale
+14/8 9am - 8pm 15/h Hermes Private Sale
+15/8 9am - 9pm 15/h Hermes Private Sale
+```
+
+The reply lists each logged shift plus the batch total; unreadable lines are
+reported without blocking the rest.
+
+## Double bookings
+
+Logging a shift that overlaps one you already stored still logs it, but the reply
+warns which shift it clashes with (overnight shifts are compared properly).
+`/upcoming` lists what you're booked for from today onwards and flags clashes; `/upcomingshifts` shows every booked shift ahead, however far away.
+
+## Calendar
+
+`/calendar` sends a `.ics` file of your upcoming shifts (open it to add them to Apple
+or Google Calendar) plus a tap-to-add Google Calendar link per shift. `/calendar aug`
+exports one month, `/calendar all` everything, `/calendar #12 #13` specific shifts.
+Overnight shifts end on the following day, and Google links use the timezone from
+`/reminders`.
+
+### Auto-syncing subscription (TimeTree, Google, Apple)
+
+`/calendarlink` returns a private feed URL your calendar app subscribes to once and
+re-reads on its own, so shifts you log or delete later update themselves. Subscribe
+in Google Calendar (*Other calendars → + → From URL*) or on iPhone (*Settings →
+Calendar → Accounts → Add Subscribed Calendar*); TimeTree then picks the shifts up
+through its calendar sync, since it imports from the phone's calendars rather than
+from an .ics URL. `/calendarlink new` rotates the link if it leaks.
+
+The feed only runs when the bot is started with a reachable address:
+
+```bash
+export PAYBOT_FEED_PORT=8799            # local port the feed listens on
+export PAYBOT_FEED_URL=https://your-host # public base URL of that port
+```
+
+Google Calendar refuses URLs carrying basic-auth credentials, so host the feed
+somewhere with a plain `https://host/<token>.ics` address (see below).
+
+## Mini app dashboard
+
+`/app` sends a button that opens a Telegram Mini App — a native-feeling web
+dashboard showing today/this week/this month's earnings (with a running shift
+counted pro-rata), what's upcoming with clashes flagged, and a tap-through
+by-month breakdown. It reuses the calendar feed's public address, so no extra
+hosting is needed. The bot also sets it as the chat's ☰ menu button, so tapping
+that opens the dashboard directly.
+
+The dashboard only runs alongside `paybot.web` (see *Hosting* below) since it's
+served over HTTP; set `PAYBOT_WEBAPP_URL` to override the address it's hosted at
+if it differs from the calendar feed's.
+
+## Reminders
+
+`/reminders on` sends you a message the evening before (20:00, UTC+8 by default)
+listing the shifts you have the next day. `/reminders 19:30 +8` changes the time or
+timezone, `/reminders off` stops them. The bot process must be running for these to
+arrive.
+
+## Breaks
+
+Mention a break anywhere in the message; unpaid breaks are deducted from paid hours,
+paid breaks are not:
+
+```
+today 9am-6pm 1h unpaid break Roadshow    -> 8h paid
+today 9am-6pm 1 hour paid break Roadshow  -> 9h paid
+today 9am-6pm 30min break Roadshow        -> uses the /break default
+today 9am-6pm no break Roadshow           -> ignores the /break default
+```
+
+`/break 1 unpaid` applies a default break to every shift that doesn't mention one.
+
+## Commands
+
+`/commands` lists everything in chat, and the same list is published to Telegram's
+command menu on startup. Unknown commands get a nudge back to `/commands`.
+
+| Command | Purpose |
+| --- | --- |
+| `/commands` | List every command (alias `/cmds`) |
+| `/help` | How to log shifts (alias `/start`) |
+| `/log <shift>` | Log a shift (or just send it as a plain message) |
+| `/app` | Open the pay dashboard mini app (aliases `/dashboard`, `/stats`) |
+| `/add <field> <event> <value>` | Backfill location/rate/pay/name/time (alias `/set`) |
+| `/rate` | Show current rates |
+| `/rate 25` | Set the default hourly rate |
+| `/rate wedding gig 30` | Rate for a specific event name |
+| `/clearrate wedding gig` | Remove an event rate |
+| `/currency SGD` | Currency label |
+| `/overtime 8 1.5` | ×1.5 beyond 8 hours (`/overtime off` to disable) |
+| `/break 1 unpaid` | Default break for shifts that don't mention one (`/break off`) |
+| `/upcoming [days]` | Shifts you're booked for (next 14 days by default) |
+| `/upcomingshifts` | Every upcoming booked shift, with the booked total |
+| `/reminders on\|off\|20:00 [+8]` | Message the evening before each shift |
+| `/list [month]` | Recent shifts, or every shift in a month |
+| `/month` | Summary per month; `/month aug` lists that month's shifts |
+| `/total [month]` | Every shift in the month plus month and all-time totals (this month by default) |
+| `/earnings [today\|week\|month\|aug]` | Pay earned so far with a per-shift breakdown (a shift running now counts pro-rata), plus what is still booked |
+| `/delete <id> [id ...]` | Delete shifts; the reply shows the recomputed totals |
+| `/clear [month]` | Delete a whole month (or everything) after confirming |
+| `/calendar [month\|all\|#id]` | `.ics` file + Google Calendar links (alias `/ics`) |
+| `/calendarlink [new]` | Subscription URL that stays in sync (alias `/subscribe`) |
+| `/export [month]` | CSV export |
+
+Months can be written as `2026-08`, `aug`, `August 2025`, `8`, `this month`, or
+`last month`.
+
+## Setup
+
+1. Message [@BotFather](https://t.me/BotFather) on Telegram → `/newbot` → copy the token.
+2. Install and run:
+
+```bash
+pip install -r requirements.txt
+export TELEGRAM_BOT_TOKEN="123456:ABC..."
+export PAYBOT_DB="paybot.sqlite3"   # optional, defaults to ./paybot.sqlite3
+python -m paybot.bot
+```
+
+The bot uses long polling, so it works from any machine with outbound internet —
+no public URL needed. Keep the process running (e.g. `systemd`, `tmux`, or a
+small VPS) for the bot to stay responsive.
+
+### Hosting bot + calendar feed together
+
+`paybot.web` runs the bot and serves the subscription feed in one process, which
+is what any host (Fly.io, Render, Railway, a VPS) needs:
+
+```bash
+export TELEGRAM_BOT_TOKEN="123456:ABC..."
+export PAYBOT_FEED_URL="https://your-app.example.com"   # public address of this service
+uvicorn paybot.web:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+The included `Dockerfile` does exactly that and keeps the database on a `/data`
+volume, so shifts survive redeploys. `GET /healthz` is a health check,
+`GET /<token>.ics` is the per-user feed, and `GET /webapp/` serves the mini app
+dashboard (its `/webapp/api/*` endpoints require Telegram's signed `initData`).
+
+## Tests
+
+```bash
+python -m pytest
+```

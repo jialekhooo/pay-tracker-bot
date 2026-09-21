@@ -2,6 +2,15 @@
   "use strict";
 
   const tg = window.Telegram ? window.Telegram.WebApp : null;
+
+  // iOS/WebKit (Telegram's in-app browser included) only evaluates `:active` styles on an
+  // element while at least one ancestor has a touchstart listener; with none registered
+  // anywhere, every custom `:active` press state in this app (the segmented pay-mode/break
+  // toggles included) silently never applies, so buttons look and feel unpressable on iPhone
+  // even though the underlying click handler fires. This no-op listener opts the whole
+  // document into WebKit's `:active` handling.
+  document.addEventListener("touchstart", () => {}, { passive: true });
+
   const els = {
     avatar: document.getElementById("avatar"),
     profileButton: document.getElementById("profile-button"),
