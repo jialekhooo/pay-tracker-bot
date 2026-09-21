@@ -320,6 +320,20 @@
     return isoDateUTC(due);
   }
 
+  // Keeps the due-date preview tracking the sheet's dates: whenever any event date changes
+  // (or a date row is added/removed) and the user hasn't picked a due date themselves,
+  // re-derive the default from whichever day falls last — the same anchor the server uses.
+  function syncDefaultPaymentDue() {
+    // A hand-picked due date and a completed payment both outrank the derived default.
+    if (paymentDueTouched || els.editForm.paid.checked) return;
+    const days = [els.editForm.day.value, ...extraDateGroups().map(({ day }) => day.value)]
+      .filter(Boolean);
+    if (!days.length) return;
+    const lastDay = days.reduce((latest, day) => (day > latest ? day : latest));
+    els.editForm.payment_due.value = defaultPaymentDue(lastDay);
+    syncFieldDisplay(els.editForm.payment_due);
+  }
+
   function mondayOf(dateStr) {
     const [year, month, day] = dateStr.split("-").map(Number);
     const utc = Date.UTC(year, month - 1, day);
@@ -1799,14 +1813,17 @@
       input.addEventListener("input", () => {
         syncFieldDisplay(input);
         updateDateOverlapWarnings();
+        if (input === dayInput) syncDefaultPaymentDue();
       });
       input.addEventListener("change", () => {
         syncFieldDisplay(input);
         updateDateOverlapWarnings();
+        if (input === dayInput) syncDefaultPaymentDue();
       });
     });
     renumberExtraDates();
     updateDateOverlapWarnings();
+    syncDefaultPaymentDue();
   }
 
 
@@ -2597,6 +2614,7 @@
       removeBtn.closest("[data-extra-date-row]").remove();
       renumberExtraDates();
       updateDateOverlapWarnings();
+      syncDefaultPaymentDue();
     }
   });
   els.editBackdrop.addEventListener("click", (event) => {
@@ -2635,10 +2653,12 @@
       input.addEventListener("input", () => {
         syncFieldDisplay(input);
         updateDateOverlapWarnings();
+        if (input === els.editForm.day) syncDefaultPaymentDue();
       });
       input.addEventListener("change", () => {
         syncFieldDisplay(input);
         updateDateOverlapWarnings();
+        if (input === els.editForm.day) syncDefaultPaymentDue();
       });
     }
   );
