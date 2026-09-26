@@ -1652,7 +1652,7 @@
   function setPayMode(mode) {
     const fixed = mode === "fixed";
     els.editForm.pay_is_fixed.value = fixed ? "yes" : "no";
-    els.editAmountSuffix.textContent = fixed ? "· lump sum" : "· per hour";
+    syncAmountSuffix();
     els.editPayMode.querySelectorAll("[data-pay-mode]").forEach((button) => {
       const active = button.dataset.payMode === mode;
       button.classList.toggle("active", active);
@@ -1660,14 +1660,36 @@
     });
   }
 
+  // A lump sum covers the whole booking — spell out how many days it spans so the amount
+  // isn't mistaken for a per-day figure when extra dates are on the sheet.
+  function syncAmountSuffix() {
+    const fixed = els.editForm.pay_is_fixed.value === "yes";
+    const days = 1 + extraDateGroups().length;
+    els.editAmountSuffix.textContent = !fixed
+      ? "\u00b7 per hour"
+      : days > 1
+        ? `\u00b7 lump sum for ${days} days`
+        : "\u00b7 lump sum";
+  }
+
+  // Worked hours across every date on the sheet (main day plus extras), each less its own
+  // unpaid break — the whole booking, mirroring how the server totals a bulk create.
   function currentFormHours() {
-    const span = spanMs(els.editForm.day.value, els.editForm.start.value, els.editForm.end.value);
-    if (!span) return 0;
-    let hours = (span[1] - span[0]) / 3600000;
-    if (els.editForm.break_paid.value !== "yes") {
-      hours -= Number(els.editForm.break_hours.value || 0);
-    }
-    return Math.max(hours, 0);
+    const breakHours =
+      els.editForm.break_paid.value !== "yes" ? Number(els.editForm.break_hours.value || 0) : 0;
+    const entries = [
+      { day: els.editForm.day.value, start: els.editForm.start.value, end: els.editForm.end.value },
+      ...extraDateGroups().map(({ day, start, end }) => ({
+        day: day.value,
+        start: start.value,
+        end: end.value,
+      })),
+    ];
+    return entries.reduce((total, { day, start, end }) => {
+      const span = spanMs(day, start, end);
+      if (!span) return total;
+      return total + Math.max((span[1] - span[0]) / 3600000 - breakHours, 0);
+    }, 0);
   }
 
   function changePayMode(mode) {
@@ -1823,6 +1845,7 @@
     renumberExtraDates();
     updateDateOverlapWarnings();
     syncDefaultPaymentDue();
+    syncAmountSuffix();
   }
 
 
@@ -2615,6 +2638,7 @@
       renumberExtraDates();
       updateDateOverlapWarnings();
       syncDefaultPaymentDue();
+      syncAmountSuffix();
     }
   });
   els.editBackdrop.addEventListener("click", (event) => {
