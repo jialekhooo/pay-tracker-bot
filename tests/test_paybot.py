@@ -974,6 +974,80 @@ def test_webapp_create_lump_sum_shift_requires_amount(tmp_path):
     storage.close()
 
 
+def test_webapp_bulk_create_splits_lump_sum_across_dates_by_hours(tmp_path):
+    """A lump sum quotes the whole booking, however many days it spans — the amount is
+    split across the shifts in proportion to their hours, never repeated per day."""
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts/bulk",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Token",
+            "rate": "450",
+            "pay_is_fixed": True,
+            "shifts": [
+                {"day": "2026-10-07", "start": "06:30", "end": "18:30"},  # 12h
+                {"day": "2026-10-08", "start": "10:00", "end": "16:00"},  # 6h
+            ],
+        },
+    )
+    assert response.status_code == 200
+    created = response.json()["created"]
+    assert [s["pay"] for s in created] == ["300.00", "150.00"]
+    assert all(s["pay_is_fixed"] for s in created)
+    assert sum(Decimal(s["pay"]) for s in created) == Decimal("450.00")
+    storage.close()
+
+
+def test_webapp_bulk_create_lump_sum_total_survives_rounding(tmp_path):
+    """Three equal days of a 100.00 lump sum can't each round to 33.33 and lose a cent —
+    the last shift absorbs the remainder so the booking still totals exactly 100.00."""
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts/bulk",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Roadshow",
+            "rate": "100",
+            "pay_is_fixed": True,
+            "shifts": [
+                {"day": "2026-10-05", "start": "09:00", "end": "17:00"},
+                {"day": "2026-10-06", "start": "09:00", "end": "17:00"},
+                {"day": "2026-10-07", "start": "09:00", "end": "17:00"},
+            ],
+        },
+    )
+    assert response.status_code == 200
+    created = response.json()["created"]
+    assert [s["pay"] for s in created] == ["33.33", "33.33", "33.34"]
+    assert sum(Decimal(s["pay"]) for s in created) == Decimal("100.00")
+    storage.close()
+
+
+def test_webapp_bulk_create_hourly_still_pays_each_shift_by_its_hours(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    client = _webapp_client(storage)
+    response = client.post(
+        "/webapp/api/shifts/bulk",
+        headers=_auth_headers("TESTTOKEN"),
+        json={
+            "event": "Roadshow",
+            "rate": "20",
+            "pay_is_fixed": False,
+            "shifts": [
+                {"day": "2026-10-05", "start": "09:00", "end": "17:00"},  # 8h
+                {"day": "2026-10-06", "start": "09:00", "end": "13:00"},  # 4h
+            ],
+        },
+    )
+    assert response.status_code == 200
+    created = response.json()["created"]
+    assert [s["pay"] for s in created] == ["160.00", "80.00"]
+    storage.close()
+
+
 def test_webapp_create_shift_uses_saved_rate_when_none_given(tmp_path):
     storage = Storage(tmp_path / "webapp.sqlite3")
     storage.save_config(42, RateConfig(default_rate=Decimal("18"), event_rates={}))

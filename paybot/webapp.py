@@ -909,17 +909,38 @@ async def create_shifts_bulk(
         raise HTTPException(status_code=400, detail="Lump sum amount is required")
 
     now = local_clock(_offset(storage, user_id))
-    created: list[dict] = []
-    clashes: list[dict] = []
+    hours_per_entry: list[Decimal] = []
     for day, start, end in entries:
         begins, ends = span(day, start, end)
         worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
         if not break_paid:
             worked -= break_hours
-        hours = max(worked, Decimal("0"))
-        pay = round_money(rate_override) if payload.pay_is_fixed else calculate_pay(
-            float(hours), event, config, rate_override
-        )
+        hours_per_entry.append(max(worked, Decimal("0")))
+
+    # A lump sum covers the whole booking, however many days it spans — split it across
+    # the shifts in proportion to their hours (evenly if no hours), with the last shift
+    # absorbing the rounding remainder so the total always matches the quoted amount.
+    if payload.pay_is_fixed:
+        total = round_money(rate_override)
+        total_hours = sum(hours_per_entry)
+        pays: list[Decimal] = []
+        for hours in hours_per_entry[:-1]:
+            share = (
+                total * hours / total_hours
+                if total_hours
+                else total / len(hours_per_entry)
+            )
+            pays.append(round_money(share))
+        pays.append(round_money(total - sum(pays)))
+    else:
+        pays = [
+            calculate_pay(float(hours), event, config, rate_override)
+            for hours in hours_per_entry
+        ]
+
+    created: list[dict] = []
+    clashes: list[dict] = []
+    for (day, start, end), hours, pay in zip(entries, hours_per_entry, pays):
         shift_id = storage.add_shift(
             user_id=user_id,
             day=day,
