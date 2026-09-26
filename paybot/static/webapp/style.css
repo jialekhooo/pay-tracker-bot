@@ -417,12 +417,20 @@ main {
   color: var(--text);
 }
 
+/* Sits at the top of the scrolling list, often over the header artwork — the same glass
+   treatment as .day-head keeps the label and inactive segment legible on any backdrop. */
 .event-sort {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin: 0 0 10px;
+  padding: 4px 5px 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .event-sort > span {
@@ -456,12 +464,21 @@ main {
   color: var(--text);
 }
 
-/* Chip row for choosing the Upcoming tab's date range; wraps so every range stays visible. */
+/* Chip row for choosing the Upcoming tab's date range; one swipeable line instead of
+   wrapping, so it stays a tidy single row on narrow iPhones. */
 .range-toggle {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
   gap: 8px;
-  padding: 2px 0 12px;
+  margin: 0 -16px;
+  padding: 2px 16px 12px;
+}
+
+.range-toggle::-webkit-scrollbar {
+  display: none;
 }
 
 .range-toggle-btn {
@@ -597,7 +614,10 @@ main {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--hint);
+  /* A touch darker than --hint plus a soft white glow: list tops often scroll over the
+     header artwork, where the plain grey used to wash out. */
+  color: #5d5d63;
+  text-shadow: 0 1px 4px rgba(255, 255, 255, 0.6);
   margin: 18px 4px 8px;
 }
 
@@ -714,6 +734,13 @@ main {
   -webkit-line-clamp: 1;
 }
 
+/* The venue gets its own single line under the times, instead of being ellipsized away
+   at the end of a shared one — locations were nearly always cut off on iPhone widths. */
+.row .sub-location {
+  margin-top: 1px;
+  -webkit-line-clamp: 1;
+}
+
 .row .icon {
   flex: none;
   width: 36px;
@@ -778,22 +805,23 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-/* State reads as a small tinted pill with a leading status dot, instead of a bare label. */
-.row .value .tag {
+/* State reads as a small tinted pill with a leading status dot, instead of a bare label —
+   shared by list rows, the event page's status, and the edit sheet's payment badge. */
+.tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  padding: 4px 9px 4px 7px;
+  padding: 5px 10px 5px 8px;
   border-radius: 999px;
   color: var(--hint);
   background: var(--fill);
 }
 
-.row .value .tag::before {
+.tag::before {
   content: "";
   flex: none;
   width: 5px;
@@ -802,19 +830,24 @@ main {
   background: currentColor;
 }
 
-.row .value .tag-upcoming {
+.tag-upcoming {
   color: var(--upcoming);
   background: var(--upcoming-bg);
 }
 
-.row .value .tag-pending {
+.tag-pending {
   color: var(--pending);
   background: var(--pending-bg);
 }
 
-.row .value .tag-paid {
+.tag-paid {
   color: var(--done);
   background: var(--done-bg);
+}
+
+.row .value .tag {
+  font-size: 10.5px;
+  padding: 4px 9px 4px 7px;
 }
 
 /* The whole-event payment status shown on an event's own page, next to the bulk action. */
@@ -827,8 +860,7 @@ main {
 }
 
 .event-payment-row .tag {
-  font-size: 11px;
-  padding: 5px 10px 5px 8px;
+  flex: none;
 }
 
 .event-mark-paid-btn {
@@ -1481,7 +1513,8 @@ main {
   border: none;
   border-radius: 0;
   padding: 0;
-  font-size: 15px;
+  /* 16px is the iOS threshold below which focusing an input zooms the whole page. */
+  font-size: 16px;
   text-align: right;
   box-sizing: border-box;
   width: auto;

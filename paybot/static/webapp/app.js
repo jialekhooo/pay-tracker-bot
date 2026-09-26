@@ -424,9 +424,8 @@
         ${eventBadge(shift.event)}
         <div class="info">
           <div class="title">${escapeHtml(shift.event)}${clash}</div>
-          <div class="sub">${when}${shift.start}\u2013${shift.end} \u00b7 ${hours(shift.hours)}${
-      shift.location ? ` \u00b7 ${escapeHtml(shift.location)}` : ""
-    }</div>
+          <div class="sub">${when}${shift.start}\u2013${shift.end} \u00b7 ${hours(shift.hours)}</div>
+          ${shift.location ? `<div class="sub sub-location">${escapeHtml(shift.location)}</div>` : ""}
         </div>
         <div class="value">
           <div class="amount">${money(displayPay, currency)}</div>
@@ -1841,7 +1840,8 @@
     els.editForm.end.value = shift.end;
     setPayMode(shift.pay_is_fixed ? "fixed" : "hourly");
     els.editForm.rate.value = shift.rate;
-    els.editForm.break_hours.value = shift.break_hours;
+    // Blank when zero so the "0h" placeholder shows, matching the create sheet.
+    els.editForm.break_hours.value = Number(shift.break_hours) ? shift.break_hours : "";
     setBreakPaid(shift.break_paid ? "yes" : "no");
     els.editForm.payment_due.value = shift.payment_due || defaultPaymentDue(shift.day);
     els.editForm.paid.checked = Boolean(shift.paid);
@@ -2007,7 +2007,7 @@
     if (form.rate.value !== shift.rate || payModeChanged) {
       payload.rate = form.rate.value;
     }
-    if (form.break_hours.value !== shift.break_hours)
+    if (Number(form.break_hours.value || 0) !== Number(shift.break_hours))
       payload.break_hours = form.break_hours.value || "0";
     const breakPaid = form.break_paid.value === "yes";
     if (breakPaid !== shift.break_paid) payload.break_paid = breakPaid;
@@ -2098,7 +2098,7 @@
     form.end.value = duplicated.end;
     setPayMode(duplicated.pay_is_fixed ? "fixed" : "hourly");
     form.rate.value = duplicated.rate;
-    form.break_hours.value = duplicated.break_hours;
+    form.break_hours.value = Number(duplicated.break_hours) ? duplicated.break_hours : "";
     setBreakPaid(duplicated.break_paid);
     form.payment_due.value = defaultPaymentDue(form.day.value);
     syncScheduleDisplays();
