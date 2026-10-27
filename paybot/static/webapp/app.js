@@ -72,7 +72,7 @@
   let dashboardDetail = null; // null | "worked" | "upcoming" — drill-down from the Overview cards
   let scope = "all";
   let monthDetail = null; // set when drilled into a month from the "Months" view
-  let eventsData = null; // fetched lazily the first time the Events tab is opened
+  let eventsData = null; // event list fetched lazily for event detail navigation
   let eventDetail = null; // set when drilled into one event from the "Events" view
   let cabClaimsData = null;
   let settingsData = null; // fetched lazily the first time the Settings tab is opened
@@ -95,7 +95,8 @@
   let overviewDay = null; // "YYYY-MM-DD" shown by the Day quick action; null = the live current day
   let overviewDayData = null; // fetched /day/{date} detail when overviewDay isn't the live day
   let allTimeGroupBy = "event";
-  let eventSort = "date"; // "date" | "alphabetical" — ordering for the All time Events list
+  let eventSort = "desc"; // "desc" | "asc" — most recent event first or last
+  let eventPayoutFilter = "all"; // all events | completed unpaid | completed paid
   let dateOrder = "asc"; // "asc" | "desc" — date order for grouped shift lists
   let upcomingRange = "tomorrow"; // "tomorrow" | "7" | "14" | "30" | "all" — the Upcoming tab's selected range
   let upcomingRangeData = null; // fetched /upcoming/{scope} detail when upcomingRange isn't the default "14"
@@ -582,15 +583,52 @@
   function eventSortToggle() {
     return `
       <div class="event-sort">
-        <span>Sort events</span>
+        <span>Event date</span>
         <div class="event-sort-toggle">
           <button type="button" class="event-sort-btn${
-            eventSort === "date" ? " active" : ""
-          }" data-event-sort="date">Event date</button>
+            eventSort === "desc" ? " active" : ""
+          }"
+            data-event-sort="desc"
+            aria-pressed="${eventSort === "desc"}"
+          >Most recent first</button>
           <button type="button" class="event-sort-btn${
-            eventSort === "alphabetical" ? " active" : ""
-          }" data-event-sort="alphabetical">A–Z</button>
+            eventSort === "asc" ? " active" : ""
+          }"
+            data-event-sort="asc"
+            aria-pressed="${eventSort === "asc"}"
+          >Most recent last</button>
         </div>
+      </div>`;
+  }
+
+  function eventPayoutFilterToggle(events) {
+    const filters = [
+      { key: "all", label: "All events", events },
+      {
+        key: "unpaid",
+        label: "Completed, not paid out",
+        events: events.filter((event) => event.completed && !event.paid_out),
+      },
+      {
+        key: "paid",
+        label: "Completed and paid out",
+        events: events.filter((event) => event.completed && event.paid_out),
+      },
+    ];
+    return `
+      <div class="event-payout-filters" role="group" aria-label="Filter events">
+        ${filters
+          .map(
+            (filter) => `
+              <button type="button" class="event-payout-filter${
+                eventPayoutFilter === filter.key ? " active" : ""
+              }"
+                data-event-payout-filter="${filter.key}"
+                aria-pressed="${eventPayoutFilter === filter.key}">
+                ${filter.label}<span>${filter.events.length}</span>
+              </button>`
+          )
+          .join("")}
       </div>`;
   }
 
@@ -611,9 +649,13 @@
 
   function sortedEvents(events) {
     return [...events].sort((left, right) => {
-      if (eventSort === "alphabetical") return left.event.localeCompare(right.event);
-      return (left.first_day || "9999-12-31").localeCompare(right.first_day || "9999-12-31") ||
-        left.event.localeCompare(right.event);
+      if (!left.last_day && right.last_day) return 1;
+      if (left.last_day && !right.last_day) return -1;
+      const direction = eventSort === "desc" ? -1 : 1;
+      return (
+        direction * (left.last_day || "").localeCompare(right.last_day || "") ||
+        left.event.localeCompare(right.event)
+      );
     });
   }
 
@@ -682,10 +724,10 @@
 
   function overviewView(data) {
     const hero = heroBlock(data.all_time, data.currency);
-    if (!eventsData || !cabClaimsData) {
+    if (!cabClaimsData) {
       return { head: hero, body: `<div class="empty">Loading event payouts…</div>` };
     }
-    return { head: hero, body: eventPayoutView(eventsData, cabClaimsData) };
+    return { head: hero, body: eventPayoutView(cabClaimsData) };
   }
 
   function dayScopeView(data) {
@@ -944,7 +986,7 @@
       .join("");
   }
 
-  function eventPayoutView(eventsData, cabClaimsData) {
+  function eventPayoutView(cabClaimsData) {
     const claimRow = (claim, needsAssignment = false) => `
       <div class="cab-claim-row${needsAssignment ? " unassigned" : ""}">
         <div class="cab-claim-info">
@@ -970,17 +1012,14 @@
             : ""
         }
       </div>`;
-    const eventInfoByName = new Map(
-      eventsData.events.map((event) => [event.event.toLowerCase(), event])
-    );
-    const payoutEvents = sortedEvents(
-      cabClaimsData.events.map((event) => ({
-        ...event,
-        first_day: eventInfoByName.get(event.event.toLowerCase())?.first_day || "9999-12-31",
-      }))
-    );
-    const eventCards = payoutEvents.length
-      ? payoutEvents
+    const payoutEvents = sortedEvents(cabClaimsData.events);
+    const visibleEvents = payoutEvents.filter((event) => {
+      if (eventPayoutFilter === "unpaid") return event.completed && !event.paid_out;
+      if (eventPayoutFilter === "paid") return event.completed && event.paid_out;
+      return true;
+    });
+    const eventCards = visibleEvents.length
+      ? visibleEvents
           .map((event) => {
             const eventClaims = cabClaimsData.claims.filter(
               (claim) =>
@@ -1022,7 +1061,15 @@
               </section>`;
           })
           .join("")
-      : `<div class="empty">Log shifts with event names to see payout totals here.</div>`;
+      : payoutEvents.length
+        ? `<div class="empty">${
+            eventPayoutFilter === "unpaid"
+              ? "No completed events awaiting payout."
+              : eventPayoutFilter === "paid"
+                ? "No completed events have been paid out yet."
+                : "Log shifts with event names to see payout totals here."
+          }</div>`
+        : `<div class="empty">Log shifts with event names to see payout totals here.</div>`;
     const unassigned = cabClaimsData.unassigned_claims.length
       ? `<div class="section-title">Assign existing claims to an event</div>
          <div class="cab-claim-list">${cabClaimsData.unassigned_claims
@@ -1033,6 +1080,8 @@
     return `
       <div class="cab-claims-intro">Cab claims are reimbursements added to your event earnings. Earnings stay unchanged, and the estimated bank credit includes both.</div>
       <button type="button" class="cab-claim-add-button" data-action="open-cab-claim">Add cab claim</button>
+      ${eventPayoutFilterToggle(payoutEvents)}
+      ${eventSortToggle()}
       <div class="section-title">Earnings and estimated payout by event</div>
       <div class="cab-event-list">${eventCards}</div>
       ${unassigned}
@@ -1752,6 +1801,11 @@
     render();
   }
 
+  function selectEventPayoutFilter(next) {
+    eventPayoutFilter = next;
+    render();
+  }
+
   function selectDateOrder(next) {
     dateOrder = next;
     render();
@@ -1810,7 +1864,6 @@
       loadEvents();
     } else if (next === "summary") {
       render();
-      if (!eventsData) loadEvents();
       if (!cabClaimsData) loadCabClaims();
     } else if (next === "settings" && !settingsData) {
       render();
@@ -2723,10 +2776,7 @@
   els.refresh.addEventListener("click", () => {
     load();
     if (view === "events") loadEvents();
-    if (view === "summary") {
-      loadEvents();
-      loadCabClaims();
-    }
+    if (view === "summary") loadCabClaims();
     if (view === "calendar") loadCalendarMonth(calendarMonth || currentMonthKey(summaryData));
     if (view === "settings") loadSettings();
   });
@@ -2851,6 +2901,11 @@
     const eventSortBtn = event.target.closest("[data-event-sort]");
     if (eventSortBtn) {
       selectEventSort(eventSortBtn.dataset.eventSort);
+      return;
+    }
+    const payoutFilterBtn = event.target.closest("[data-event-payout-filter]");
+    if (payoutFilterBtn) {
+      selectEventPayoutFilter(payoutFilterBtn.dataset.eventPayoutFilter);
       return;
     }
     const dateOrderBtn = event.target.closest("[data-date-order]");

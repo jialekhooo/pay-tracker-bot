@@ -417,6 +417,60 @@ main {
   color: var(--text);
 }
 
+.event-payout-filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px 12px;
+  padding: 2px 16px 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.event-payout-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.event-payout-filter {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--separator);
+  border-radius: 999px;
+  background: var(--section-bg);
+  color: var(--hint);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.event-payout-filter span {
+  display: inline-flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--fill);
+  color: inherit;
+  font-size: 11px;
+}
+
+.event-payout-filter.active {
+  border-color: var(--button);
+  background: var(--button);
+  color: var(--button-text);
+}
+
+.event-payout-filter.active span {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 /* Sits at the top of the scrolling list, often over the header artwork — the same glass
    treatment as .day-head keeps the label and inactive segment legible on any backdrop. */
 .event-sort {

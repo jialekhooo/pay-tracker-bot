@@ -705,6 +705,40 @@ def test_webapp_cab_claims_reconcile_without_changing_shift_pay(tmp_path):
     storage.close()
 
 
+def test_webapp_cab_claims_include_event_completion_and_payout_status(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Awaiting payout",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2026, 8, 19), time(9, 0), time(17, 0), "Awaiting payout",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2026, 8, 20), time(9, 0), time(17, 0), "Paid out",
+        Decimal("0"), False, Decimal("8"), Decimal("150"), "SGD", paid=True,
+    )
+    storage.add_shift(
+        42, date(2027, 8, 20), time(9, 0), time(17, 0), "Upcoming",
+        Decimal("0"), False, Decimal("8"), Decimal("200"), "SGD",
+    )
+    client = _webapp_client(storage)
+
+    response = client.get("/webapp/api/cab-claims", headers=_auth_headers("TESTTOKEN"))
+
+    assert response.status_code == 200
+    by_event = {event["event"]: event for event in response.json()["events"]}
+    assert by_event["Awaiting payout"]["last_day"] == "2026-08-19"
+    assert by_event["Awaiting payout"]["completed"] is True
+    assert by_event["Awaiting payout"]["paid_out"] is False
+    assert by_event["Paid out"]["completed"] is True
+    assert by_event["Paid out"]["paid_out"] is True
+    assert by_event["Upcoming"]["completed"] is False
+    assert by_event["Upcoming"]["paid_out"] is False
+    storage.close()
+
+
 @pytest.mark.parametrize(
     ("payload", "message"),
     [

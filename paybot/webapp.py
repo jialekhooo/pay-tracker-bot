@@ -122,6 +122,7 @@ def _num(value: Decimal) -> str:
 
 
 def _cab_claims_json(storage: Storage, user_id: int) -> dict:
+    now = local_clock(_offset(storage, user_id))
     event_totals: dict[str, dict] = {}
     for record in storage.list_shifts(user_id):
         key = record.event.casefold()
@@ -132,9 +133,15 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
                 "cab_claims": Decimal("0"),
                 "currency": record.currency,
                 "shifts": 0,
+                "last_day": record.day,
+                "states": [],
+                "paid": [],
             }
         event_totals[key]["earnings"] += record.pay
         event_totals[key]["shifts"] += 1
+        event_totals[key]["last_day"] = max(event_totals[key]["last_day"], record.day)
+        event_totals[key]["states"].append(worked_by(record, now).state)
+        event_totals[key]["paid"].append(record.paid)
     available_events = [
         {"event": total["event"], "currency": total["currency"]}
         for total in event_totals.values()
@@ -166,11 +173,17 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
                 "cab_claims": Decimal("0"),
                 "currency": record.currency,
                 "shifts": 0,
+                "last_day": None,
+                "states": [],
+                "paid": [],
             }
         event_totals[key]["cab_claims"] += record.amount
 
     events = []
     for total in event_totals.values():
+        completed = bool(total["shifts"]) and all(
+            state == "done" for state in total["states"]
+        )
         events.append(
             {
                 "event": total["event"],
@@ -179,6 +192,9 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
                 "banked": _num(total["earnings"] + total["cab_claims"]),
                 "currency": total["currency"],
                 "shifts": total["shifts"],
+                "last_day": total["last_day"].isoformat() if total["last_day"] else None,
+                "completed": completed,
+                "paid_out": completed and all(total["paid"]),
             }
         )
     events.sort(key=lambda item: (-Decimal(item["earnings"]), item["event"].casefold()))

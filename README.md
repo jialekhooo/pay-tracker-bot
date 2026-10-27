@@ -101,7 +101,8 @@ Event earnings and cab claims appear together while remaining separate figures.
 Claims are linked to a logged work event as reimbursable amounts, and each event
 shows its estimated bank credit (earnings plus cab reimbursements). You can add
 or remove dated claims with a note. Claims never change the earnings recorded
-for a shift.
+for a shift. In Earnings, filter events by completion and payout status, and
+sort them from most recent to oldest or oldest to most recent.
 
 ## Reminders
 
