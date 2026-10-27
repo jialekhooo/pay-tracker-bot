@@ -98,9 +98,10 @@ if it differs from the calendar feed's.
 
 The dashboard's **Earnings** view shows all-time earnings and event payouts.
 Event earnings and cab claims appear together while remaining separate figures.
-Claims are linked to a logged work event, and each event shows its estimated
-bank credit (earnings minus claims). You can add or remove dated claims with a
-note. Claims never change the earnings recorded for a shift.
+Claims are linked to a logged work event as reimbursable amounts, and each event
+shows its estimated bank credit (earnings plus cab reimbursements). You can add
+or remove dated claims with a note. Claims never change the earnings recorded
+for a shift.
 
 ## Reminders
 

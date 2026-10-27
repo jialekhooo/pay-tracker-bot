@@ -40,6 +40,10 @@
     searchInput: document.getElementById("search-input"),
     searchResults: document.getElementById("search-results"),
     searchClose: document.getElementById("search-close"),
+    cabClaimBackdrop: document.getElementById("cab-claim-backdrop"),
+    cabClaimTitle: document.getElementById("cab-claim-title"),
+    cabClaimContent: document.getElementById("cab-claim-content"),
+    cabClaimClose: document.getElementById("cab-claim-close"),
     toast: document.getElementById("toast"),
     toastText: document.getElementById("toast-text"),
     toastAction: document.getElementById("toast-action"),
@@ -80,6 +84,7 @@
   let editingShiftId = null;
   let editorMode = null; // "edit" | "create"
   let editingShiftSnapshot = null; // the shift currently open for editing, for live badge sync
+  let cabClaimOpener = null;
   let paymentDueTouched = false; // true once the user edits the due-date field themselves
   let hasDateOverlap = false; // true while any two bulk-create dates overlap in time
   let activeEditField = null; // focused input inside the edit sheet, while the keyboard is up
@@ -948,7 +953,7 @@
       needsAssignment ? " · Needs event" : ""
     }</span>
         </div>
-        <strong class="cab-claim-amount">−${money(claim.amount, claim.currency)}</strong>
+        <strong class="cab-claim-amount">+${money(claim.amount, claim.currency)}</strong>
         <button type="button" class="cab-claim-delete" data-action="delete-cab-claim" data-claim-id="${
           claim.id
         }" aria-label="Delete cab claim">×</button>
@@ -1004,7 +1009,7 @@
                     event.earnings,
                     event.currency
                   )}</strong></span>
-                  <span>Cab claims <strong>−${money(
+                  <span>Cab reimbursements <strong>+${money(
                     event.cab_claims,
                     event.currency
                   )}</strong></span>
@@ -1026,13 +1031,12 @@
          <p class="cab-claim-footnote">These older claims are not included in an event total until assigned.</p>`
       : "";
     return `
-      <div class="cab-claims-intro">Event earnings stay unchanged; cab claims are shown separately and deducted only to estimate the payout to compare with your bank.</div>
-      <div class="section-title">Add a cab claim</div>
-      ${cabClaimForm(cabClaimsData)}
+      <div class="cab-claims-intro">Cab claims are reimbursements added to your event earnings. Earnings stay unchanged, and the estimated bank credit includes both.</div>
+      <button type="button" class="cab-claim-add-button" data-action="open-cab-claim">Add cab claim</button>
       <div class="section-title">Earnings and estimated payout by event</div>
       <div class="cab-event-list">${eventCards}</div>
       ${unassigned}
-      <p class="cab-claim-footnote">Estimated bank credit = event earnings − linked cab claims.</p>
+      <p class="cab-claim-footnote">Estimated bank credit = event earnings + linked cab reimbursements.</p>
     `;
   }
 
@@ -1071,6 +1075,21 @@
           event || cabClaimsData.available_events.length ? "" : "disabled"
         }>Add cab claim</button>
       </form>`;
+  }
+
+  function openCabClaimModal(event = null) {
+    if (!cabClaimsData) return;
+    els.cabClaimTitle.textContent = "Add cab claim";
+    els.cabClaimContent.innerHTML = cabClaimForm(cabClaimsData, event);
+    els.cabClaimBackdrop.classList.remove("hidden");
+    els.cabClaimClose.focus();
+  }
+
+  function closeCabClaimModal() {
+    els.cabClaimBackdrop.classList.add("hidden");
+    els.cabClaimContent.innerHTML = "";
+    if (cabClaimOpener?.isConnected) cabClaimOpener.focus();
+    cabClaimOpener = null;
   }
 
   function eventsView(data) {
@@ -1124,7 +1143,7 @@
                       payout.earnings,
                       payout.currency
                     )}</strong></span>
-                    <span>Cab claims <strong>−${money(
+                    <span>Cab reimbursements <strong>+${money(
                       payout.cab_claims,
                       payout.currency
                     )}</strong></span>
@@ -1139,7 +1158,7 @@
                                 <strong>${escapeHtml(claim.note || "Cab claim")}</strong>
                                 <span>${escapeHtml(dayKeyLabel(claim.day))}</span>
                               </div>
-                              <strong class="cab-claim-amount">−${money(
+                              <strong class="cab-claim-amount">+${money(
                                 claim.amount,
                                 claim.currency
                               )}</strong>
@@ -1154,8 +1173,13 @@
                 </div>`
               : `<div class="empty">Loading event payout…</div>`
           }
-          <div class="section-title">Add a cab claim for ${escapeHtml(detail.event)}</div>
-          ${cabClaimsData ? cabClaimForm(cabClaimsData, detail.event) : ""}`,
+          ${
+            cabClaimsData
+              ? `<button type="button" class="cab-claim-add-button" data-action="open-cab-claim" data-event-name="${encodeURIComponent(
+                  detail.event
+                )}">Add cab claim for this event</button>`
+              : ""
+          }`,
     };
   }
 
@@ -1456,6 +1480,7 @@
           note: form.elements.note.value,
         },
       });
+      closeCabClaimModal();
       await loadCabClaims();
       showSuccessToast("Cab claim added");
     } catch (err) {
@@ -2745,6 +2770,18 @@
   els.searchBackdrop.addEventListener("click", (event) => {
     if (event.target === els.searchBackdrop) closeSearch();
   });
+  els.cabClaimClose.addEventListener("click", closeCabClaimModal);
+  els.cabClaimBackdrop.addEventListener("click", (event) => {
+    if (event.target === els.cabClaimBackdrop) closeCabClaimModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (
+      event.key === "Escape" &&
+      !els.cabClaimBackdrop.classList.contains("hidden")
+    ) {
+      closeCabClaimModal();
+    }
+  });
   els.searchInput.addEventListener("input", (event) => {
     if (searchDebounce) clearTimeout(searchDebounce);
     const value = event.target.value;
@@ -2757,7 +2794,7 @@
     openEditor(shiftsById.get(Number(row.dataset.id)));
   });
 
-  els.contentWrap.addEventListener("submit", (event) => {
+  els.cabClaimContent.addEventListener("submit", (event) => {
     if (event.target.id !== "cab-claim-form") return;
     event.preventDefault();
     submitCabClaim(event.target);
@@ -2783,6 +2820,14 @@
         "remove-avatar": removeAvatar,
         "delete-cab-claim": deleteCabClaim,
         "assign-cab-claim": assignCabClaim,
+        "open-cab-claim": (button) => {
+          cabClaimOpener = button;
+          openCabClaimModal(
+            button.dataset.eventName
+              ? decodeURIComponent(button.dataset.eventName)
+              : null
+          );
+        },
       };
       const handler = actions[actionBtn.dataset.action];
       if (handler) handler(actionBtn);
@@ -2962,7 +3007,8 @@
 
   if (tg && tg.BackButton) {
     tg.BackButton.onClick(() => {
-      if (eventDetail) setEventDetail(null);
+      if (!els.cabClaimBackdrop.classList.contains("hidden")) closeCabClaimModal();
+      else if (eventDetail) setEventDetail(null);
       else if (monthDetail) setMonthDetail(null);
       else if (dashboardDetail) setDashboardDetail(null);
       else if (settingsSection) setSettingsSection(null);

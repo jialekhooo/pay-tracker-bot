@@ -687,7 +687,7 @@ def test_webapp_cab_claims_reconcile_without_changing_shift_pay(tmp_path):
     by_event = {event["event"]: event for event in summary.json()["events"]}
     assert by_event["Test gig"]["earnings"] == "1500.00"
     assert by_event["Test gig"]["cab_claims"] == "250.00"
-    assert by_event["Test gig"]["banked"] == "1250.00"
+    assert by_event["Test gig"]["banked"] == "1750.00"
     assert by_event["Second gig"]["earnings"] == "500.00"
     assert by_event["Second gig"]["cab_claims"] == "0.00"
     assert by_event["Second gig"]["banked"] == "500.00"
@@ -763,7 +763,7 @@ def test_webapp_cab_claims_can_assign_legacy_unlinked_claim(tmp_path):
     assert assigned.status_code == 200
     assert assigned.json()["unassigned_claims"] == []
     assert assigned.json()["events"][0]["cab_claims"] == "20.00"
-    assert assigned.json()["events"][0]["banked"] == "100.00"
+    assert assigned.json()["events"][0]["banked"] == "140.00"
     storage.close()
 
 

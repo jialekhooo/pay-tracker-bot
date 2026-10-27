@@ -176,7 +176,7 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
                 "event": total["event"],
                 "earnings": _num(total["earnings"]),
                 "cab_claims": _num(total["cab_claims"]),
-                "banked": _num(total["earnings"] - total["cab_claims"]),
+                "banked": _num(total["earnings"] + total["cab_claims"]),
                 "currency": total["currency"],
                 "shifts": total["shifts"],
             }

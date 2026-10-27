@@ -6,7 +6,7 @@
   <!-- Opts out of Android WebView's automatic darkening, which would recolour the fixed palette. -->
   <meta name="color-scheme" content="light" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=70" />
+  <link rel="stylesheet" href="style.css?v=71" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -79,6 +79,21 @@
           <button type="button" class="btn secondary" id="search-close">Close</button>
         </div>
       </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="cab-claim-backdrop">
+      <section
+        class="modal-sheet cab-claim-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cab-claim-title"
+      >
+        <div class="cab-claim-modal-header">
+          <h2 id="cab-claim-title">Add cab claim</h2>
+          <button type="button" class="sheet-btn icon" id="cab-claim-close" aria-label="Close">✕</button>
+        </div>
+        <div id="cab-claim-content"></div>
+      </section>
     </div>
 
     <div class="modal-backdrop hidden" id="edit-backdrop">
@@ -238,6 +253,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=74"></script>
+  <script src="app.js?v=76"></script>
 </body>
 </html>

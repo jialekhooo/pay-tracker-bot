@@ -907,6 +907,22 @@ main {
   line-height: 1.4;
 }
 
+.cab-claim-add-button {
+  width: 100%;
+  margin: 2px 0 10px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--button);
+  color: var(--button-text);
+  font: inherit;
+  font-weight: 650;
+}
+
+.cab-claim-add-button:active {
+  opacity: 0.75;
+}
+
 .cab-event-list {
   display: flex;
   flex-direction: column;
@@ -1004,6 +1020,35 @@ main {
   padding: 14px;
   border-radius: var(--radius);
   background: var(--section-bg);
+}
+
+.cab-claim-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cab-claim-modal-header h2 {
+  margin: 0;
+}
+
+#cab-claim-backdrop {
+  align-items: center;
+  padding: 16px 8px;
+  background: rgba(60, 60, 67, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 22;
+}
+
+#cab-claim-sheet {
+  width: min(100%, 420px);
+  max-height: 86%;
+  padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px;
+  background: var(--secondary-bg);
 }
 
 .cab-claim-form label {
@@ -1126,7 +1171,7 @@ main {
 }
 
 .cab-claim-amount {
-  color: var(--destructive);
+  color: var(--done);
 }
 
 .cab-claim-delete {
@@ -1588,14 +1633,16 @@ main {
    translucent sheet; there they get an opaque sheet over a stronger dim instead. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   #edit-backdrop,
-  #search-backdrop {
+  #search-backdrop,
+  #cab-claim-backdrop {
     background: rgba(0, 0, 0, 0.4);
   }
 
   .form-sheet,
   .sheet-bar,
   #search-sheet,
-  #search-sheet .modal-actions {
+  #search-sheet .modal-actions,
+  #cab-claim-sheet {
     background: #ffffff;
   }
 }
