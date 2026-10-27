@@ -54,6 +54,18 @@ CREATE TABLE IF NOT EXISTS shifts (
 
 CREATE INDEX IF NOT EXISTS idx_shifts_user_day ON shifts (user_id, day);
 
+CREATE TABLE IF NOT EXISTS cab_claims (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    amount TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    currency TEXT NOT NULL,
+    event TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cab_claims_user_day ON cab_claims (user_id, day);
+
 CREATE TABLE IF NOT EXISTS feeds (
     user_id INTEGER PRIMARY KEY,
     token TEXT NOT NULL UNIQUE
@@ -122,6 +134,16 @@ class EventSummary:
     currency: str
 
 
+@dataclass(frozen=True)
+class CabClaimRecord:
+    id: int
+    day: date
+    amount: Decimal
+    note: str
+    currency: str
+    event: str | None
+
+
 class Storage:
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
@@ -149,6 +171,9 @@ class Storage:
                 "payment_due": "TEXT",
                 "paid": "INTEGER NOT NULL DEFAULT 0",
             },
+            "cab_claims": {
+                "event": "TEXT",
+            },
         }
         for table, columns in additions.items():
             existing = {
@@ -157,6 +182,9 @@ class Storage:
             for column, definition in columns.items():
                 if column not in existing:
                     self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cab_claims_user_event ON cab_claims (user_id, event)"
+        )
         self._number_shifts()
 
     def _number_shifts(self) -> None:
@@ -333,6 +361,50 @@ class Storage:
             (user_id, first.isoformat(), last.isoformat()),
         )
         return [_to_record(row) for row in rows]
+
+    def add_cab_claim(
+        self, user_id: int, day: date, amount: Decimal, note: str, currency: str, event: str
+    ) -> int:
+        cursor = self._conn.execute(
+            """
+            INSERT INTO cab_claims (user_id, day, amount, note, currency, event)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, day.isoformat(), str(amount), note, currency, event),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def cab_claims(self, user_id: int) -> list[CabClaimRecord]:
+        rows = self._conn.execute(
+            """
+            SELECT * FROM cab_claims
+            WHERE user_id = ?
+            ORDER BY day DESC, id DESC
+            """,
+            (user_id,),
+        )
+        return [_to_cab_claim(row) for row in rows]
+
+    def assign_cab_claim_event(
+        self, user_id: int, claim_id: int, event: str, currency: str
+    ) -> bool:
+        cursor = self._conn.execute(
+            """
+            UPDATE cab_claims SET event = ?, currency = ?
+            WHERE user_id = ? AND id = ?
+            """,
+            (event, currency, user_id, claim_id),
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def delete_cab_claim(self, user_id: int, claim_id: int) -> bool:
+        cursor = self._conn.execute(
+            "DELETE FROM cab_claims WHERE user_id = ? AND id = ?", (user_id, claim_id)
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
 
     def month_summaries(self, user_id: int) -> list[MonthSummary]:
         rows = self._conn.execute(
@@ -589,4 +661,15 @@ def _to_record(row: sqlite3.Row) -> ShiftRecord:
         currency=row["currency"],
         payment_due=date.fromisoformat(row["payment_due"]) if row["payment_due"] else None,
         paid=bool(row["paid"]),
+    )
+
+
+def _to_cab_claim(row: sqlite3.Row) -> CabClaimRecord:
+    return CabClaimRecord(
+        id=row["id"],
+        day=date.fromisoformat(row["day"]),
+        amount=Decimal(row["amount"]),
+        note=row["note"],
+        currency=row["currency"],
+        event=row["event"],
     )

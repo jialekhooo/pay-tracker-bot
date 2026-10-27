@@ -121,6 +121,86 @@ def _num(value: Decimal) -> str:
     return str(round_money(value))
 
 
+def _cab_claims_json(storage: Storage, user_id: int) -> dict:
+    event_totals: dict[str, dict] = {}
+    for record in storage.list_shifts(user_id):
+        key = record.event.casefold()
+        if key not in event_totals:
+            event_totals[key] = {
+                "event": record.event,
+                "earnings": Decimal("0"),
+                "cab_claims": Decimal("0"),
+                "currency": record.currency,
+                "shifts": 0,
+            }
+        event_totals[key]["earnings"] += record.pay
+        event_totals[key]["shifts"] += 1
+    available_events = [
+        {"event": total["event"], "currency": total["currency"]}
+        for total in event_totals.values()
+        if total["shifts"]
+    ]
+
+    records = storage.cab_claims(user_id)
+    unassigned = []
+    claim_json = []
+    for record in records:
+        claim_json.append(
+            {
+                "id": record.id,
+                "day": record.day.isoformat(),
+                "amount": _num(record.amount),
+                "note": record.note,
+                "currency": record.currency,
+                "event": record.event,
+            }
+        )
+        if not record.event:
+            unassigned.append(claim_json[-1])
+            continue
+        key = record.event.casefold()
+        if key not in event_totals:
+            event_totals[key] = {
+                "event": record.event,
+                "earnings": Decimal("0"),
+                "cab_claims": Decimal("0"),
+                "currency": record.currency,
+                "shifts": 0,
+            }
+        event_totals[key]["cab_claims"] += record.amount
+
+    events = []
+    for total in event_totals.values():
+        events.append(
+            {
+                "event": total["event"],
+                "earnings": _num(total["earnings"]),
+                "cab_claims": _num(total["cab_claims"]),
+                "banked": _num(total["earnings"] - total["cab_claims"]),
+                "currency": total["currency"],
+                "shifts": total["shifts"],
+            }
+        )
+    events.sort(key=lambda item: (-Decimal(item["earnings"]), item["event"].casefold()))
+    return {
+        "currency": storage.get_config(user_id).currency,
+        "available_events": available_events,
+        "events": events,
+        "claims": claim_json,
+        "unassigned_claims": unassigned,
+    }
+
+
+def _cab_claim_event(storage: Storage, user_id: int, event: str) -> tuple[str, str]:
+    name = event.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Choose an event")
+    for record in storage.list_shifts(user_id):
+        if record.event.casefold() == name.casefold():
+            return record.event, record.currency
+    raise HTTPException(status_code=400, detail="Choose an event from your logged shifts")
+
+
 async def _fetch_avatar(bot_token: str, user_id: int) -> tuple[bytes, str] | None:
     """The user's Telegram profile photo via the Bot API.
 
@@ -305,6 +385,17 @@ class ShiftBulkCreate(BaseModel):
     payment_due: str | None = None
 
 
+class CabClaimCreate(BaseModel):
+    day: str
+    amount: str
+    event: str
+    note: str = ""
+
+
+class CabClaimEventUpdate(BaseModel):
+    event: str
+
+
 class SettingsUpdate(BaseModel):
     """A partial edit from the mini app's Settings tab — unset fields are left alone."""
 
@@ -470,6 +561,75 @@ async def summary(request: Request, authorization: str | None = Header(default=N
             for s in summaries
         ],
     }
+
+
+@router.get("/cab-claims")
+async def cab_claims(
+    request: Request, authorization: str | None = Header(default=None)
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    return _cab_claims_json(storage, user_id)
+
+
+@router.post("/cab-claims", status_code=201)
+async def create_cab_claim(
+    payload: CabClaimCreate,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    event, currency = _cab_claim_event(storage, user_id, payload.event)
+    try:
+        day = date_cls.fromisoformat(payload.day)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date, expected YYYY-MM-DD") from exc
+    try:
+        amount = Decimal(payload.amount)
+        if not amount.is_finite() or amount <= 0:
+            raise InvalidOperation
+        amount = round_money(amount)
+        if amount <= 0:
+            raise InvalidOperation
+    except (InvalidOperation, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Amount must be a positive number") from exc
+    note = payload.note.strip()
+    if len(note) > 250:
+        raise HTTPException(status_code=400, detail="Note must be 250 characters or fewer")
+    claim_id = storage.add_cab_claim(user_id, day, amount, note, currency, event)
+    return {
+        "id": claim_id,
+        "day": day.isoformat(),
+        "amount": _num(amount),
+        "note": note,
+        "currency": currency,
+        "event": event,
+    }
+
+
+@router.patch("/cab-claims/{claim_id}")
+async def assign_cab_claim_event(
+    claim_id: int,
+    payload: CabClaimEventUpdate,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    storage, user_id = _authed_user(request, authorization)
+    event, currency = _cab_claim_event(storage, user_id, payload.event)
+    if not storage.assign_cab_claim_event(user_id, claim_id, event, currency):
+        raise HTTPException(status_code=404, detail="Cab claim not found")
+    return _cab_claims_json(storage, user_id)
+
+
+@router.delete("/cab-claims/{claim_id}", status_code=204)
+async def delete_cab_claim(
+    claim_id: int,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    storage, user_id = _authed_user(request, authorization)
+    if not storage.delete_cab_claim(user_id, claim_id):
+        raise HTTPException(status_code=404, detail="Cab claim not found")
+    return Response(status_code=204)
 
 
 def _clashing_ids(records: list[ShiftRecord]) -> set[int]:

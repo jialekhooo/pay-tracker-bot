@@ -96,6 +96,12 @@ The dashboard only runs alongside `paybot.web` (see *Hosting* below) since it's
 served over HTTP; set `PAYBOT_WEBAPP_URL` to override the address it's hosted at
 if it differs from the calendar feed's.
 
+The dashboard's **Earnings** view shows all-time earnings and event payouts.
+Event earnings and cab claims appear together while remaining separate figures.
+Claims are linked to a logged work event, and each event shows its estimated
+bank credit (earnings minus claims). You can add or remove dated claims with a
+note. Claims never change the earnings recorded for a shift.
+
 ## Reminders
 
 `/reminders on` sends you a message the evening before (20:00, UTC+8 by default)

@@ -900,6 +900,282 @@ main {
   font-size: 14px;
 }
 
+.cab-claims-intro {
+  margin: 8px 4px 12px;
+  color: var(--hint);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.cab-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cab-event-card {
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--section-bg);
+}
+
+.cab-event-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 14px 14px 10px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.cab-event-heading:active {
+  opacity: 0.7;
+}
+
+.cab-event-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cab-event-heading span {
+  flex: none;
+  color: var(--hint);
+  font-size: 12px;
+}
+
+.cab-event-bank {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--glass);
+  color: #10243a;
+}
+
+.cab-event-bank span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cab-event-bank strong {
+  font-size: 18px;
+  text-align: right;
+}
+
+.cab-event-totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.cab-event-totals span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--hint);
+  font-size: 11px;
+}
+
+.cab-event-totals strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cab-event-no-claims {
+  padding: 0 14px 14px;
+  color: var(--hint);
+  font-size: 12px;
+}
+
+.cab-claim-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--section-bg);
+}
+
+.cab-claim-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--hint);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cab-claim-event-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--secondary-bg);
+}
+
+.cab-claim-event-fixed span {
+  color: var(--hint);
+  font-size: 12px;
+}
+
+.cab-claim-event-fixed strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.cab-claim-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.cab-claim-form input,
+.cab-claim-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--separator);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.cab-claim-submit {
+  border: 0;
+  border-radius: 10px;
+  padding: 11px;
+  background: var(--button);
+  color: var(--button-text);
+  font: inherit;
+  font-weight: 600;
+}
+
+.cab-claim-submit:disabled,
+.cab-claim-delete:disabled,
+.cab-claim-assign-btn:disabled {
+  opacity: 0.55;
+}
+
+.cab-claim-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 13px;
+}
+
+.cab-claim-list {
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--section-bg);
+}
+
+.cab-claim-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--fill);
+}
+
+.cab-event-card .cab-claim-list {
+  border-radius: 0;
+  border-top: 1px solid var(--fill);
+}
+
+.cab-claim-row.unassigned {
+  background: #fffaf0;
+}
+
+.cab-claim-row:last-child {
+  border-bottom: 0;
+}
+
+.cab-claim-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+
+.cab-claim-info strong,
+.cab-claim-amount {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.cab-claim-info span {
+  color: var(--hint);
+  font-size: 12px;
+}
+
+.cab-claim-amount {
+  color: var(--destructive);
+}
+
+.cab-claim-delete {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--hint);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.cab-claim-assign {
+  display: flex;
+  flex-basis: 100%;
+  gap: 8px;
+}
+
+.cab-claim-assign select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 14px;
+}
+
+.cab-claim-assign-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--button);
+  color: var(--button-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cab-claim-footnote {
+  margin: 12px 4px 0;
+  color: var(--hint);
+  font-size: 12px;
+  text-align: center;
+}
+
 .back-row {
   display: flex;
   align-items: center;

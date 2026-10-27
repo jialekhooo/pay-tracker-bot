@@ -66,10 +66,11 @@
   let summaryData = null;
   let view = "dashboard"; // dashboard | summary | calendar | settings
   let dashboardDetail = null; // null | "worked" | "upcoming" — drill-down from the Overview cards
-  let scope = "today"; // which quick action is selected within the Earnings workspace
+  let scope = "all";
   let monthDetail = null; // set when drilled into a month from the "Months" view
   let eventsData = null; // fetched lazily the first time the Events tab is opened
   let eventDetail = null; // set when drilled into one event from the "Events" view
+  let cabClaimsData = null;
   let settingsData = null; // fetched lazily the first time the Settings tab is opened
   let settingsSection = null; // null | "profile" | "pay" | "reminders" | "calendar" | "export" — drill-down within Settings
   let telegramFirstName = ""; // fallback greeting name when no display name is set
@@ -88,7 +89,7 @@
   let overviewWeekData = null; // fetched /week/{start} detail when overviewWeekStart isn't the live week
   let overviewDay = null; // "YYYY-MM-DD" shown by the Day quick action; null = the live current day
   let overviewDayData = null; // fetched /day/{date} detail when overviewDay isn't the live day
-  let allTimeGroupBy = "month"; // "month" | "event" — how the All Time scope's list is grouped
+  let allTimeGroupBy = "event";
   let eventSort = "date"; // "date" | "alphabetical" — ordering for the All time Events list
   let dateOrder = "asc"; // "asc" | "desc" — date order for grouped shift lists
   let upcomingRange = "tomorrow"; // "tomorrow" | "7" | "14" | "30" | "all" — the Upcoming tab's selected range
@@ -675,29 +676,11 @@
   }
 
   function overviewView(data) {
-    if (scope === "today") return dayScopeView(data);
-    if (scope === "month") return monthScopeView(data);
-    if (scope === "week") return weekScopeView(data);
-    const bar = quickActionsBar();
     const hero = heroBlock(data.all_time, data.currency);
-    const toggle = groupByToggle();
-    if (allTimeGroupBy === "event") {
-      if (!eventsData) {
-        return { head: bar + hero + toggle, body: `<div class="empty">Loading…</div>` };
-      }
-      const body = eventsData.events.length
-        ? `${eventSortToggle()}<div class="section-title">By event</div><div class="card-list">${eventListRows(
-            sortedEvents(eventsData.events)
-          )}</div>`
-        : `<div class="empty">Nothing logged yet.</div>`;
-      return { head: bar + hero + toggle, body };
+    if (!eventsData || !cabClaimsData) {
+      return { head: hero, body: `<div class="empty">Loading event payouts…</div>` };
     }
-    const body = data.months.length
-      ? `<div class="section-title">By month</div><div class="card-list">${monthListRows(
-          data.months
-        )}</div>`
-      : `<div class="empty">Nothing logged yet.</div>`;
-    return { head: bar + hero + toggle, body };
+    return { head: hero, body: eventPayoutView(eventsData, cabClaimsData) };
   }
 
   function dayScopeView(data) {
@@ -956,6 +939,140 @@
       .join("");
   }
 
+  function eventPayoutView(eventsData, cabClaimsData) {
+    const claimRow = (claim, needsAssignment = false) => `
+      <div class="cab-claim-row${needsAssignment ? " unassigned" : ""}">
+        <div class="cab-claim-info">
+          <strong>${escapeHtml(claim.note || "Cab claim")}</strong>
+          <span>${escapeHtml(dayKeyLabel(claim.day))}${
+      needsAssignment ? " · Needs event" : ""
+    }</span>
+        </div>
+        <strong class="cab-claim-amount">−${money(claim.amount, claim.currency)}</strong>
+        <button type="button" class="cab-claim-delete" data-action="delete-cab-claim" data-claim-id="${
+          claim.id
+        }" aria-label="Delete cab claim">×</button>
+        ${
+          needsAssignment
+            ? `<div class="cab-claim-assign">
+                <select aria-label="Assign cab claim to event">
+                  <option value="">Choose event…</option>${eventOptions}
+                </select>
+                <button type="button" class="cab-claim-assign-btn" data-action="assign-cab-claim" data-claim-id="${claim.id}" ${
+                  cabClaimsData.available_events.length ? "" : "disabled"
+                }>Assign</button>
+              </div>`
+            : ""
+        }
+      </div>`;
+    const eventInfoByName = new Map(
+      eventsData.events.map((event) => [event.event.toLowerCase(), event])
+    );
+    const payoutEvents = sortedEvents(
+      cabClaimsData.events.map((event) => ({
+        ...event,
+        first_day: eventInfoByName.get(event.event.toLowerCase())?.first_day || "9999-12-31",
+      }))
+    );
+    const eventCards = payoutEvents.length
+      ? payoutEvents
+          .map((event) => {
+            const eventClaims = cabClaimsData.claims.filter(
+              (claim) =>
+                claim.event && claim.event.toLowerCase() === event.event.toLowerCase()
+            );
+            return `
+              <section class="cab-event-card">
+                <button type="button" class="cab-event-heading" ${
+                  event.shifts
+                    ? `data-event="${encodeURIComponent(event.event)}"`
+                    : "disabled"
+                }>
+                  <strong>${escapeHtml(event.event)}</strong>
+                  <span>${
+                    event.shifts
+                      ? `${event.shifts} shift${event.shifts === 1 ? "" : "s"} · View shifts ›`
+                      : "No shifts logged"
+                  }</span>
+                </button>
+                <div class="cab-event-bank">
+                  <span>Estimated bank credit</span>
+                  <strong>${money(event.banked, event.currency)}</strong>
+                </div>
+                <div class="cab-event-totals">
+                  <span>Event earnings <strong>${money(
+                    event.earnings,
+                    event.currency
+                  )}</strong></span>
+                  <span>Cab claims <strong>−${money(
+                    event.cab_claims,
+                    event.currency
+                  )}</strong></span>
+                </div>
+                ${
+                  eventClaims.length
+                    ? `<div class="cab-claim-list">${eventClaims.map((claim) => claimRow(claim)).join("")}</div>`
+                    : `<div class="cab-event-no-claims">No cab claims for this event.</div>`
+                }
+              </section>`;
+          })
+          .join("")
+      : `<div class="empty">Log shifts with event names to see payout totals here.</div>`;
+    const unassigned = cabClaimsData.unassigned_claims.length
+      ? `<div class="section-title">Assign existing claims to an event</div>
+         <div class="cab-claim-list">${cabClaimsData.unassigned_claims
+           .map((claim) => claimRow(claim, true))
+           .join("")}</div>
+         <p class="cab-claim-footnote">These older claims are not included in an event total until assigned.</p>`
+      : "";
+    return `
+      <div class="cab-claims-intro">Event earnings stay unchanged; cab claims are shown separately and deducted only to estimate the payout to compare with your bank.</div>
+      <div class="section-title">Add a cab claim</div>
+      ${cabClaimForm(cabClaimsData)}
+      <div class="section-title">Earnings and estimated payout by event</div>
+      <div class="cab-event-list">${eventCards}</div>
+      ${unassigned}
+      <p class="cab-claim-footnote">Estimated bank credit = event earnings − linked cab claims.</p>
+    `;
+  }
+
+  function cabClaimForm(cabClaimsData, event = null) {
+    const currency =
+      cabClaimsData.available_events.find(
+        (available) => available.event.toLowerCase() === (event || "").toLowerCase()
+      )?.currency || cabClaimsData.currency;
+    const eventOptions = cabClaimsData.available_events
+      .map(
+        (available) =>
+          `<option value="${escapeHtml(available.event)}"${
+            event && available.event.toLowerCase() === event.toLowerCase() ? " selected" : ""
+          }>${escapeHtml(available.event)} (${escapeHtml(available.currency)})</option>`
+      )
+      .join("");
+    const eventField = event
+      ? `<div class="cab-claim-event-fixed"><span>Work event</span><strong>${escapeHtml(
+          event
+        )}</strong><input type="hidden" name="event" value="${escapeHtml(event)}" /></div>`
+      : `<label>Work event<select name="event" required ${
+          cabClaimsData.available_events.length ? "" : "disabled"
+        }><option value="">Choose event…</option>${eventOptions}</select></label>`;
+    return `
+      <form class="cab-claim-form" id="cab-claim-form">
+        ${eventField}
+        <div class="cab-claim-fields">
+          <label>Date<input type="date" name="day" required value="${escapeHtml(
+            currentDayKey(summaryData)
+          )}" /></label>
+          <label>Amount (${escapeHtml(currency)})<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required /></label>
+        </div>
+        <label>Note (optional)<input type="text" name="note" maxlength="250" placeholder="e.g. Taxi home" /></label>
+        <p class="cab-claim-error hidden" id="cab-claim-error"></p>
+        <button type="submit" class="cab-claim-submit" ${
+          event || cabClaimsData.available_events.length ? "" : "disabled"
+        }>Add cab claim</button>
+      </form>`;
+  }
+
   function eventsView(data) {
     if (!data) {
       return { head: "", body: `<div class="empty">Loading…</div>` };
@@ -980,13 +1097,65 @@
         : `<button type="button" class="event-mark-paid-btn" data-mark-event-paid="${encodeURIComponent(
             detail.event
           )}">Mark event as paid</button>`;
+    const payout = cabClaimsData?.events.find(
+      (item) => item.event.toLowerCase() === detail.event.toLowerCase()
+    );
+    const claims = cabClaimsData?.claims.filter(
+      (claim) => claim.event && claim.event.toLowerCase() === detail.event.toLowerCase()
+    ) || [];
     return {
       head: `<div class="back-row" id="back-to-events">\u2039 Events</div>${periodHero(detail)}
-        <div class="event-payment-row">
-          <span class="tag ${meta.cls}">${meta.label}</span>
-          ${markPaidButton}
-        </div>`,
-      body: periodBody(detail),
+          <div class="event-payment-row">
+            <span class="tag ${meta.cls}">${meta.label}</span>
+            ${markPaidButton}
+          </div>`,
+      body: `
+          ${periodBody(detail)}
+          <div class="section-title">Event payout estimate</div>
+          ${
+            payout
+              ? `<div class="cab-event-card">
+                  <div class="cab-event-bank">
+                    <span>Estimated bank credit</span>
+                    <strong>${money(payout.banked, payout.currency)}</strong>
+                  </div>
+                  <div class="cab-event-totals">
+                    <span>Event earnings <strong>${money(
+                      payout.earnings,
+                      payout.currency
+                    )}</strong></span>
+                    <span>Cab claims <strong>−${money(
+                      payout.cab_claims,
+                      payout.currency
+                    )}</strong></span>
+                  </div>
+                  ${
+                    claims.length
+                      ? `<div class="cab-claim-list">${claims
+                          .map(
+                            (claim) => `
+                            <div class="cab-claim-row">
+                              <div class="cab-claim-info">
+                                <strong>${escapeHtml(claim.note || "Cab claim")}</strong>
+                                <span>${escapeHtml(dayKeyLabel(claim.day))}</span>
+                              </div>
+                              <strong class="cab-claim-amount">−${money(
+                                claim.amount,
+                                claim.currency
+                              )}</strong>
+                              <button type="button" class="cab-claim-delete" data-action="delete-cab-claim" data-claim-id="${
+                                claim.id
+                              }" aria-label="Delete cab claim">×</button>
+                            </div>`
+                          )
+                          .join("")}</div>`
+                      : `<div class="cab-event-no-claims">No cab claims for this event.</div>`
+                  }
+                </div>`
+              : `<div class="empty">Loading event payout…</div>`
+          }
+          <div class="section-title">Add a cab claim for ${escapeHtml(detail.event)}</div>
+          ${cabClaimsData ? cabClaimForm(cabClaimsData, detail.event) : ""}`,
     };
   }
 
@@ -1260,6 +1429,77 @@
     }
   }
 
+  async function loadCabClaims() {
+    try {
+      const data = await api("/webapp/api/cab-claims");
+      if (eventDetail || view === "summary") {
+        cabClaimsData = data;
+        render();
+      }
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  async function submitCabClaim(form) {
+    const submit = form.querySelector('button[type="submit"]');
+    const error = document.getElementById("cab-claim-error");
+    submit.disabled = true;
+    error.classList.add("hidden");
+    try {
+      await api("/webapp/api/cab-claims", {
+        method: "POST",
+        body: {
+          day: form.elements.day.value,
+          amount: form.elements.amount.value,
+          event: form.elements.event.value,
+          note: form.elements.note.value,
+        },
+      });
+      await loadCabClaims();
+      showSuccessToast("Cab claim added");
+    } catch (err) {
+      error.textContent = err.detail || "Couldn't add cab claim — try again.";
+      error.classList.remove("hidden");
+      submit.disabled = false;
+    }
+  }
+
+  async function deleteCabClaim(button) {
+    if (!(await confirmDialog("Delete this cab claim?"))) return;
+    const claimId = Number(button.dataset.claimId);
+    button.disabled = true;
+    try {
+      await api(`/webapp/api/cab-claims/${claimId}`, { method: "DELETE" });
+      await loadCabClaims();
+      showSuccessToast("Cab claim deleted");
+    } catch (err) {
+      button.disabled = false;
+      showToast(err.detail || "Couldn't delete cab claim — try again.");
+    }
+  }
+
+  async function assignCabClaim(button) {
+    const row = button.closest(".cab-claim-row");
+    const event = row.querySelector("select").value;
+    if (!event) {
+      showToast("Choose an event for this claim.");
+      return;
+    }
+    button.disabled = true;
+    try {
+      await api(`/webapp/api/cab-claims/${button.dataset.claimId}`, {
+        method: "PATCH",
+        body: { event },
+      });
+      await loadCabClaims();
+      showSuccessToast("Cab claim assigned");
+    } catch (err) {
+      button.disabled = false;
+      showToast(err.detail || "Couldn't assign cab claim — try again.");
+    }
+  }
+
   async function loadCalendarMonth(month, selectedDay = null) {
     calendarMonth = month;
     calendarMonthData = null;
@@ -1404,7 +1644,12 @@
   async function openEvent(name) {
     if (tg && tg.BackButton) tg.BackButton.show();
     try {
-      eventDetail = await api(`/webapp/api/event/${encodeURIComponent(name)}`);
+      const [detail, claims] = await Promise.all([
+        api(`/webapp/api/event/${encodeURIComponent(name)}`),
+        api("/webapp/api/cab-claims"),
+      ]);
+      eventDetail = detail;
+      cabClaimsData = claims;
       render();
     } catch (err) {
       showError(err);
@@ -1460,13 +1705,18 @@
       overviewDayData = null;
     }
     render();
+    if (next === "all" && allTimeGroupBy === "event") {
+      if (!eventsData) loadEvents();
+      if (!cabClaimsData) loadCabClaims();
+    }
   }
 
   function selectAllTimeGroupBy(next) {
     allTimeGroupBy = next;
-    if (next === "event" && !eventsData) {
+    if (next === "event") {
       render();
-      loadEvents();
+      if (!eventsData) loadEvents();
+      if (!cabClaimsData) loadCabClaims();
     } else {
       render();
     }
@@ -1533,6 +1783,10 @@
     } else if (next === "events" && !eventsData) {
       render();
       loadEvents();
+    } else if (next === "summary") {
+      render();
+      if (!eventsData) loadEvents();
+      if (!cabClaimsData) loadCabClaims();
     } else if (next === "settings" && !settingsData) {
       render();
       loadSettings();
@@ -1974,6 +2228,9 @@
     }
     if (eventsData) {
       loadEvents();
+    }
+    if (view === "summary") {
+      loadCabClaims();
     }
     await load();
   }
@@ -2441,6 +2698,10 @@
   els.refresh.addEventListener("click", () => {
     load();
     if (view === "events") loadEvents();
+    if (view === "summary") {
+      loadEvents();
+      loadCabClaims();
+    }
     if (view === "calendar") loadCalendarMonth(calendarMonth || currentMonthKey(summaryData));
     if (view === "settings") loadSettings();
   });
@@ -2496,6 +2757,12 @@
     openEditor(shiftsById.get(Number(row.dataset.id)));
   });
 
+  els.contentWrap.addEventListener("submit", (event) => {
+    if (event.target.id !== "cab-claim-form") return;
+    event.preventDefault();
+    submitCabClaim(event.target);
+  });
+
   els.contentWrap.addEventListener("change", (event) => {
     if (event.target.id === "avatar-file-input") handleAvatarFileSelected(event);
   });
@@ -2514,6 +2781,8 @@
         "export-csv": exportCsv,
         "choose-avatar": chooseAvatar,
         "remove-avatar": removeAvatar,
+        "delete-cab-claim": deleteCabClaim,
+        "assign-cab-claim": assignCabClaim,
       };
       const handler = actions[actionBtn.dataset.action];
       if (handler) handler(actionBtn);

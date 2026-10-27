@@ -4,6 +4,7 @@ from decimal import Decimal
 import hashlib
 import hmac
 import json
+import sqlite3
 import time as time_module
 from urllib.parse import urlencode
 
@@ -651,6 +652,150 @@ def test_webapp_update_shift_renames_event_without_touching_pay(tmp_path):
     body = response.json()
     assert body["event"] == "Renamed gig"
     assert body["pay"] == "120.00"
+    storage.close()
+
+
+def test_webapp_cab_claims_reconcile_without_changing_shift_pay(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("1500"), "SGD",
+    )
+    storage.add_shift(
+        42, date(2026, 8, 20), time(9, 0), time(17, 0), "Second gig",
+        Decimal("0"), False, Decimal("8"), Decimal("500"), "SGD",
+    )
+    client = _webapp_client(storage)
+    headers = _auth_headers("TESTTOKEN")
+
+    created = client.post(
+        "/webapp/api/cab-claims",
+        headers=headers,
+        json={
+            "day": "2026-08-19",
+            "amount": "250",
+            "event": "Test gig",
+            "note": "Taxi home",
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["amount"] == "250.00"
+    assert created.json()["event"] == "Test gig"
+
+    summary = client.get("/webapp/api/cab-claims", headers=headers)
+    assert summary.status_code == 200
+    by_event = {event["event"]: event for event in summary.json()["events"]}
+    assert by_event["Test gig"]["earnings"] == "1500.00"
+    assert by_event["Test gig"]["cab_claims"] == "250.00"
+    assert by_event["Test gig"]["banked"] == "1250.00"
+    assert by_event["Second gig"]["earnings"] == "500.00"
+    assert by_event["Second gig"]["cab_claims"] == "0.00"
+    assert by_event["Second gig"]["banked"] == "500.00"
+    assert summary.json()["claims"][0]["note"] == "Taxi home"
+    assert storage.get_shift(42, shift_id).pay == Decimal("1500")
+    assert storage.cab_claims(99) == []
+
+    deleted = client.delete(
+        f"/webapp/api/cab-claims/{created.json()['id']}", headers=headers
+    )
+    assert deleted.status_code == 204
+    after_delete = client.get("/webapp/api/cab-claims", headers=headers).json()
+    by_event = {event["event"]: event for event in after_delete["events"]}
+    assert by_event["Test gig"]["banked"] == "1500.00"
+    storage.close()
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"day": "not-a-date", "amount": "10"}, "Invalid date"),
+        ({"day": "2026-08-19", "amount": "-1"}, "positive number"),
+        ({"day": "2026-08-19", "amount": "NaN"}, "positive number"),
+        (
+            {"day": "2026-08-19", "amount": "10", "event": "Unknown gig"},
+            "Choose an event from your logged shifts",
+        ),
+    ],
+)
+def test_webapp_cab_claims_reject_invalid_values(tmp_path, payload, message):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    client = _webapp_client(storage)
+    payload = {"event": "Test gig", **payload}
+    response = client.post(
+        "/webapp/api/cab-claims", headers=_auth_headers("TESTTOKEN"), json=payload
+    )
+    assert response.status_code == 400
+    assert message in response.json()["detail"]
+    assert storage.cab_claims(42) == []
+    storage.close()
+
+
+def test_webapp_cab_claims_can_assign_legacy_unlinked_claim(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(17, 0), "Test gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    )
+    claim_id = storage._conn.execute(
+        """
+        INSERT INTO cab_claims (user_id, day, amount, note, currency, event)
+        VALUES (?, ?, ?, ?, ?, NULL)
+        """,
+        (42, "2026-08-19", "20.00", "Taxi", "SGD"),
+    ).lastrowid
+    storage._conn.commit()
+    client = _webapp_client(storage)
+    headers = _auth_headers("TESTTOKEN")
+
+    before = client.get("/webapp/api/cab-claims", headers=headers).json()
+    assert before["unassigned_claims"][0]["id"] == claim_id
+    assert before["events"][0]["banked"] == "120.00"
+
+    assigned = client.patch(
+        f"/webapp/api/cab-claims/{claim_id}",
+        headers=headers,
+        json={"event": "Test gig"},
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["unassigned_claims"] == []
+    assert assigned.json()["events"][0]["cab_claims"] == "20.00"
+    assert assigned.json()["events"][0]["banked"] == "100.00"
+    storage.close()
+
+
+def test_storage_migrates_existing_cab_claims_without_losing_them(tmp_path):
+    database = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        """
+        CREATE TABLE cab_claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            day TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            currency TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO cab_claims (user_id, day, amount, note, currency)
+        VALUES (42, '2026-08-19', '20.00', 'Taxi', 'SGD')
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    storage = Storage(database)
+    claims = storage.cab_claims(42)
+    assert len(claims) == 1
+    assert claims[0].amount == Decimal("20.00")
+    assert claims[0].event is None
     storage.close()
 
 
