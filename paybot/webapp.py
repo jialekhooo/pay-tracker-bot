@@ -184,6 +184,9 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
         completed = bool(total["shifts"]) and all(
             state == "done" for state in total["states"]
         )
+        upcoming = bool(total["shifts"]) and all(
+            state == "upcoming" for state in total["states"]
+        )
         events.append(
             {
                 "event": total["event"],
@@ -194,6 +197,8 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
                 "shifts": total["shifts"],
                 "last_day": total["last_day"].isoformat() if total["last_day"] else None,
                 "completed": completed,
+                "ongoing": bool(total["shifts"]) and not completed and not upcoming,
+                "upcoming": upcoming,
                 "paid_out": completed and all(total["paid"]),
             }
         )

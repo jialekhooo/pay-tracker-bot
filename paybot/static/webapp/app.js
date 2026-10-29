@@ -97,10 +97,10 @@
   let overviewDayData = null; // fetched /day/{date} detail when overviewDay isn't the live day
   let allTimeGroupBy = "event";
   let eventSort = "desc"; // "desc" | "asc" — most recent event first or last
-  let eventPayoutFilter = "all"; // all events | completed unpaid | completed paid
+  let eventPayoutFilter = "all"; // all | ongoing | upcoming | completed unpaid | completed paid
   let dateOrder = "asc"; // "asc" | "desc" — date order for grouped shift lists
-  let upcomingRange = "tomorrow"; // "tomorrow" | "7" | "14" | "30" | "all" — the Upcoming tab's selected range
-  let upcomingRangeData = null; // fetched /upcoming/{scope} detail when upcomingRange isn't the default "14"
+  let upcomingRange = "all"; // "tomorrow" | "7" | "14" | "30" | "all" — the Upcoming tab's selected range
+  let upcomingRangeData = null; // fetched /upcoming/{scope} detail for the selected range
   let calendarMonth = null; // "YYYY-MM" currently visible in Calendar
   let calendarMonthData = null; // /month/{key} payload used by the calendar grid
   let calendarSelectedDay = null; // "YYYY-MM-DD" selected inside the calendar grid
@@ -606,6 +606,16 @@
     const filters = [
       { key: "all", label: "All events", events },
       {
+        key: "ongoing",
+        label: "Ongoing events",
+        events: events.filter((event) => event.ongoing),
+      },
+      {
+        key: "upcoming",
+        label: "Upcoming events",
+        events: events.filter((event) => event.upcoming),
+      },
+      {
         key: "unpaid",
         label: "Completed, not paid out",
         events: events.filter((event) => event.completed && !event.paid_out),
@@ -684,7 +694,7 @@
           : periodHero(monthData);
       return {
         head: `${periodControls}${monthNav}${hero}`,
-        body: periodBody(monthData),
+        body: periodBody(monthData, { currency: data.currency }),
       };
     }
 
@@ -863,13 +873,13 @@
       </div>`;
   }
 
-  function periodBody(detail, { grouped = true } = {}) {
+  function periodBody(detail, { grouped = true, currency = detail.currency } = {}) {
     if (!detail.shifts.length) {
       return `<div class="empty">Nothing logged for ${escapeHtml(detail.label)}.</div>`;
     }
     return grouped
-      ? shiftGroupsSection(detail.shifts, detail.currency)
-      : shiftDayCard(detail.shifts, detail.currency);
+      ? shiftGroupsSection(detail.shifts, currency)
+      : shiftDayCard(detail.shifts, currency);
   }
 
   const UPCOMING_RANGES = [
@@ -1067,10 +1077,21 @@
       </div>`;
     const payoutEvents = sortedEvents(cabClaimsData.events);
     const visibleEvents = payoutEvents.filter((event) => {
+      if (eventPayoutFilter === "ongoing") return event.ongoing;
+      if (eventPayoutFilter === "upcoming") return event.upcoming;
       if (eventPayoutFilter === "unpaid") return event.completed && !event.paid_out;
       if (eventPayoutFilter === "paid") return event.completed && event.paid_out;
       return true;
     });
+    const emptyEventMessages = {
+      ongoing: "No ongoing events.",
+      upcoming: "No upcoming events.",
+      unpaid: "No completed events awaiting payout.",
+      paid: "No completed events have been paid out yet.",
+    };
+    const emptyEventMessage = payoutEvents.length
+      ? emptyEventMessages[eventPayoutFilter] || "No events match this filter."
+      : "Log shifts with event names to see payout totals here.";
     const eventCards = visibleEvents.length
       ? visibleEvents
           .map((event) => {
@@ -1114,15 +1135,7 @@
               </section>`;
           })
           .join("")
-      : payoutEvents.length
-        ? `<div class="empty">${
-            eventPayoutFilter === "unpaid"
-              ? "No completed events awaiting payout."
-              : eventPayoutFilter === "paid"
-                ? "No completed events have been paid out yet."
-                : "Log shifts with event names to see payout totals here."
-          }</div>`
-        : `<div class="empty">Log shifts with event names to see payout totals here.</div>`;
+      : `<div class="empty">${emptyEventMessage}</div>`;
     const unassigned = cabClaimsData.unassigned_claims.length
       ? `<div class="section-title">Assign existing claims to an event</div>
          <div class="cab-claim-list">${cabClaimsData.unassigned_claims
@@ -1789,12 +1802,13 @@
 
   function setDashboardDetail(value) {
     dashboardDetail = value;
-    if (value === "upcoming") upcomingRange = "14";
+    if (value === "upcoming") upcomingRange = "all";
     if (tg && tg.BackButton) {
       if (value) tg.BackButton.show();
       else tg.BackButton.hide();
     }
     render();
+    if (value === "upcoming") loadUpcomingRange("all");
   }
 
   async function openEvent(name) {

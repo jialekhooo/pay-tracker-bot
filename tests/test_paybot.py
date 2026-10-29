@@ -739,6 +739,40 @@ def test_webapp_cab_claims_include_event_completion_and_payout_status(tmp_path):
     storage.close()
 
 
+def test_webapp_cab_claims_include_ongoing_and_upcoming_event_status(tmp_path, monkeypatch):
+    import paybot.webapp as webapp_module
+
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    monkeypatch.setattr(webapp_module, "local_clock", lambda _offset: NOON)
+    shifts = [
+        (date(2026, 8, 13), "Running event"),
+        (date(2026, 8, 14), "Upcoming event"),
+        (date(2026, 8, 12), "Multi-day event"),
+        (date(2026, 8, 14), "Multi-day event"),
+        (date(2026, 8, 12), "Completed event"),
+    ]
+    for day, event in shifts:
+        storage.add_shift(
+            42, day, time(9, 0), time(17, 0), event,
+            Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+        )
+    client = _webapp_client(storage)
+
+    response = client.get("/webapp/api/cab-claims", headers=_auth_headers("TESTTOKEN"))
+
+    assert response.status_code == 200
+    by_event = {event["event"]: event for event in response.json()["events"]}
+    assert by_event["Running event"]["ongoing"] is True
+    assert by_event["Running event"]["upcoming"] is False
+    assert by_event["Upcoming event"]["ongoing"] is False
+    assert by_event["Upcoming event"]["upcoming"] is True
+    assert by_event["Multi-day event"]["ongoing"] is True
+    assert by_event["Multi-day event"]["upcoming"] is False
+    assert by_event["Completed event"]["ongoing"] is False
+    assert by_event["Completed event"]["upcoming"] is False
+    storage.close()
+
+
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
