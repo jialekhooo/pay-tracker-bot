@@ -391,6 +391,35 @@ main {
   color: var(--button);
 }
 
+.overview-period-toggle {
+  display: flex;
+  gap: 3px;
+  margin: 4px 0 10px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.overview-period-btn {
+  flex: 1;
+  min-height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.overview-period-btn.active {
+  background: var(--section-bg);
+  color: var(--text);
+}
+
 /* Segmented control for choosing how the All Time list is grouped (months vs. events) */
 .group-toggle {
   display: flex;
@@ -1310,6 +1339,10 @@ main {
 
 .month-nav-btn:active {
   opacity: 0.6;
+}
+
+.month-nav-btn:disabled {
+  opacity: 0.4;
 }
 
 /* Both nav labels sit inside the header artwork. */

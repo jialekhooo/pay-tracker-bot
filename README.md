@@ -86,11 +86,11 @@ somewhere with a plain `https://host/<token>.ics` address (see below).
 ## Mini app dashboard
 
 `/app` sends a button that opens a Telegram Mini App — a native-feeling web
-dashboard showing today/this week/this month's earnings (with a running shift
-counted pro-rata), what's upcoming with clashes flagged, and a tap-through
-by-month breakdown. It reuses the calendar feed's public address, so no extra
-hosting is needed. The bot also sets it as the chat's ☰ menu button, so tapping
-that opens the dashboard directly.
+dashboard showing all-time earnings by default, with a toggle to browse monthly
+earnings, what's upcoming with clashes flagged, and a tap-through by-month
+breakdown. It reuses the calendar feed's public address, so no extra hosting is
+needed. The bot also sets it as the chat's ☰ menu button, so tapping that opens
+the dashboard directly.
 
 The dashboard only runs alongside `paybot.web` (see *Hosting* below) since it's
 served over HTTP; set `PAYBOT_WEBAPP_URL` to override the address it's hosted at

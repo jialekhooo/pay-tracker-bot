@@ -69,6 +69,7 @@
 
   let summaryData = null;
   let view = "dashboard"; // dashboard | summary | calendar | settings
+  let dashboardOverviewMode = "all"; // all-time totals or a browsed month
   let dashboardDetail = null; // null | "worked" | "upcoming" — drill-down from the Overview cards
   let scope = "all";
   let monthDetail = null; // set when drilled into a month from the "Months" view
@@ -660,6 +661,33 @@
   }
 
   function dashboardView(data) {
+    const periodControls = dashboardOverviewPeriodControls();
+    if (dashboardOverviewMode === "month") {
+      const liveKey = currentMonthKey(data);
+      const activeKey = overviewMonth || liveKey;
+      const monthData =
+        activeKey === liveKey
+          ? data.month
+          : overviewMonthData && overviewMonthData.month === activeKey
+            ? overviewMonthData
+            : null;
+      const monthNav = overviewMonthNavBar(activeKey, liveKey);
+      if (!monthData) {
+        return {
+          head: `${periodControls}${monthNav}`,
+          body: `<div class="empty">Loading…</div>`,
+        };
+      }
+      const hero =
+        monthData.projected !== undefined
+          ? heroBlock(monthData, data.currency)
+          : periodHero(monthData);
+      return {
+        head: `${periodControls}${monthNav}${hero}`,
+        body: periodBody(monthData),
+      };
+    }
+
     const tomorrow = shiftDayKey(currentDayKey(data), 1);
     const tomorrowShifts = data.upcoming.filter((shift) => shift.day === tomorrow);
     const tomorrowLabel = dayKeyLabel(tomorrow);
@@ -667,13 +695,15 @@
       ? shiftDayCard(tomorrowShifts, data.currency)
       : `<div class="dashboard-empty">Nothing booked for ${escapeHtml(tomorrowLabel)}.</div>`;
     const month = data.month;
-    const planned = Number(month.to_come) > 0 ? money(month.to_come, data.currency) : "No upcoming pay";
+    const planned =
+      Number(month.to_come) > 0 ? money(month.to_come, data.currency) : "No upcoming pay";
 
     return {
       // The hero and the two stat cards sit in the head so they stay inside the header
       // artwork while the list below them scrolls.
       head: `
-        ${heroBlock(month, data.currency)}
+        ${periodControls}
+        ${heroBlock(data.all_time, data.currency)}
         <div class="dashboard-glance">
           <div class="dashboard-stat" data-dashboard-stat="worked">
             <span>Worked this month</span>
@@ -691,6 +721,29 @@
         ${tomorrowBody}
       `,
     };
+  }
+
+  function dashboardOverviewPeriodControls() {
+    return `
+      <div class="overview-period-toggle" role="group" aria-label="Earnings period">
+        <button type="button" class="overview-period-btn${
+          dashboardOverviewMode === "all" ? " active" : ""
+        }" data-overview-period="all" aria-pressed="${dashboardOverviewMode === "all"}">All time</button>
+        <button type="button" class="overview-period-btn${
+          dashboardOverviewMode === "month" ? " active" : ""
+        }" data-overview-period="month" aria-pressed="${dashboardOverviewMode === "month"}">By month</button>
+      </div>`;
+  }
+
+  function overviewMonthNavBar(activeMonth, currentMonth) {
+    return `
+      <div class="month-nav">
+        <button type="button" class="month-nav-btn" data-month-nav="prev" aria-label="Previous month">‹</button>
+        <div class="month-nav-label">${escapeHtml(monthKeyLabel(activeMonth))}</div>
+        <button type="button" class="month-nav-btn" data-month-nav="next" aria-label="Next month" ${
+          activeMonth >= currentMonth ? "disabled" : ""
+        }>›</button>
+      </div>`;
   }
 
   function dashboardDetailView(data) {
@@ -1637,18 +1690,47 @@
     const liveKey = currentMonthKey(summaryData);
     const activeKey = overviewMonth || liveKey;
     const nextKey = shiftMonthKey(activeKey, direction);
+    if (nextKey > liveKey) return;
+    dashboardOverviewMode = "month";
+    overviewMonth = nextKey;
     if (nextKey === liveKey) {
-      overviewMonth = null;
       overviewMonthData = null;
       render();
       return;
     }
-    overviewMonth = nextKey;
     overviewMonthData = null;
     render();
+    await loadOverviewMonth(nextKey);
+  }
+
+  function selectDashboardOverviewPeriod(next) {
+    dashboardOverviewMode = next;
+    if (next === "month") {
+      const activeMonth = overviewMonth || currentMonthKey(summaryData);
+      if (
+        activeMonth !== currentMonthKey(summaryData) &&
+        (!overviewMonthData || overviewMonthData.month !== activeMonth)
+      ) {
+        overviewMonthData = null;
+        render();
+        loadOverviewMonth(activeMonth);
+        return;
+      }
+    }
+    render();
+  }
+
+  async function loadOverviewMonth(month) {
     try {
-      overviewMonthData = await api(`/webapp/api/month/${nextKey}`);
-      render();
+      const result = await api(`/webapp/api/month/${month}`);
+      if (
+        view === "dashboard" &&
+        dashboardOverviewMode === "month" &&
+        overviewMonth === month
+      ) {
+        overviewMonthData = result;
+        render();
+      }
     } catch (err) {
       showError(err);
     }
@@ -1840,6 +1922,7 @@
       return;
     }
     view = next;
+    if (next === "dashboard") dashboardOverviewMode = "all";
     dashboardDetail = null;
     monthDetail = null;
     eventDetail = null;
@@ -2923,6 +3006,8 @@
       const direction = monthNavBtn.dataset.monthNav === "next" ? 1 : -1;
       if (monthDetail) {
         navigateMonthDetail(direction);
+      } else if (view === "dashboard" && dashboardOverviewMode === "month") {
+        navigateOverviewMonth(direction);
       } else if (scope === "week") {
         navigateOverviewWeek(direction);
       } else if (scope === "today") {
@@ -2930,6 +3015,11 @@
       } else {
         navigateOverviewMonth(direction);
       }
+      return;
+    }
+    const overviewPeriodBtn = event.target.closest("[data-overview-period]");
+    if (overviewPeriodBtn) {
+      selectDashboardOverviewPeriod(overviewPeriodBtn.dataset.overviewPeriod);
       return;
     }
     const calendarNavBtn = event.target.closest("[data-calendar-nav]");
