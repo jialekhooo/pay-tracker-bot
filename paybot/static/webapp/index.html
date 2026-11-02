@@ -6,7 +6,7 @@
   <!-- Opts out of Android WebView's automatic darkening, which would recolour the fixed palette. -->
   <meta name="color-scheme" content="light" />
   <title>HowMuch</title>
-  <link rel="stylesheet" href="style.css?v=73" />
+  <link rel="stylesheet" href="style.css?v=74" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -14,13 +14,14 @@
     <header class="topbar">
       <div class="who">
         <div class="titles">
+          <div class="brand-label">HOWMUCH</div>
           <h1 id="greeting">Overview</h1>
           <div class="asof" id="asof">mini app</div>
         </div>
       </div>
       <div class="topbar-actions">
-        <button class="icon-btn" id="search-open" aria-label="Search shifts" title="Search shifts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m20 20-4.35-4.35"/></svg></button>
-        <button class="icon-btn" id="refresh" aria-label="Refresh" title="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.5"/><path d="M20 4v4.5h-4.5"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.5"/><path d="M4 20v-4.5h4.5"/></svg></button>
+        <button class="icon-btn" id="search-open" aria-label="Search shifts" title="Search shifts"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m20 20-4.35-4.35"/></svg></button>
+        <button class="icon-btn" id="refresh" aria-label="Refresh" title="Refresh"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.5"/><path d="M20 4v4.5h-4.5"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.5"/><path d="M4 20v-4.5h4.5"/></svg></button>
         <button class="profile-btn hidden" id="profile-button" aria-label="Open profile settings" title="Profile settings">
           <span class="avatar" id="avatar">H</span>
         </button>
@@ -41,26 +42,26 @@
       </div>
     </main>
 
-    <nav class="bottom-nav" id="bottom-nav">
-      <button class="nav-btn active" data-view="dashboard">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.8 12 4l8.5 6.8"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><span>Overview</span>
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Primary">
+      <button class="nav-btn active" data-view="dashboard" aria-current="page">
+        <span class="nav-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.8 12 4l8.5 6.8"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><span>Overview</span>
       </button>
       <button class="nav-btn" data-view="summary">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 20V11"/><path d="M12 20V4.5"/><path d="M19.5 20v-7.5"/></svg></span><span>Earnings</span>
+        <span class="nav-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 20V11"/><path d="M12 20V4.5"/><path d="M19.5 20v-7.5"/></svg></span><span>Earnings</span>
       </button>
       <button class="nav-btn nav-add" data-view="add" aria-label="Add Shift">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span>Add</span>
+        <span class="nav-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span>Add</span>
       </button>
       <button class="nav-btn" data-view="calendar">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/><path d="M7.7 13.3h1.6M11.2 13.3h1.6M14.7 13.3h1.6M7.7 16.6h1.6M11.2 16.6h1.6"/></svg></span><span>Calendar</span>
+        <span class="nav-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/><path d="M7.7 13.3h1.6M11.2 13.3h1.6M14.7 13.3h1.6M7.7 16.6h1.6M11.2 16.6h1.6"/></svg></span><span>Calendar</span>
       </button>
       <button class="nav-btn" data-view="settings">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.4a7.6 7.6 0 0 0 .07-1.4 7.6 7.6 0 0 0-.07-1.4l2-1.5-2-3.4-2.3.9a7.7 7.7 0 0 0-2.4-1.4L14.3 3H9.7l-.37 2.3a7.7 7.7 0 0 0-2.4 1.4l-2.3-.9-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2.8l-2 1.5 2 3.4 2.3-.9c.72.62 1.53 1.1 2.4 1.4L9.7 21h4.6l.37-2.3c.87-.3 1.68-.78 2.4-1.4l2.3.9 2-3.4Z"/></svg></span><span>Settings</span>
+        <span class="nav-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.4a7.6 7.6 0 0 0 .07-1.4 7.6 7.6 0 0 0-.07-1.4l2-1.5-2-3.4-2.3.9a7.7 7.7 0 0 0-2.4-1.4L14.3 3H9.7l-.37 2.3a7.7 7.7 0 0 0-2.4 1.4l-2.3-.9-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2.8l-2 1.5 2 3.4 2.3-.9c.72.62 1.53 1.1 2.4 1.4L9.7 21h4.6l.37-2.3c.87-.3 1.68-.78 2.4-1.4l2.3.9 2-3.4Z"/></svg></span><span>Settings</span>
       </button>
     </nav>
 
     <div class="toast hidden" id="toast">
-      <span id="toast-text"></span>
+      <span id="toast-text" role="status"></span>
       <button type="button" id="toast-action"></button>
     </div>
 
@@ -71,6 +72,7 @@
         <input
           type="search"
           id="search-input"
+          aria-label="Event or location"
           placeholder="Event or location…"
           autocomplete="off"
         />
@@ -253,6 +255,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=80"></script>
+  <script src="app.js?v=81"></script>
 </body>
 </html>

@@ -118,8 +118,8 @@
     // the client theme frame the app: the header matches the top of the header artwork.
     // Hex colours here need Bot API 6.9; older clients (mostly Android) reject the call.
     const canPinChrome = !tg.isVersionAtLeast || tg.isVersionAtLeast("6.9");
-    if (canPinChrome && tg.setHeaderColor) tg.setHeaderColor("#123047");
-    if (canPinChrome && tg.setBackgroundColor) tg.setBackgroundColor("#f2f2f7");
+    if (canPinChrome && tg.setHeaderColor) tg.setHeaderColor("#123e38");
+    if (canPinChrome && tg.setBackgroundColor) tg.setBackgroundColor("#f3f6f5");
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (user && user.username) telegramUsername = user.username;
     if (user && user.first_name) {
@@ -146,12 +146,13 @@
   function updateGreeting() {
     const name = (settingsData && settingsData.display_name) || telegramFirstName || "You";
     const header = {
-      dashboard: ["Overview", "This month at a glance"],
+      dashboard: ["Overview", "Your work. Your worth."],
       summary: ["Earnings", "Detailed earnings"],
       calendar: ["Calendar", "Your shifts by date"],
       settings: ["Settings", "Profile and settings"],
     }[view] || ["HowMuch", "Pay tracker"];
     els.greeting.textContent = header[0];
+    document.title = `${header[0]} · HowMuch`;
     els.asof.textContent = header[1];
     els.profileButton.classList.toggle("hidden", view !== "dashboard");
     paintAvatar(els.avatar, name.trim()[0].toUpperCase());
@@ -539,15 +540,12 @@
     const totals = tallyTotals(block);
     const split =
       Number(block.to_come) > 0
-        ? `<div class="projected">${money(block.earned, currency)} earned \u00b7 ${money(
-            block.to_come,
-            currency
-          )} still to come</div>`
+        ? `<div class="projected"><span>Earned so far<strong>${money(block.earned, currency)}</strong></span><span>Still to come<strong>${money(block.to_come, currency)}</strong></span></div>`
         : "";
     const label = options.label === false ? "" : `<div class="label">${escapeHtml(block.label)}</div>`;
     return `
       <div class="hero">
-        ${label}
+        <div class="hero-heading">${label}<span class="hero-emblem" aria-hidden="true">${ICONS.wallet}</span></div>
         <div class="amount">${money(block.projected, currency)}</div>
         <div class="meta">${hours(totals.hours)} \u00b7 ${totals.count} shift${
       totals.count === 1 ? "" : "s"
@@ -703,7 +701,7 @@
     const tomorrowLabel = dayKeyLabel(tomorrow);
     const tomorrowBody = tomorrowShifts.length
       ? shiftDayCard(tomorrowShifts, data.currency)
-      : `<div class="dashboard-empty">Nothing booked for ${escapeHtml(tomorrowLabel)}.</div>`;
+      : `<div class="dashboard-empty"><span class="empty-icon" aria-hidden="true">${ICONS.calendar}</span><strong>A little breathing room</strong><p>No shifts booked for ${escapeHtml(tomorrowLabel)}.</p><button type="button" class="empty-add" data-action="create-shift">Add a shift</button></div>`;
     const month = data.month;
     const planned =
       Number(month.to_come) > 0 ? money(month.to_come, data.currency) : "No upcoming pay";
@@ -715,19 +713,19 @@
         ${periodControls}
         ${heroBlock(data.all_time, data.currency)}
         <div class="dashboard-glance">
-          <div class="dashboard-stat" data-dashboard-stat="worked">
+          <button type="button" class="dashboard-stat" data-dashboard-stat="worked">
             <span>Worked this month</span>
             <strong>${hours(month.hours)}</strong>
-            <div class="chevron">\u203a</div>
-          </div>
-          <div class="dashboard-stat" data-dashboard-stat="upcoming">
+            <span class="chevron" aria-hidden="true">\u203a</span>
+          </button>
+          <button type="button" class="dashboard-stat" data-dashboard-stat="upcoming">
             <span>Upcoming shifts</span>
             <strong>${planned}</strong>
-            <div class="chevron">\u203a</div>
-          </div>
+            <span class="chevron" aria-hidden="true">\u203a</span>
+          </button>
         </div>`,
       body: `
-        <div class="section-title">Tomorrow · ${escapeHtml(tomorrowLabel)}</div>
+        <div class="section-heading"><h2>Tomorrow</h2><span>${escapeHtml(tomorrowLabel)}</span></div>
         ${tomorrowBody}
       `,
     };
@@ -1948,6 +1946,8 @@
     if (tg && tg.BackButton) tg.BackButton.hide();
     [...els.bottomNav.querySelectorAll(".nav-btn")].forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.view === next);
+      if (btn.dataset.view === next) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
     });
     if (next === "calendar") {
       const month = calendarMonth || currentMonthKey(summaryData);
@@ -2955,6 +2955,7 @@
     const actionBtn = event.target.closest("[data-action]");
     if (actionBtn) {
       const actions = {
+        "create-shift": () => openCreator(),
         "save-profile": saveProfile,
         "save-pay": savePay,
         "save-reminders": saveReminders,
