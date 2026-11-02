@@ -198,3 +198,16 @@ dashboard (its `/webapp/api/*` endpoints require Telegram's signed `initData`).
 ```bash
 python -m pytest
 ```
+
+## Automatic payment detection (DBS + Gmail)
+
+Settings → **Payment detection** can connect Gmail with read-only access and check
+DBS FAST transfer alerts. Exact event totals and explicit payer rules can mark
+completed events paid automatically; uncertain matches stay in a review queue.
+Each change has an Undo action, and duplicate alerts cannot double-apply payments.
+The first scan includes the last 30 days; transfers before automation was enabled
+require review.
+
+Google OAuth credentials must be configured before Gmail can connect. See
+[setup, matching rules, and recovery](docs/payment-detection.md). This feature is
+off by default and does not use bank credentials.

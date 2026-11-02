@@ -2583,3 +2583,29 @@ button:disabled { cursor: default; }
 #edit-form input[type="number"] { -moz-appearance: textfield; }
 #edit-form input[type="number"]::-webkit-inner-spin-button,
 #edit-form input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Payment detection follows the open, single-surface form styling. */
+.payment-detection { background: #fff; border-radius: 20px; padding: 22px; margin-top: 8px; }
+.payment-detection h2 { margin: 0; font-size: 23px; letter-spacing: -0.03em; }
+.payment-detection h3 { margin: 0 0 10px; font-size: 16px; }
+.payment-detection p { color: #526d63; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.payment-detection .payment-note { font-size: 12px; color: var(--hint); }
+.payment-panel { padding: 22px 0; border-bottom: 1px solid var(--separator); }
+.payment-panel:last-of-type { border-bottom: 0; }
+.payment-rule { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding-block: 12px; border-bottom: 1px solid var(--separator); }
+.payment-rule > div { min-width: 0; }
+.payment-rule strong, .payment-rule span { display: block; overflow-wrap: anywhere; }
+.payment-rule strong { font-size: 13px; }
+.payment-rule span { font-size: 12px; margin-top: 4px; color: var(--hint); }
+.payment-text-button { border: 0; background: transparent; color: var(--button); min-height: 44px; padding: 8px 0; font: inherit; font-size: 13px; text-align: left; }
+.payment-text-button:disabled { opacity: 0.45; }
+.payment-text-button[aria-pressed="true"] { font-weight: 700; }
+.payment-rule-fields { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
+.payment-rule-fields label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--hint); }
+.payment-rule-fields input, .payment-rule-fields select { min-width: 0; max-width: 100%; min-height: 44px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--separator); border-radius: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; }
+.payment-review-actions { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.payment-receipt { padding: 18px 0; border-bottom: 1px solid var(--separator); }
+.payment-receipt:last-child { border-bottom: 0; }
+.payment-receipt-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; justify-content: space-between; }
+.payment-status { color: var(--hint); font-size: 11px; }
+.payment-receipt p { margin-block: 6px; }

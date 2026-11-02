@@ -7,10 +7,11 @@ sync alive.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import shutil
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -81,9 +82,14 @@ async def lifespan(app: FastAPI):
     await application.start()
     await application.updater.start_polling(drop_pending_updates=True)
     logger.info("Bot polling; calendar feed at %s; mini app at %s", feed_base_url(), webapp_url())
+    from .gmail_payments import poll_mailboxes
+    payment_poll = asyncio.create_task(poll_mailboxes(app.state.storage))
     try:
         yield
     finally:
+        payment_poll.cancel()
+        with suppress(asyncio.CancelledError):
+            await payment_poll
         await application.updater.stop()
         await application.stop()
         await application.shutdown()

@@ -76,6 +76,7 @@
   let eventsData = null; // event list fetched lazily for event detail navigation
   let eventDetail = null; // set when drilled into one event from the "Events" view
   let cabClaimsData = null;
+  let paymentDetectionData = null;
   let settingsData = null; // fetched lazily the first time the Settings tab is opened
   let settingsSection = null; // null | "profile" | "pay" | "reminders" | "calendar" | "export" — drill-down within Settings
   let telegramFirstName = ""; // fallback greeting name when no display name is set
@@ -1299,12 +1300,102 @@
   const SETTINGS_SECTIONS = [
     { key: "profile", icon: ICONS.user, label: "Account Settings" },
     { key: "pay", icon: ICONS.wallet, label: "Pay Rate" },
+    { key: "payments", icon: ICONS.wallet, label: "Payment detection" },
     { key: "reminders", icon: ICONS.bell, label: "Reminders" },
     { key: "calendar", icon: ICONS.calendar, label: "Calendar Sync" },
     { key: "export", icon: ICONS.download, label: "Export shifts" },
   ];
 
+  const PAYMENT_API = "/webapp/api/payment-detection";
+
+  async function loadPaymentDetection() {
+    try {
+      paymentDetectionData = await api(PAYMENT_API);
+      if (view === "settings" && settingsSection === "payments") render();
+    } catch (err) {
+      showToast(err.detail || "Couldn't load payment detection.");
+    }
+  }
+
+  function paymentDetectionView(back) {
+    const data = paymentDetectionData;
+    if (!data) return { head: back, body: '<div class="empty">Loading payment detection…</div>' };
+    const options = data.events.map((event) => `<option value="${escapeHtml(event)}">${escapeHtml(event)}</option>`).join("");
+    const rules = data.rules.map((rule) => `<div class="payment-rule"><div><strong>${escapeHtml(rule.payer)}</strong><span>${escapeHtml(rule.event)}</span></div><button type="button" class="payment-text-button" data-action="delete-payer-rule" data-rule-id="${rule.id}">Remove</button></div>`).join("");
+    const labels = { review: "Needs review", auto_paid: "Automatically marked paid", confirmed_paid: "Confirmed paid", dismissed: "Dismissed", undone: "Undone" };
+    const receipts = data.receipts.map((receipt) => {
+      const candidates = receipt.candidates || [];
+      const confirm = receipt.status === "review" ? candidates.map((candidate) => `<button type="button" class="payment-text-button" data-action="confirm-receipt" data-receipt-id="${receipt.id}" data-event="${escapeHtml(encodeURIComponent(candidate.event))}">Mark ${escapeHtml(candidate.event)} paid${candidate.includes_cab ? " (includes cab)" : ""}</button>`).join("") : "";
+      const undo = ["auto_paid", "confirmed_paid"].includes(receipt.status) ? `<button type="button" class="payment-text-button" data-action="undo-receipt" data-receipt-id="${receipt.id}">Undo marking paid</button>` : "";
+      return `<article class="payment-receipt"><div class="payment-receipt-heading"><h3>${receipt.amount === null ? "Amount unavailable" : money(receipt.amount, receipt.currency)}</h3><span class="payment-status">${labels[receipt.status] || "Needs review"}</span></div><p>${escapeHtml(receipt.payer || "Unknown payer")}${receipt.account_last4 ? ` · Account …${escapeHtml(receipt.account_last4)}` : ""}</p><p>${receipt.received_at ? escapeHtml(new Date(receipt.received_at).toLocaleString()) : "Transfer date unavailable"}</p>${receipt.event ? `<p>Event: ${escapeHtml(receipt.event)}</p>` : ""}<p class="payment-note">${escapeHtml(receipt.reason)}</p><div class="payment-review-actions">${confirm}${undo}${receipt.status === "review" ? `<button type="button" class="payment-text-button" data-action="dismiss-receipt" data-receipt-id="${receipt.id}">Dismiss alert</button>` : ""}</div></article>`;
+    }).join("");
+    return { head: back, body: `<section class="payment-detection">
+      <h2>Payment detection</h2><p class="payment-intro">Use DBS transfer alerts in Gmail to keep track of incoming pay.</p>
+      <section class="payment-panel"><h3>Gmail connection</h3>
+        <p>${data.connected ? escapeHtml(data.email) : "Connect the Gmail account that receives your DBS alerts."}</p>
+        ${!data.available ? '<p class="payment-note">Gmail sign-in setup is still needed on this app. Detection will stay off until it is ready.</p>' : ""}
+        ${data.connected ? `<p class="payment-note">Checks DBS alerts every two minutes.${data.last_scan ? ` Last checked ${escapeHtml(new Date(data.last_scan * 1000).toLocaleString())}.` : " Waiting for the first check."}</p><div class="payment-review-actions"><button type="button" class="btn primary" data-action="scan-payments" ${data.available ? "" : "disabled"}>Check now</button><button type="button" class="payment-text-button" data-action="disconnect-gmail">Disconnect Gmail</button></div>` : data.available ? '<button type="button" class="btn primary" data-action="connect-gmail">Connect Gmail</button><p class="payment-note">Google will ask for read-only Gmail access. The app searches for DBS transfer alerts and does not change your email.</p>' : ""}
+        <button type="button" class="payment-text-button" data-action="refresh-detection">Refresh connection status</button>
+        ${data.error ? `<p class="modal-error" role="alert">${escapeHtml(data.error)}</p>` : ""}
+      </section>
+      <section class="payment-panel"><h3>Automatic marking</h3><p>Only verified DBS alerts with an exact unpaid event total, matching currency, and a payer rule can mark an event paid.</p><p class="payment-note">Amount-only matches, partial payments, and combined payouts need review. Cab reimbursements can be included in an exact event total. Rules apply to new alerts; adding a rule does not mark old alerts paid.</p>
+        <button type="button" class="payment-text-button" data-action="toggle-payment-auto" aria-pressed="${data.auto_enabled}" ${data.connected && data.available ? "" : "disabled"}>${data.auto_enabled ? "Automatic marking is on · Turn off" : "Turn on automatic marking"}</button>
+      </section>
+      <section class="payment-panel"><h3>Payer rules</h3><p class="payment-note">Use the payer name exactly as shown in the DBS email, for example REFIX PTE. LTD.</p>${rules || '<p class="payment-note">No payer rules yet.</p>'}
+        <div class="payment-rule-fields"><label for="payment-payer">Payer name<input type="text" id="payment-payer" maxlength="200" placeholder="e.g. REFIX PTE. LTD." /></label><label for="payment-event">Work event<select id="payment-event"><option value="">Choose event…</option>${options}</select></label><button type="button" class="payment-text-button" data-action="add-payer-rule" ${data.events.length ? "" : "disabled"}>Add payer rule</button></div>
+      </section>
+      <section class="payment-panel"><h3>Payment history</h3><p class="payment-note">${data.receipts.length ? "Showing the latest 50 alerts. Open Gmail to check the original message." : "Recent DBS alerts will appear here after you connect Gmail."}</p>${receipts}</section>
+      <p class="modal-error hidden" role="alert" id="payment-detection-error"></p>
+    </section>` };
+  }
+
+  async function paymentDetectionAction(button) {
+    const action = button.dataset.action;
+    hideSettingsError("payment-detection-error");
+    setButtonSaving(button, true, "Working…");
+    try {
+      if (action === "refresh-detection") {
+        await loadPaymentDetection();
+        return;
+      }
+      if (action === "connect-gmail") {
+        const result = await api(PAYMENT_API + "/connect", { method: "POST" });
+        if (tg && tg.openLink) tg.openLink(result.url);
+        else window.open(result.url, "_blank", "noopener,noreferrer");
+        return;
+      }
+      let path, method = "POST", body;
+      if (action === "scan-payments") path = "/scan";
+      if (action === "disconnect-gmail") {
+        if (!(await confirmDialog("Disconnect Gmail and stop checking bank alerts?"))) return;
+        path = "/connection"; method = "DELETE";
+      }
+      if (action === "toggle-payment-auto") {
+        path = ""; method = "PATCH"; body = { auto_enabled: !paymentDetectionData.auto_enabled };
+      }
+      if (action === "add-payer-rule") {
+        path = "/rules"; body = { payer: document.getElementById("payment-payer").value.trim(), event: document.getElementById("payment-event").value };
+        if (!body.payer || !body.event) throw { detail: "Enter a payer name and select an event." };
+      }
+      if (action === "delete-payer-rule") { path = `/rules/${button.dataset.ruleId}`; method = "DELETE"; }
+      if (["confirm-receipt", "dismiss-receipt", "undo-receipt"].includes(action)) {
+        path = `/receipts/${button.dataset.receiptId}/${action.split("-")[0]}`;
+        if (action === "confirm-receipt") body = { event: decodeURIComponent(button.dataset.event) };
+      }
+      if (path === undefined) return;
+      paymentDetectionData = await api(PAYMENT_API + path, { method, body });
+      cabClaimsData = null;
+      await load();
+      if (view === "settings" && settingsSection === "payments") render();
+    } catch (err) {
+      showSettingsError("payment-detection-error", err.detail || "Couldn't update payment detection. Try again.");
+    } finally {
+      if (button.isConnected) setButtonSaving(button, false);
+    }
+  }
+
   function settingsSectionHint(key, data) {
+    if (key === "payments") return "DBS alerts · Gmail";
     if (key === "pay") return `${money(data.default_rate, data.currency)} / hour`;
     if (key === "reminders") {
       return data.reminders.enabled ? `On \u00b7 ${data.reminders.send_at}` : "Off";
@@ -1361,6 +1452,7 @@
 
   function settingsSectionView(data, section) {
     const back = `<div class="back-row" id="back-to-settings">\u2039 Settings</div>`;
+    if (section === "payments") return paymentDetectionView(back);
     if (section === "profile") {
       return {
         head: back,
@@ -1851,6 +1943,7 @@
 
   function setSettingsSection(value) {
     settingsSection = value;
+    if (value === "payments") loadPaymentDetection();
     if (tg && tg.BackButton) {
       if (value) tg.BackButton.show();
       else tg.BackButton.hide();
@@ -2878,7 +2971,10 @@
     if (view === "events") loadEvents();
     if (view === "summary") loadCabClaims();
     if (view === "calendar") loadCalendarMonth(calendarMonth || currentMonthKey(summaryData));
-    if (view === "settings") loadSettings();
+    if (view === "settings") {
+      loadSettings();
+      if (settingsSection === "payments") loadPaymentDetection();
+    }
   });
 
   function openSearch() {
@@ -2958,6 +3054,16 @@
     const actionBtn = event.target.closest("[data-action]");
     if (actionBtn) {
       const actions = {
+        "connect-gmail": paymentDetectionAction,
+        "refresh-detection": paymentDetectionAction,
+        "scan-payments": paymentDetectionAction,
+        "disconnect-gmail": paymentDetectionAction,
+        "toggle-payment-auto": paymentDetectionAction,
+        "add-payer-rule": paymentDetectionAction,
+        "delete-payer-rule": paymentDetectionAction,
+        "confirm-receipt": paymentDetectionAction,
+        "dismiss-receipt": paymentDetectionAction,
+        "undo-receipt": paymentDetectionAction,
         "create-shift": () => openCreator(),
         "save-profile": saveProfile,
         "save-pay": savePay,

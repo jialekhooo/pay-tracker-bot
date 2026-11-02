@@ -1388,3 +1388,8 @@ async def rotate_calendar_link(
     token = issue_token(storage, user_id, refresh=True)
     calendar_url = f"{base_url.rstrip('/')}/{token}.ics"
     return {"calendar_url": calendar_url, "webcal_url": _webcal_url(calendar_url)}
+
+
+# Keep payment detection behind the same Telegram authentication as the Mini App.
+from .gmail_payments import router as payment_detection_router
+router.include_router(payment_detection_router)
