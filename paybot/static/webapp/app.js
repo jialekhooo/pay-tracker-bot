@@ -2075,12 +2075,13 @@
   function syncRateWidth() {
     const input = els.editForm.rate;
     const shown = input.value || input.placeholder || "0";
-    input.style.width = `${Math.max(shown.length, 1) + 0.5}ch`;
+    input.style.width = `${Math.min(Math.max(shown.length, 1) + 0.5, 12)}ch`;
   }
 
   function setPayMode(mode) {
     const fixed = mode === "fixed";
     els.editForm.pay_is_fixed.value = fixed ? "yes" : "no";
+    els.editForm.rate.setAttribute("aria-label", fixed ? "Lump sum amount" : "Rate per hour");
     syncAmountSuffix();
     els.editPayMode.querySelectorAll("[data-pay-mode]").forEach((button) => {
       const active = button.dataset.payMode === mode;
@@ -2136,7 +2137,9 @@
   function setBreakPaid(value) {
     els.editForm.break_paid.value = value;
     els.editBreakPaid.querySelectorAll("[data-break-paid]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.breakPaid === value);
+      const active = button.dataset.breakPaid === value;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
     });
   }
 
@@ -2224,7 +2227,7 @@
         <span class="group-label"></span>
         <button type="button" class="row-remove" data-remove-date aria-label="Remove date">✕</button>
       </div>
-      <div class="detail-rows">
+      <div class="detail-rows schedule-rows">
         <label class="detail-row">
           <span class="row-label">Date</span>
           <span class="field-control">
