@@ -42,6 +42,7 @@ from .reminders import (
 )
 from .schedule import find_clashes, span
 from .storage import ShiftRecord, Storage
+from .payment_detection import PaymentStore
 
 INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
 
@@ -123,6 +124,8 @@ def _num(value: Decimal) -> str:
 
 def _cab_claims_json(storage: Storage, user_id: int) -> dict:
     now = local_clock(_offset(storage, user_id))
+    detection = PaymentStore(storage)
+    payer_rules = detection.rules(user_id)
     event_totals: dict[str, dict] = {}
     for record in storage.list_shifts(user_id):
         key = record.event.casefold()
@@ -200,6 +203,7 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
                 "ongoing": bool(total["shifts"]) and not completed and not upcoming,
                 "upcoming": upcoming,
                 "paid_out": completed and all(total["paid"]),
+                "payers": [r["payer"] for r in payer_rules if r["event"].casefold() == total["event"].casefold()],
             }
         )
     events.sort(key=lambda item: (-Decimal(item["earnings"]), item["event"].casefold()))
@@ -209,6 +213,7 @@ def _cab_claims_json(storage: Storage, user_id: int) -> dict:
         "events": events,
         "claims": claim_json,
         "unassigned_claims": unassigned,
+        "payer_suggestions": detection.payer_suggestions(user_id),
     }
 
 

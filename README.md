@@ -204,6 +204,8 @@ python -m pytest
 Settings → **Payment detection** can connect Gmail with read-only access and check
 DBS FAST transfer alerts. Exact event totals and explicit payer rules can mark
 completed events paid automatically; uncertain matches stay in a review queue.
+Set the paying company once using **Paid by** on an Earnings job card; this
+creates the payer rule automatically, with suggestions from detected alerts.
 Each change has an Undo action, and duplicate alerts cannot double-apply payments.
 The first scan includes the last 30 days; transfers before automation was enabled
 require review.

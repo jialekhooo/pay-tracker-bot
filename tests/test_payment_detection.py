@@ -386,3 +386,52 @@ def test_apply_failure_rolls_back_all_shift_flags_and_receipt(store):
     assert not store.storage.get_shift(42,second).paid
     assert store.db.execute('SELECT count(*) FROM payment_receipts').fetchone()[0]==0
     assert store.db.execute('SELECT count(*) FROM payment_allocations').fetchone()[0]==0
+
+
+def test_job_card_payer_replaces_removes_and_is_reflected_in_event_totals(store):
+    shift(store)
+    store.save_rule(42,'Old company','Event')
+    store.save_rule(42,'Another company','Event')
+    client,headers=client_for(store)
+    url='/webapp/api/payment-detection/event-payer'
+    result=client.put(url,headers=headers,json={'event':'Event','payer':'REFIX PTE. LTD.'})
+    assert result.status_code==200 and result.json()['payers']==['refix pte. ltd.']
+    card=client.get('/webapp/api/cab-claims',headers=headers).json()
+    assert card['events'][0]['payers']==['refix pte. ltd.']
+    assert 'refix pte. ltd.' in card['payer_suggestions']
+    assert client.put(url,headers=headers,json={'event':'Event','payer':''}).json()['payers']==[]
+    assert not store.rules(42)
+
+
+def test_job_payer_rule_is_scoped_to_user_and_event(store):
+    shift(store)
+    shift(store,event='Other')
+    shift(store,user=99,event='Private')
+    store.set_event_payer(42,'Other','Other company')
+    client,headers=client_for(store)
+    url='/webapp/api/payment-detection/event-payer'
+    assert client.put(url,json={'event':'Event','payer':'REFIX'}).status_code==401
+    assert client.put(url,headers=headers,json={'event':'Private','payer':'REFIX'}).status_code==400
+    assert client.put(url,headers=headers,json={'event':'Missing','payer':'REFIX'}).status_code==400
+    assert store.rules(42)[0]['event']=='Other'
+    assert not store.rules(99)
+
+
+def test_job_card_payer_uses_the_automatic_detection_matcher(store):
+    sid=shift(store)
+    store.save_connection(42,'person@gmail.com','encrypted')
+    with store.db:
+        store.db.execute('UPDATE payment_connections SET auto_since=1 WHERE user_id=42')
+    client,headers=client_for(store)
+    client.put('/webapp/api/payment-detection/event-payer',headers=headers,json={'event':'Event','payer':'REFIX PTE. LTD.'})
+    rid=store.ingest(42,'mail-1',parsed(),True)
+    assert store.receipt(42,rid)['status']=='auto_paid'
+    assert store.storage.get_shift(42,sid).paid
+
+
+def test_payer_suggestions_only_use_own_authenticated_alerts(store):
+    store.ingest(42,'mail-1',parsed(),True)
+    other=parsed(BODY.replace('TEST-REF-1','REF-2').replace('REFIX PTE. LTD.','Unverified company'))
+    store.ingest(42,'mail-2',other,False)
+    assert store.payer_suggestions(42)==['REFIX PTE. LTD.']
+    assert store.payer_suggestions(99)==[]

@@ -155,6 +155,21 @@ class PayerRule(BaseModel):
     event: str = Field(min_length=1, max_length=120)
 
 
+class EventPayer(BaseModel):
+    event: str = Field(min_length=1, max_length=120)
+    payer: str = Field(max_length=200)
+
+
+@router.put("/event-payer")
+async def set_event_payer(payload: EventPayer, request: Request, authorization: str | None = Header(default=None)):
+    store, user_id = store_for(request, authorization)
+    try:
+        store.set_event_payer(user_id, payload.event, payload.payer)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"event": payload.event, "payers": [r["payer"] for r in store.rules(user_id) if r["event"].casefold() == payload.event.strip().casefold()]}
+
+
 class ApplyReceipt(BaseModel):
     event: str = Field(min_length=1, max_length=120)
 

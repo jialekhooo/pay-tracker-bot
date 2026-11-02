@@ -1048,6 +1048,46 @@
       .join("");
   }
 
+  function jobPayerSuggestions() {
+    return `<datalist id="job-payer-options">${(cabClaimsData?.payer_suggestions || []).map((name) => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>`;
+  }
+
+  function jobPayerEditor(event) {
+    if (!event.shifts) return "";
+    const payers = event.payers || [];
+    const key = encodeURIComponent(event.event);
+    return `<details class="job-payer">
+      <summary><span>Paid by</span><strong>${payers.length ? escapeHtml(payers.join(", ")) : "Add paying company"}</strong></summary>
+      <form class="job-payer-form" data-job-payer-event="${escapeHtml(key)}">
+        <label for="job-payer-${escapeHtml(key)}">Company name in the DBS alert</label>
+        <input id="job-payer-${escapeHtml(key)}" type="text" class="job-payer-input" maxlength="200" list="job-payer-options" autocomplete="off" placeholder="e.g. REFIX PTE. LTD." value="${escapeHtml(payers[0] || "")}" />
+        <p class="job-payer-hint">Set this once for the job. Future matching payments can mark it paid when Gmail detection is on. Clear the name to remove it.</p>
+        <div class="job-payer-actions"><button type="submit" class="payment-text-button">Save company</button><button type="button" class="payment-text-button" data-action="open-payment-detection">Payment detection settings</button></div>
+        <p class="modal-error hidden" role="alert"></p>
+      </form>
+    </details>`;
+  }
+
+  async function saveJobPayer(form) {
+    const button = form.querySelector('button[type="submit"]');
+    const error = form.querySelector('[role="alert"]');
+    error.classList.add("hidden");
+    setButtonSaving(button, true, "Saving…");
+    try {
+      const payer = form.querySelector(".job-payer-input").value.trim();
+      await api("/webapp/api/payment-detection/event-payer", { method: "PUT", body: { event: decodeURIComponent(form.dataset.jobPayerEvent), payer } });
+      cabClaimsData = await api("/webapp/api/cab-claims");
+      paymentDetectionData = null;
+      render();
+      showSuccessToast(payer ? "Paying company saved" : "Paying company removed");
+    } catch (err) {
+      error.textContent = err.detail || "Couldn't save the paying company. Try again.";
+      error.classList.remove("hidden");
+    } finally {
+      if (button.isConnected) setButtonSaving(button, false);
+    }
+  }
+
   function eventPayoutView(cabClaimsData) {
     const claimRow = (claim, needsAssignment = false) => `
       <div class="cab-claim-row${needsAssignment ? " unassigned" : ""}">
@@ -1126,6 +1166,7 @@
                     event.currency
                   )}</strong></span>
                 </div>
+                ${jobPayerEditor(event)}
                 ${
                   eventClaims.length
                     ? `<div class="cab-claim-list">${eventClaims.map((claim) => claimRow(claim)).join("")}</div>`
@@ -1149,6 +1190,7 @@
       ${eventSortToggle()}
       <div class="section-title">Earnings and estimated payout by event</div>
       <div class="cab-event-list">${eventCards}</div>
+      ${jobPayerSuggestions()}
       ${unassigned}
       <p class="cab-claim-footnote">Estimated bank credit = event earnings + linked cab reimbursements.</p>
     `;
@@ -1262,6 +1304,8 @@
                       payout.currency
                     )}</strong></span>
                   </div>
+                  ${jobPayerEditor(payout)}
+                  ${jobPayerSuggestions()}
                   ${
                     claims.length
                       ? `<div class="cab-claim-list">${claims
@@ -3046,6 +3090,13 @@
     submitCabClaim(event.target);
   });
 
+  els.contentWrap.addEventListener("submit", (event) => {
+    const form = event.target.closest(".job-payer-form");
+    if (!form) return;
+    event.preventDefault();
+    saveJobPayer(form);
+  });
+
   els.contentWrap.addEventListener("change", (event) => {
     if (event.target.id === "avatar-file-input") handleAvatarFileSelected(event);
   });
@@ -3054,6 +3105,7 @@
     const actionBtn = event.target.closest("[data-action]");
     if (actionBtn) {
       const actions = {
+        "open-payment-detection": () => { selectView("settings"); setSettingsSection("payments"); },
         "connect-gmail": paymentDetectionAction,
         "refresh-detection": paymentDetectionAction,
         "scan-payments": paymentDetectionAction,

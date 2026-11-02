@@ -25,8 +25,12 @@ OAuth permission. A background task checks new DBS alerts every two minutes;
      unreadable and requires users to reconnect.
 5. Open Settings → Payment detection → **Connect Gmail**. Complete Google consent
    in the external browser, return to Telegram, then **Refresh connection status**.
-6. Add payer rules (for example `REFIX PTE. LTD.` → the corresponding work event).
-   Enable automatic marking only when the mapping is correct. It starts disabled.
+6. In Earnings, open **Paid by** on a job card and select or enter the paying
+   company (for example `REFIX PTE. LTD.`). Suggestions come from verified bank
+   alerts and saved companies. The same field is available in event details.
+   Save once for that job; it creates the matching rule automatically. The payer
+   rule list in Settings is also available for advanced edits. Enable automatic
+   marking after checking the company. It starts disabled.
 
 Until all four deployment settings are present and valid, the UI reports that
 Gmail setup is needed and the background importer makes no Gmail requests.
@@ -109,3 +113,11 @@ credentials, Gmail pagination, duplicate alerts, and failed scan checkpoints.
 Browser checks cover setup, payer rules, and responsive layouts in Chrome and WebKit.
 Real Gmail consent and a real bank alert must still be checked after configuring
 OAuth; mocks do not replace that end-to-end connection test.
+
+### Company on the job card
+
+**Paid by → Save company** replaces that job's existing payer rules with the
+selected company. Clearing the field removes the job's payer rule. Other jobs and
+users are unaffected. A company can pay multiple jobs; the automatic matcher still
+requires an exact event total and a single eligible match. Saving a company does
+not reprocess older alerts or enable automatic marking by itself.

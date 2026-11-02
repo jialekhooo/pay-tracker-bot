@@ -145,6 +145,30 @@ class PaymentStore:
         with self.db:
             self.db.execute("INSERT OR IGNORE INTO payment_rules(user_id,payer,event) VALUES(?,?,?)", (user_id, payer, event))
 
+    def set_event_payer(self, user_id: int, event: str, payer: str) -> None:
+        event, payer = event.strip(), normalized(payer)
+        if not event or len(event) > 120 or len(payer) > 200:
+            raise ValueError("Enter a valid event and company name.")
+        shifts = self.storage.shifts_for_event(user_id, event)
+        if not shifts:
+            raise ValueError("Event not found.")
+        event = shifts[0].event
+        with self.db:
+            self.db.execute("DELETE FROM payment_rules WHERE user_id=? AND lower(event)=lower(?)", (user_id, event))
+            if payer:
+                self.db.execute("INSERT INTO payment_rules(user_id,payer,event) VALUES(?,?,?)", (user_id, payer, event))
+
+    def payer_suggestions(self, user_id: int) -> list[str]:
+        names = [row[0] for row in self.db.execute(
+            "SELECT payer FROM payment_receipts WHERE user_id=? AND trusted=1 AND payer<>'' "
+            "GROUP BY payer ORDER BY MAX(created_at) DESC LIMIT 100", (user_id,),
+        )]
+        names.extend(rule["payer"] for rule in self.rules(user_id))
+        unique = {}
+        for name in names:
+            unique.setdefault(normalized(name), name)
+        return list(unique.values())[:100]
+
     def candidates(self, user_id: int, receipt: dict) -> list[dict]:
         if not receipt.get("amount") or not receipt.get("received_at"):
             return []
