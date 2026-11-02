@@ -1183,7 +1183,7 @@
           <label>Amount (${escapeHtml(currency)})<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required /></label>
         </div>
         <label>Note (optional)<input type="text" name="note" maxlength="250" placeholder="e.g. Taxi home" /></label>
-        <p class="cab-claim-error hidden" id="cab-claim-error"></p>
+        <p class="cab-claim-error hidden" id="cab-claim-error" role="alert"></p>
         <button type="submit" class="cab-claim-submit" ${
           event || cabClaimsData.available_events.length ? "" : "disabled"
         }>Add cab claim</button>
