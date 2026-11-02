@@ -1709,7 +1709,7 @@ main {
 }
 
 .form-sheet {
-  background: #f4f7f5;
+  background: #ffffff;
   border-radius: 26px 26px 0 0;
   max-height: 94%;
   padding: 0 20px calc(24px + env(safe-area-inset-bottom, 0px));
@@ -1726,7 +1726,7 @@ main {
   z-index: 2;
   margin: 0 -20px;
   padding: 16px 20px;
-  background: rgba(244, 247, 245, 0.97);
+  background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(60, 60, 67, 0.12);
@@ -2509,7 +2509,7 @@ button:disabled { cursor: default; }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
-/* Shift editor: compact sections, quiet choices, and an explicit primary action. */
+/* A single surface with open rows and dividers, rather than nested cards. */
 #edit-save {
   justify-self: end;
   min-width: 66px;
@@ -2521,54 +2521,58 @@ button:disabled { cursor: default; }
   font-size: 14px;
   font-weight: 650;
 }
-#edit-cancel { width: 40px; height: 40px; background: #e7eeea; }
-#edit-cancel svg { width: 19px; height: 19px; }
+#edit-cancel { width: 40px; height: 40px; background: transparent; }
+#edit-cancel svg { width: 20px; height: 20px; }
+#edit-sheet { padding-inline: 24px; }
+#edit-sheet .sheet-bar { margin-inline: -24px; padding-inline: 24px; }
 #edit-sheet .sheet-bar h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
-#edit-form .lead-row, #edit-form .field-group, #edit-form > .detail-rows {
-  border: 1px solid #dfe7e2;
-  border-radius: 18px;
+#edit-form { gap: 22px; padding-top: 24px; }
+#edit-form .lead-row,
+#edit-form .field-group,
+#edit-form > .detail-rows {
+  padding: 0 0 20px;
+  border: 0;
+  border-bottom: 1px solid var(--separator);
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
-#edit-form .field-group { padding: 14px; }
-#edit-form .lead-row { padding: 14px; gap: 12px; }
+#edit-form .lead-badge { display: none; }
 .event-name-field { flex: 1; min-width: 0; }
-.event-name-field .group-label { margin-bottom: 5px; font-size: 11px; }
-#edit-form .lead-row input { width: 100%; font-size: 17px; font-weight: 650; }
-#edit-form .group-label { color: #526d63; font-weight: 650; }
-#edit-form .segmented { padding: 4px; gap: 4px; background: #eef3ef; border-radius: 12px; }
-#edit-form .segment { min-height: 40px; padding: 8px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #64786d; font-size: 13px; }
-#edit-form .segment.active { background: #fff; border-color: #dbe5de; color: var(--button); font-weight: 700; box-shadow: 0 1px 3px rgba(24,59,55,0.06); }
-#edit-form .segment.active::before { content: "✓"; margin-right: 6px; }
-#edit-form .amount-row { margin-top: 12px; column-gap: 8px; row-gap: 4px; }
+.event-name-field .group-label { margin-bottom: 8px; }
+#edit-form .lead-row input { width: 100%; padding-block: 6px; font-size: 23px; font-weight: 600; letter-spacing: -0.025em; }
+#edit-form input::placeholder { color: #82958c; font-weight: 400; }
+#edit-form .group-label { color: #64786d; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+#edit-form .segmented { padding: 0; gap: 24px; background: transparent; border-radius: 0; }
+#edit-form .segment { flex: none; min-height: 44px; padding: 8px 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #64786d; font-size: 14px; }
+#edit-form .segment.active { background: transparent; border-bottom-color: var(--button); color: var(--button); font-weight: 700; box-shadow: none; }
+#edit-form .amount-row { margin-top: 14px; column-gap: 8px; row-gap: 4px; }
 #edit-form .amount-currency { font-size: 16px; }
-#edit-form .amount-row input { font-size: 30px; font-weight: 700; letter-spacing: -0.035em; }
-#edit-form .amount-suffix { font-size: 12px; white-space: normal; }
-#edit-form .schedule-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
-#edit-form .schedule-rows .detail-row { padding: 12px; min-height: 50px; border: 1px solid #dfe7e2; border-radius: 12px; background: #f8faf9; }
-#edit-form .schedule-rows .detail-row:first-child { grid-column: 1 / -1; }
-#edit-form .schedule-rows .detail-row:not(:first-child) { flex-wrap: wrap; gap: 7px; }
-#edit-form .schedule-rows .detail-row:not(:first-child) .row-label { flex-basis: 100%; font-size: 12px; color: var(--hint); }
-#edit-form .schedule-rows .detail-row:not(:first-child) .field-control { margin-left: 0; justify-content: flex-start; }
-#edit-form .schedule-rows .detail-row:not(:first-child) .field-display { justify-content: flex-start; min-width: 0; }
+#edit-form .amount-row input { font-size: 30px; font-weight: 650; letter-spacing: -0.035em; }
+#edit-form .amount-suffix { font-size: 13px; white-space: normal; }
+#edit-form .schedule-rows { display: flex; flex-direction: column; gap: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
+#edit-form .schedule-rows .detail-row { padding: 0; min-height: 48px; border: 0; border-radius: 0; background: transparent; }
+#edit-form .schedule-rows .detail-row + .detail-row { border-top: 1px solid #edf1ee; }
 #edit-form .schedule-rows .detail-row::before { display: none; }
-#edit-form .field-control { min-height: 24px; }
-#edit-form .field-control:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-.break-length-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; color: #526d63; font-size: 13px; }
-.break-length-input { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid #dfe7e2; border-radius: 10px; background: #f8faf9; }
-#edit-form .break-length-input input { width: 4ch; text-align: right; }
-.break-length-input > span { font-size: 12px; color: var(--hint); }
-#edit-form .field-group > .detail-rows:not(.schedule-rows) { border: 0; border-radius: 0; box-shadow: none; }
+#edit-form .schedule-rows .row-label { font-size: 14px; }
+#edit-form .field-control { min-height: 28px; }
+#edit-form .field-control:focus-within { box-shadow: 0 2px 0 var(--accent); }
+#edit-form input:focus-visible { outline: none; box-shadow: 0 2px 0 var(--accent); }
+.break-length-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; color: #526d63; font-size: 14px; }
+.break-length-input { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+#edit-form .break-length-input input { width: 5ch; padding-block: 6px; text-align: right; }
+.break-length-input > span { font-size: 13px; color: var(--hint); }
+#edit-form .field-group > .detail-rows:not(.schedule-rows) { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 #edit-form .field-group > .detail-rows:not(.schedule-rows) .detail-row { padding-inline: 0; }
-#edit-form .plain-row input { padding: 12px; border: 1px solid #dfe7e2; border-radius: 12px; background: #f8faf9; }
-#edit-form .add-date-btn { min-height: 46px; padding: 11px; border-style: solid; background: transparent; font-size: 13px; }
-#edit-form .add-date-icon { background: transparent; color: var(--button); font-size: 20px; }
+#edit-form .plain-row input { min-height: 44px; padding: 8px 0; border: 0; border-radius: 0; background: transparent; }
+#edit-form .add-date-btn { justify-content: flex-start; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 14px; font-weight: 500; }
+#edit-form .add-date-icon { width: 20px; height: 20px; border-radius: 0; background: transparent; color: var(--button); font-size: 22px; }
 #edit-extra-dates:empty { display: none; }
-#edit-form .detail-row.action { min-height: 48px; font-size: 14px; }
+#edit-form .detail-row.action { min-height: 48px; justify-content: flex-start; padding-inline: 0; font-size: 14px; }
 @media (max-width: 359px) {
-  #edit-sheet { padding-inline: 16px; }
-  #edit-sheet .sheet-bar { margin-inline: -16px; padding-inline: 16px; }
-  #edit-form .schedule-rows .detail-row { padding: 10px; }
-  #edit-form .schedule-rows .row-chev { display: none; }
+  #edit-sheet { padding-inline: 20px; }
+  #edit-sheet .sheet-bar { margin-inline: -20px; padding-inline: 20px; }
+  #edit-form .lead-row input { font-size: 21px; }
 }
 
 #edit-form input[type="number"] { -moz-appearance: textfield; }
