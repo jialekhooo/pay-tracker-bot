@@ -121,8 +121,14 @@
         <form id="edit-form">
           <label class="lead-row">
             <span class="lead-badge" id="edit-badge"></span>
-            <span class="event-name-field"><span class="group-label">Work event</span><input type="text" name="event" required maxlength="120" placeholder="e.g. Weekend market" /></span>
+            <span class="event-name-field"><span class="group-label">Work event</span><input type="text" name="event" list="edit-job-options" autocomplete="off" required maxlength="120" placeholder="Choose a job or enter a new one" /></span>
           </label>
+          <datalist id="edit-job-options"></datalist>
+          <div class="field-group">
+            <label class="plain-row"><span class="group-label">Paid by (optional)</span><input type="text" name="payer" maxlength="200" list="edit-payer-options" autocomplete="off" placeholder="e.g. REFIX PTE. LTD." aria-describedby="edit-payer-hint" /></label>
+            <p class="job-payer-hint" id="edit-payer-hint">Shared with this job’s earnings card. Use the company name in the DBS alert.</p>
+          </div>
+          <datalist id="edit-payer-options"></datalist>
 
           <div class="field-group">
             <span class="group-label">Pay</span>
@@ -261,6 +267,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=85"></script>
+  <script src="app.js?v=86"></script>
 </body>
 </html>

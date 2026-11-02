@@ -116,6 +116,11 @@ OAuth; mocks do not replace that end-to-end connection test.
 
 ### Company on the job card
 
+New Shift and Edit Shift also show **Paid by**. Select an existing work event to
+load its current company, or enter a company while creating a new job. Saving the
+form updates the same job-level payer rule used by the earnings card. Leaving the
+company unchanged preserves existing rules; clearing it removes the mapping.
+
 **Paid by → Save company** replaces that job's existing payer rules with the
 selected company. Clearing the field removes the job's payer rule. Other jobs and
 users are unaffected. A company can pay multiple jobs; the automatic matcher still

@@ -2418,6 +2418,44 @@
   }
 
 
+  let editorJobLoad = 0;
+  let editorPayerEvent = "";
+  let editorPayerChanged = false;
+
+  function syncEditorJob() {
+    const key = els.editForm.event.value.trim().toLocaleLowerCase();
+    if (key === editorPayerEvent) return;
+    editorPayerEvent = key;
+    editorPayerChanged = false;
+    const job = cabClaimsData?.events.find((item) => item.event.toLocaleLowerCase() === key);
+    els.editForm.payer.value = job?.payers?.[0] || "";
+  }
+
+  async function loadEditorJobs() {
+    const request = ++editorJobLoad;
+    editorPayerEvent = "";
+    editorPayerChanged = false;
+    els.editForm.payer.value = "";
+    els.editForm.payer.disabled = true;
+    els.editSave.disabled = true;
+    try {
+      const data = await api("/webapp/api/cab-claims");
+      if (request !== editorJobLoad || !editorMode) return;
+      cabClaimsData = data;
+      document.getElementById("edit-job-options").innerHTML = data.available_events.map((job) => `<option value="${escapeHtml(job.event)}"></option>`).join("");
+      document.getElementById("edit-payer-options").innerHTML = (data.payer_suggestions || []).map((payer) => `<option value="${escapeHtml(payer)}"></option>`).join("");
+      editorPayerEvent = null;
+      syncEditorJob();
+      els.editForm.payer.disabled = false;
+    } catch (err) {
+      if (request !== editorJobLoad || !editorMode) return;
+      els.editError.textContent = "Couldn't load job details. Reopen the form to edit the paying company. You can still save the shift.";
+      els.editError.classList.remove("hidden");
+    } finally {
+      if (request === editorJobLoad && editorMode) els.editSave.disabled = false;
+    }
+  }
+
   function openEditor(shift) {
     if (!shift) return;
     editorMode = "edit";
@@ -2449,6 +2487,7 @@
     els.editSheet.scrollTop = 0;
     syncRateWidth();
     els.editBackdrop.classList.remove("hidden");
+    loadEditorJobs();
   }
 
   function openCreator(presetDay) {
@@ -2478,9 +2517,11 @@
     els.editSheet.scrollTop = 0;
     syncRateWidth();
     els.editBackdrop.classList.remove("hidden");
+    loadEditorJobs();
   }
 
   function closeEditor() {
+    editorJobLoad++;
     els.editBackdrop.classList.add("hidden");
     editingShiftId = null;
     editorMode = null;
@@ -2544,9 +2585,9 @@
     if (eventsData) {
       loadEvents();
     }
-    if (view === "summary") {
-      loadCabClaims();
-    }
+    paymentDetectionData = null;
+    cabClaimsData = null;
+    if (view === "summary" || eventDetail) await loadCabClaims();
     await load();
   }
 
@@ -2572,6 +2613,7 @@
       location: form.location.value.trim(),
       pay_is_fixed: form.pay_is_fixed.value === "yes",
     };
+    if (editorPayerChanged) payload.payer = form.payer.value.trim();
     if (form.rate.value) payload.rate = form.rate.value;
     if (form.break_hours.value) {
       payload.break_hours = form.break_hours.value;
@@ -2590,6 +2632,7 @@
     if (!shift) return null;
     const form = els.editForm;
     const payload = {};
+    if (editorPayerChanged) payload.payer = form.payer.value.trim();
     if (form.event.value.trim() !== shift.event) payload.event = form.event.value.trim();
     if (form.location.value.trim() !== (shift.location || ""))
       payload.location = form.location.value.trim();
@@ -3280,7 +3323,11 @@
     if (event.target === els.editBackdrop) closeEditor();
   });
   els.editForm.addEventListener("submit", submitEditor);
-  els.editForm.event.addEventListener("input", syncEventBadge);
+  els.editForm.event.addEventListener("input", () => {
+    syncEventBadge();
+    syncEditorJob();
+  });
+  els.editForm.payer.addEventListener("input", () => { editorPayerChanged = true; });
   els.editForm.rate.addEventListener("input", syncRateWidth);
   els.editPayMode.addEventListener("click", (event) => {
     const button = event.target.closest("[data-pay-mode]");

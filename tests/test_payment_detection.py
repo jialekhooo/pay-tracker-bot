@@ -214,6 +214,44 @@ def client_for(store):
     return TestClient(app, base_url='https://app.test'), {'Authorization':'tma '+urlencode(values)}
 
 
+def test_shift_form_and_job_card_share_payer(store):
+    client, headers = client_for(store)
+    payload = dict(event='New job', day='2026-11-02', start='09:00', end='17:00', rate='20', payer='REFIX PTE. LTD.')
+    response = client.post('/webapp/api/shifts', json=payload, headers=headers)
+    assert response.status_code == 200
+    sid = response.json()['id']
+    cards = client.get('/webapp/api/cab-claims', headers=headers).json()
+    assert cards['events'][0]['payers'] == ['refix pte. ltd.']
+    # A normal shift edit preserves the shared setting; payer-only edits replace it.
+    assert client.patch(f'/webapp/api/shifts/{sid}', json={'location': 'Hall'}, headers=headers).status_code == 200
+    assert store.rules(42)[0]['payer'] == 'refix pte. ltd.'
+    assert client.patch(f'/webapp/api/shifts/{sid}', json={'payer': 'Other company'}, headers=headers).status_code == 200
+    assert store.rules(42)[0]['payer'] == 'other company'
+    # Editing the card changes the same rule used by the form and automatic detection.
+    assert client.put('/webapp/api/payment-detection/event-payer', json={'event':'New job','payer':'REFIX PTE. LTD.'}, headers=headers).status_code == 200
+    assert client.get('/webapp/api/cab-claims', headers=headers).json()['events'][0]['payers'] == ['refix pte. ltd.']
+    assert client.patch(f'/webapp/api/shifts/{sid}', json={'payer':''}, headers=headers).status_code == 200
+    assert store.rules(42) == []
+
+
+def test_bulk_shift_payer_is_shared_and_scoped(store):
+    other = shift(store, event='New job', user=99)
+    store.set_event_payer(99, 'New job', 'Private company')
+    client, headers = client_for(store)
+    payload = dict(event='New job', rate='20', payer='REFIX PTE. LTD.', shifts=[
+        dict(day='2026-11-02', start='09:00', end='17:00'),
+        dict(day='2026-11-03', start='09:00', end='17:00')])
+    response = client.post('/webapp/api/shifts/bulk', json=payload, headers=headers)
+    assert response.status_code == 200
+    assert len(response.json()['created']) == 2
+    assert store.rules(42)[0]['payer'] == 'refix pte. ltd.'
+    assert store.rules(99)[0]['payer'] == 'private company'
+    assert not store.storage.get_shift(99, other).paid
+    payload['payer'] = 'x' * 201
+    assert client.post('/webapp/api/shifts/bulk', json=payload, headers=headers).status_code == 422
+    assert len(store.storage.list_shifts(42)) == 2
+
+
 def configured(monkeypatch):
     monkeypatch.setenv('GOOGLE_CLIENT_ID', 'client')
     monkeypatch.setenv('GOOGLE_CLIENT_SECRET', 'secret')

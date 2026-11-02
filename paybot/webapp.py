@@ -27,7 +27,7 @@ from urllib.parse import parse_qsl
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .bot import earned_by, worked_by
 from .feed import issue_token
@@ -371,12 +371,14 @@ class ShiftUpdate(BaseModel):
     break_paid: bool | None = None
     payment_due: str | None = None
     paid: bool | None = None
+    payer: str | None = Field(default=None, max_length=200)
 
 
 class ShiftCreate(BaseModel):
     """A new shift logged from the mini app's "+" button."""
 
     event: str
+    payer: str | None = Field(default=None, max_length=200)
     location: str = ""
     day: str
     start: str
@@ -402,6 +404,7 @@ class ShiftBulkCreate(BaseModel):
     everything each time."""
 
     event: str
+    payer: str | None = Field(default=None, max_length=200)
     location: str = ""
     shifts: list[ShiftBulkEntry]
     rate: str | None = None
@@ -820,6 +823,9 @@ async def update_shift(
     if payload.location is not None:
         fields["location"] = payload.location.strip()
 
+    if payload.payer is not None and len(event) > 120:
+        raise HTTPException(status_code=400, detail="Event name is too long")
+
     break_hours = record.break_hours
     if payload.break_hours is not None:
         try:
@@ -900,10 +906,13 @@ async def update_shift(
     if payload.paid is not None:
         fields["paid"] = int(payload.paid)
 
-    if not fields:
+    if not fields and payload.payer is None:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
-    storage.update_shift(user_id, shift_id, **fields)
+    if fields:
+        storage.update_shift(user_id, shift_id, **fields)
+    if payload.payer is not None:
+        PaymentStore(storage).set_event_payer(user_id, event, payload.payer)
     updated = storage.get_shift(user_id, shift_id)
     clashes: list[dict] = []
     if durational_change or payload.day is not None:
@@ -927,6 +936,8 @@ async def create_shift(
     config = storage.get_config(user_id)
 
     event = payload.event.strip()
+    if payload.payer is not None and len(event) > 120:
+        raise HTTPException(status_code=400, detail="Event name is too long")
     if not event:
         raise HTTPException(status_code=400, detail="Event name can't be empty")
 
@@ -1001,6 +1012,8 @@ async def create_shift(
         payment_due=payment_due,
     )
     clashes = _clash_summaries(storage, user_id, day, start, end, exclude_id=shift_id)
+    if payload.payer is not None:
+        PaymentStore(storage).set_event_payer(user_id, event, payload.payer)
     return {
         **_shift_json(storage.get_shift(user_id, shift_id), local_clock(_offset(storage, user_id))),
         "clashes": clashes,
@@ -1018,6 +1031,8 @@ async def create_shifts_bulk(
     config = storage.get_config(user_id)
 
     event = payload.event.strip()
+    if payload.payer is not None and len(event) > 120:
+        raise HTTPException(status_code=400, detail="Event name is too long")
     if not event:
         raise HTTPException(status_code=400, detail="Event name can't be empty")
 
@@ -1144,6 +1159,8 @@ async def create_shifts_bulk(
         )
         created.append(_shift_json(storage.get_shift(user_id, shift_id), now))
         clashes.extend(_clash_summaries(storage, user_id, day, start, end, exclude_id=shift_id))
+    if payload.payer is not None:
+        PaymentStore(storage).set_event_payer(user_id, event, payload.payer)
     return {"created": created, "clashes": clashes}
 
 
