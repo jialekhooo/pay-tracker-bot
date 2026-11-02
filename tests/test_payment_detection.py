@@ -325,6 +325,8 @@ def test_mailbox_scan_paginates_deduplicates_and_encrypts(store, monkeypatch):
 
 def test_mailbox_failure_does_not_advance_checkpoint(store, monkeypatch):
     configured(monkeypatch)
+    shift(store)
+    store.save_rule(42, 'REFIX PTE. LTD.', 'Event')
     store.save_connection(42,'person@gmail.com',gmail.cipher().encrypt(b'token').decode())
     original=httpx.AsyncClient
     monkeypatch.setattr(gmail.httpx,'AsyncClient',lambda **kwargs: original(transport=httpx.MockTransport(lambda r:httpx.Response(401,json={'error':'invalid_grant'})), **kwargs))
@@ -468,8 +470,116 @@ def test_job_card_payer_uses_the_automatic_detection_matcher(store):
 
 
 def test_payer_suggestions_only_use_own_authenticated_alerts(store):
+    shift(store)
+    store.save_rule(42, 'REFIX PTE. LTD.', 'Event')
     store.ingest(42,'mail-1',parsed(),True)
     other=parsed(BODY.replace('TEST-REF-1','REF-2').replace('REFIX PTE. LTD.','Unverified company'))
     store.ingest(42,'mail-2',other,False)
     assert store.payer_suggestions(42)==['REFIX PTE. LTD.']
     assert store.payer_suggestions(99)==[]
+
+
+def test_no_saved_companies_never_accesses_gmail(store, monkeypatch):
+    configured(monkeypatch)
+    store.save_connection(42, 'person@gmail.com', gmail.cipher().encrypt(b'token').decode())
+    monkeypatch.setattr(gmail.httpx, 'AsyncClient', lambda **kwargs: pytest.fail('Must not access Gmail without a saved payer'))
+    asyncio.run(gmail.scan_mailbox(store.storage, 42))
+    assert store.connection(42)['last_scan'] == 0
+
+
+def test_company_search_and_actual_payer_filter_exclude_personal_transfers(store, monkeypatch):
+    configured(monkeypatch)
+    shift(store)
+    store.set_event_payer(42, 'Event', 'REFIX PTE. LTD.')
+    shift(store, user=99)
+    store.set_event_payer(99, 'Event', 'KHOO JIA LE')
+    store.save_connection(42, 'person@gmail.com', gmail.cipher().encrypt(b'token').decode())
+    bodies = {
+        'relevant': BODY,
+        'personal': BODY.replace('TEST-REF-1','PERSONAL').replace('REFIX PTE. LTD.','KHOO JIA LE') + '\nNote: REFIX PTE. LTD.',
+        'substring': BODY.replace('TEST-REF-1','SUBSTRING').replace('REFIX PTE. LTD.','REFIX PTE. LTD. OTHER'),
+        'missing': BODY.replace('TEST-REF-1','MISSING').replace('From: REFIX PTE. LTD.',''),
+    }
+    queries = []
+    def respond(request):
+        if request.url.path == '/token':
+            return httpx.Response(200, json={'access_token':'access'})
+        if request.url.path.endswith('/messages'):
+            queries.append(request.url.params['q'])
+            return httpx.Response(200, json={'messages':[{'id':key} for key in bodies]})
+        key = request.url.path.rsplit('/', 1)[1]
+        return httpx.Response(200, json={'payload':{'mimeType':'text/plain', 'headers':[{'name':'Subject','value':DBS_SUBJECT},{'name':'From','value':DBS_SENDER}]+AUTH, 'body':{'data':base64.urlsafe_b64encode(bodies[key].encode()).decode()}}})
+    original = httpx.AsyncClient
+    monkeypatch.setattr(gmail.httpx, 'AsyncClient', lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
+    asyncio.run(gmail.scan_mailbox(store.storage, 42))
+    assert 'from:ibanking.alert@dbs.com' in queries[0]
+    assert '{"refix pte. ltd."}' in queries[0] and 'khoo' not in queries[0]
+    assert [row[0] for row in store.db.execute('SELECT message_id FROM payment_receipts')] == ['relevant']
+    assert store.status(42)['receipts'][0]['payer'] == 'REFIX PTE. LTD.'
+    assert not store.storage.list_shifts(42)[0].paid  # Automatic marking stays off.
+
+
+def test_legacy_unrelated_alerts_hidden_before_history_limit_and_suggestions(store):
+    shift(store)
+    store.set_event_payer(42, 'Event', 'REFIX PTE. LTD.')
+    relevant = store.ingest(42, 'relevant', parsed(), True)
+    for i in range(60):
+        receipt = parsed(BODY.replace('TEST-REF-1', f'PERSONAL-{i}').replace('REFIX PTE. LTD.', 'KHOO JIA LE'))
+        rid = store.ingest(42, f'personal-{i}', receipt, True)
+        store.dismiss(42, rid)
+    assert [r['id'] for r in store.status(42)['receipts']] == [relevant]
+    assert store.payer_suggestions(42) == ['REFIX PTE. LTD.']
+    store.set_event_payer(42, 'Event', '')
+    assert store.status(42)['receipts'] == []
+    assert store.payer_suggestions(42) == []
+
+
+def test_applied_history_keeps_undo_after_company_removed(store):
+    sid = shift(store)
+    enable(store)
+    rid = store.ingest(42, 'relevant', parsed(), True)
+    store.set_event_payer(42, 'Event', '')
+    assert store.status(42)['receipts'][0]['id'] == rid
+    store.undo(42, rid)
+    assert not store.storage.get_shift(42, sid).paid
+    assert store.status(42)['receipts'][0]['status'] == 'undone'
+
+
+def test_company_search_batches_and_failed_batch_preserves_checkpoint(store, monkeypatch):
+    configured(monkeypatch)
+    shift(store)
+    for i in range(21):
+        store.save_rule(42, f'Company {i}', 'Event')
+    store.save_connection(42, 'person@gmail.com', gmail.cipher().encrypt(b'token').decode())
+    queries = []
+    def respond(request):
+        if request.url.path == '/token':
+            return httpx.Response(200, json={'access_token':'access'})
+        queries.append(request.url.params['q'])
+        return httpx.Response(200, json={}) if len(queries) == 1 else httpx.Response(503)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(gmail.httpx, 'AsyncClient', lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
+    with pytest.raises(ValueError):
+        asyncio.run(gmail.scan_mailbox(store.storage, 42))
+    assert len(queries) == 2
+    assert queries[0].count('"company ') == 20 and queries[1].count('"company ') == 1
+    assert store.connection(42)['last_scan'] == 0
+
+
+def test_removing_company_during_scan_stops_reading_results(store, monkeypatch):
+    configured(monkeypatch)
+    shift(store)
+    store.set_event_payer(42, 'Event', 'REFIX PTE. LTD.')
+    store.save_connection(42, 'person@gmail.com', gmail.cipher().encrypt(b'token').decode())
+    def respond(request):
+        if request.url.path == '/token':
+            return httpx.Response(200, json={'access_token':'access'})
+        if request.url.path.endswith('/messages'):
+            store.set_event_payer(42, 'Event', '')
+            return httpx.Response(200, json={'messages':[{'id':'must-not-read'}]})
+        pytest.fail('Must stop fetching messages after the company is removed')
+    original = httpx.AsyncClient
+    monkeypatch.setattr(gmail.httpx, 'AsyncClient', lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
+    asyncio.run(gmail.scan_mailbox(store.storage, 42))
+    assert store.connection(42)['last_scan'] == 0
+    assert not store.status(42)['receipts']

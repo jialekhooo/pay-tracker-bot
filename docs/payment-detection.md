@@ -4,6 +4,18 @@ Settings → Payment detection connects a Gmail mailbox using Google's read-only
 OAuth permission. A background task checks new DBS alerts every two minutes;
 **Check now** runs the same importer. No email is sent, moved, marked read, or deleted.
 
+The importer searches only for DBS alerts mentioning companies saved under **Paid
+by** or payer rules. Without saved companies, it makes no Gmail requests. Gmail's
+phrase search narrows the messages fetched; the actual payer line is then checked
+against the saved names, ignoring case and repeated whitespace. Unrelated or
+missing payers are not imported. A phrase can occur elsewhere in an email, so the
+app may need to read a search result to reject it after checking its payer.
+
+Unrelated alerts imported by older versions are hidden from history and company
+suggestions. The latest-50 limit applies after filtering. Previously applied
+payments remain in history so their audit trail and Undo stay available even
+after a company rule is removed. Hidden legacy records are not deleted.
+
 ## One-time deployment setup
 
 1. Create/select a Google Cloud project and enable the **Gmail API**.

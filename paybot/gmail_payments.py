@@ -292,6 +292,9 @@ async def scan_mailbox(storage, user_id: int) -> None:
         connection = store.connection(user_id)
         if not connection or not connection["refresh_token"]:
             raise ValueError("Connect Gmail first.")
+        payers = sorted(store.allowed_payers(user_id))
+        if not payers:
+            return  # No job companies configured: do not access Gmail at all.
         started = int(time.time())
         try:
             refresh = cipher().decrypt(connection["refresh_token"].encode()).decode()
@@ -304,33 +307,13 @@ async def scan_mailbox(storage, user_id: int) -> None:
                 token = response.json()
                 headers = {"Authorization": "Bearer " + token["access_token"]}
                 since = max(connection["connected_at"] - 30 * 86400, connection["last_scan"] - 300)
-                query = f'from:{DBS_SENDER} subject:"digibank Alerts" after:{since} before:{started + 1}'
-                page_token = None
-                for _ in range(100):
-                    params = {"q": query, "maxResults": 100}
-                    if page_token:
-                        params["pageToken"] = page_token
-                    response = await client.get(API + "/messages", headers=headers, params=params)
-                    response.raise_for_status()
-                    page = response.json()
-                    for item in page.get("messages", []):
-                        response = await client.get(API + "/messages/" + item["id"], headers=headers, params={"format": "full"})
-                        response.raise_for_status()
-                        message = response.json()
-                        payload = message.get("payload", {})
-                        mail_headers = payload.get("headers", [])
-                        values = {h["name"].lower(): h["value"] for h in mail_headers if h["name"].lower() in {"subject", "from"}}
-                        parsed = parse_dbs_alert(values.get("subject", ""), values.get("from", ""), message_text(payload))
-                        current = store.connection(user_id)
-                        if not current or current["refresh_token"] != connection["refresh_token"]:
-                            return  # Disconnected or replaced while requests were in flight.
-                        if parsed:
-                            store.ingest(user_id, item["id"], parsed, gmail_authenticated(mail_headers, message.get("labelIds", [])))
-                    page_token = page.get("nextPageToken")
-                    if not page_token:
-                        break
-                else:
-                    raise ValueError("There are too many alerts to scan at once. Please try again later.")
+                # Keep company names inside quoted search terms, never query operators.
+                phrases = ['"' + payer.replace('\\', ' ').replace('"', ' ') + '"' for payer in payers]
+                base_query = f'from:{DBS_SENDER} subject:"digibank Alerts" subject:received subject:transfer after:{since} before:{started + 1}'
+                queries = [base_query + ' {' + ' '.join(phrases[i:i + 20]) + '}' for i in range(0, len(phrases), 20)]
+                for query in queries:
+                    if not await _scan_query(client, headers, query, store, user_id, connection, set(payers)):
+                        return
             with store.db:
                 store.db.execute("UPDATE payment_connections SET last_scan=?,error='' WHERE user_id=? AND refresh_token=?", (started, user_id, connection["refresh_token"]))
         except (httpx.HTTPError, InvalidToken, KeyError, ValueError) as exc:
@@ -338,6 +321,45 @@ async def scan_mailbox(storage, user_id: int) -> None:
             with store.db:
                 store.db.execute("UPDATE payment_connections SET error=? WHERE user_id=? AND refresh_token=?", (message, user_id, connection["refresh_token"]))
             raise ValueError(message) from exc
+
+
+async def _scan_query(client, headers, query, store, user_id, connection, payers):
+    def still_current():
+        current = store.connection(user_id)
+        return bool(current and current["refresh_token"] == connection["refresh_token"] and store.allowed_payers(user_id) == payers)
+
+    page_token = None
+    for _ in range(100):
+        if not still_current():
+            return False
+        params = {"q": query, "maxResults": 100}
+        if page_token:
+            params["pageToken"] = page_token
+        response = await client.get(API + "/messages", headers=headers, params=params)
+        response.raise_for_status()
+        page = response.json()
+        for item in page.get("messages", []):
+            if not still_current():
+                return False
+            response = await client.get(API + "/messages/" + item["id"], headers=headers, params={"format": "full"})
+            response.raise_for_status()
+            message = response.json()
+            payload = message.get("payload", {})
+            mail_headers = payload.get("headers", [])
+            values = {h["name"].lower(): h["value"] for h in mail_headers if h["name"].lower() in {"subject", "from"}}
+            parsed = parse_dbs_alert(values.get("subject", ""), values.get("from", ""), message_text(payload))
+            if not still_current():
+                return False  # Disconnected or replaced while requests were in flight.
+            # Gmail can match a name elsewhere in the message. Verify the
+            # actual From: payer line again against the latest saved rules.
+            if parsed and store.accepts_payer(user_id, parsed["payer"]):
+                store.ingest(user_id, item["id"], parsed, gmail_authenticated(mail_headers, message.get("labelIds", [])))
+        page_token = page.get("nextPageToken")
+        if not page_token:
+            break
+    else:
+        raise ValueError("There are too many alerts to scan at once. Please try again later.")
+    return True
 
 
 @router.post("/scan")

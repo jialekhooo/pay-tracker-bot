@@ -159,6 +159,7 @@ class PaymentStore:
                 self.db.execute("INSERT INTO payment_rules(user_id,payer,event) VALUES(?,?,?)", (user_id, payer, event))
 
     def payer_suggestions(self, user_id: int) -> list[str]:
+        allowed = self.allowed_payers(user_id)
         names = [row[0] for row in self.db.execute(
             "SELECT payer FROM payment_receipts WHERE user_id=? AND trusted=1 AND payer<>'' "
             "GROUP BY payer ORDER BY MAX(created_at) DESC LIMIT 100", (user_id,),
@@ -166,8 +167,15 @@ class PaymentStore:
         names.extend(rule["payer"] for rule in self.rules(user_id))
         unique = {}
         for name in names:
-            unique.setdefault(normalized(name), name)
+            if normalized(name) in allowed:
+                unique.setdefault(normalized(name), name)
         return list(unique.values())[:100]
+
+    def allowed_payers(self, user_id: int) -> set[str]:
+        return {normalized(rule["payer"]) for rule in self.rules(user_id)}
+
+    def accepts_payer(self, user_id: int, payer: str) -> bool:
+        return bool(payer and normalized(payer) in self.allowed_payers(user_id))
 
     def candidates(self, user_id: int, receipt: dict) -> list[dict]:
         if not receipt.get("amount") or not receipt.get("received_at"):
@@ -300,13 +308,20 @@ class PaymentStore:
     def status(self, user_id: int) -> dict:
         conn = self.connection(user_id)
         receipts = []
-        for row in self.db.execute("SELECT * FROM payment_receipts WHERE user_id=? ORDER BY id DESC LIMIT 50", (user_id,)):
+        allowed = self.allowed_payers(user_id)
+        for row in self.db.execute("SELECT * FROM payment_receipts WHERE user_id=? ORDER BY id DESC", (user_id,)):
             item = dict(row)
+            # Keep reconciled history/undo accessible even after a company is removed.
+            # Unrelated legacy imports must not fill the latest-50 window.
+            if normalized(item["payer"]) not in allowed and not item["event"]:
+                continue
             item.pop("receipt_key")
             item.pop("message_id")
             item.pop("user_id")
-            item["candidates"] = self.candidates(user_id, item) if item["status"] == "review" and item["trusted"] else []
+            item["candidates"] = [c for c in self.candidates(user_id, item) if c["payer_match"]] if item["status"] == "review" and item["trusted"] else []
             receipts.append(item)
+            if len(receipts) == 50:
+                break
         return {
             "connected": bool(conn and conn["refresh_token"]), "email": conn["email"] if conn else None,
             "auto_enabled": bool(conn and conn["auto_since"]), "last_scan": conn["last_scan"] if conn else 0,
