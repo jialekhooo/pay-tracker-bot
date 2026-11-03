@@ -1610,6 +1610,8 @@
               <label>Spreadsheet</label>
               <p>Download every logged shift as a CSV file for Excel, Numbers, or Google Sheets.</p>
               <button type="button" class="btn secondary" data-action="export-csv">Download CSV</button>
+              <a id="csv-browser-link" class="payment-text-button hidden" target="_blank" rel="noopener noreferrer">Open CSV in browser</a>
+              <p class="payment-note">On iPhone, if a preview opens, tap Share → Save to Files. Download links expire after five minutes; tap Download CSV again for a fresh link.</p>
             </div>
           </div>
           <p class="modal-error hidden" id="settings-export-error"></p>
@@ -2985,27 +2987,37 @@
     hideSettingsError("settings-export-error");
     setButtonSaving(button, true, "Preparing…");
     try {
-      const response = await fetch("/webapp/api/export/csv", { headers });
-      if (!response.ok) {
-        let detail;
-        try {
-          detail = (await response.json()).detail;
-        } catch (err) {
-          detail = undefined;
-        }
-        const error = new Error("csv-export-failed");
-        error.detail = detail;
-        throw error;
+      const file = await api("/webapp/api/export/csv/link", { method: "POST" });
+      const url = new URL(file.url, window.location.origin).href;
+      const fallback = document.getElementById("csv-browser-link");
+      if (fallback) {
+        fallback.href = url;
+        fallback.classList.remove("hidden");
+        fallback.onclick = (event) => {
+          if (tg && tg.openLink) { event.preventDefault(); tg.openLink(url); }
+        };
       }
-      const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "howmuch-shifts.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      showSuccessToast("CSV downloaded successfully");
+      if (tg && typeof tg.downloadFile === "function" && (!tg.isVersionAtLeast || tg.isVersionAtLeast("8.0"))) {
+        try {
+          tg.downloadFile({ url, file_name: file.file_name }, (accepted) => {
+            if (accepted) showSuccessToast("CSV download requested");
+          });
+          return;
+        } catch (err) {
+          // Older clients may expose the method without implementing native downloads.
+        }
+      }
+      if (tg && tg.openLink) {
+        tg.openLink(url);
+        showSuccessToast("CSV opened in browser · use Share to save");
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = file.file_name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
     } catch (err) {
       showSettingsError("settings-export-error", err.detail || "Couldn't export CSV — try again.");
     } finally {

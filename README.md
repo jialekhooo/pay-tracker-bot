@@ -105,6 +105,13 @@ for a shift. In Earnings, filter events by ongoing, upcoming, completion, and
 payout status, and sort them from most recent to oldest or oldest to most
 recent.
 
+In Settings → Export shifts, **Download CSV** uses Telegram's native download
+prompt on supported clients. **Open CSV in browser** is also available after
+preparing the file; on iPhone, use Share → Save to Files if a preview opens.
+Download links are private bearer links valid for five minutes and should not be
+shared. They contain no Telegram credentials, are scoped to the exporting user,
+are excluded from application access logs, and return uncached attachments.
+
 ## Reminders
 
 `/reminders on` sends you a message the evening before (20:00, UTC+8 by default)

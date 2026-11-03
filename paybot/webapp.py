@@ -15,15 +15,16 @@ import io
 import json
 import logging
 import re
+import secrets
 import time as time_module
-from base64 import b64decode
+from base64 import b64decode, urlsafe_b64encode, urlsafe_b64decode
 from binascii import Error as Base64Error
 from dataclasses import replace
 from datetime import date as date_cls
 from datetime import datetime, timedelta
 from datetime import time as time_cls
 from decimal import Decimal, InvalidOperation
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlencode
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request, Response
@@ -1282,6 +1283,55 @@ def _webcal_url(calendar_url: str | None) -> str | None:
 async def export_csv(request: Request, authorization: str | None = Header(default=None)) -> Response:
     """Downloads every logged shift in a spreadsheet-friendly CSV file."""
     storage, user_id = _authed_user(request, authorization)
+    return _csv_response(storage, user_id)
+
+
+class CsvDownloadAccessFilter(logging.Filter):
+    def filter(self, record):
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                value.split("?", 1)[0] if isinstance(value, str) and value.startswith("/webapp/api/export/csv/download?") else value
+                for value in record.args
+            )
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(CsvDownloadAccessFilter())
+
+
+def _csv_ticket_signature(request: Request, payload: str) -> str:
+    key = hmac.new(request.app.state.bot_token.encode(), b"howmuch-csv-export-v1", hashlib.sha256).digest()
+    return hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()
+
+
+@router.post("/export/csv/link")
+async def csv_download_link(request: Request, response: Response, authorization: str | None = Header(default=None)) -> dict:
+    _, user_id = _authed_user(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    expires = int(time_module.time()) + 300
+    payload = urlsafe_b64encode(f"{user_id}:{expires}:{secrets.token_urlsafe(16)}".encode()).decode().rstrip("=")
+    ticket = payload + "." + _csv_ticket_signature(request, payload)
+    return {"url": "/webapp/api/export/csv/download?" + urlencode({"ticket": ticket}), "file_name": "howmuch-shifts.csv"}
+
+
+@router.api_route("/export/csv/download", methods=["GET", "HEAD"])
+async def download_csv(request: Request, ticket: str) -> Response:
+    try:
+        if len(ticket) > 512:
+            raise ValueError("Invalid ticket")
+        payload, signature = ticket.split(".", 1)
+        if not hmac.compare_digest(signature, _csv_ticket_signature(request, payload)):
+            raise ValueError("Invalid signature")
+        user_id, expires, _ = urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode().split(":")
+        if int(expires) <= int(time_module.time()):
+            raise ValueError("Expired")
+        user_id = int(user_id)
+    except (ValueError, TypeError, UnicodeError, Base64Error) as exc:
+        raise HTTPException(403, "Download link expired or invalid. Tap Download CSV again.") from exc
+    return _csv_response(request.app.state.storage, user_id)
+
+
+def _csv_response(storage: Storage, user_id: int) -> Response:
     output = io.StringIO(newline="")
     writer = csv.writer(output)
     writer.writerow(
@@ -1318,7 +1368,13 @@ async def export_csv(request: Request, authorization: str | None = Header(defaul
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="howmuch-shifts.csv"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="howmuch-shifts.csv"',
+            "Access-Control-Allow-Origin": "https://web.telegram.org",
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
