@@ -82,6 +82,8 @@ class AppStorage(Storage):
         self._conn.commit()
         from .payment_detection import PaymentStore
         PaymentStore(self)
+        from .live_activity import ensure_schema
+        ensure_schema(self._conn)
 
 
 def digest(value: str) -> str:

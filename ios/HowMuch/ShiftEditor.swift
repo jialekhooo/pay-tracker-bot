@@ -13,6 +13,8 @@ struct ShiftEditor: View {
     var duplicating = false
     var template: JobTemplate? = nil
     var templateOnly = false
+    /// A job message shared from another app; filled in on open for review.
+    var initialMessage: String? = nil
     @State private var event = ""
     @State private var payerID: UUID?
     @State private var choosingPayer = false
@@ -104,7 +106,11 @@ struct ShiftEditor: View {
             .sheet(isPresented: $choosingPayer) { PayerPickerView(selected: payerID) { payerID = $0 } }
             .onChange(of: event) { _, name in if existing == nil && !templateOnly { if let assigned = store.data.settings.payer(for: name)?.id { payerID = assigned } else if name != loadedTemplateEvent { payerID = nil } } }
             .sheet(isPresented: $findingLocation) { JobLocationPicker(initial: location) { location = $0 } }
-            .onAppear { if !loaded { load(); loaded = true } }
+            .onAppear {
+                guard !loaded else { return }
+                load(); loaded = true
+                if let initialMessage { applyPasted(JobMessageParser.parse(initialMessage)) }
+            }
             .onChange(of: [event, location, amount, breakMinutes, currency, threshold, multiplier]) { _, _ in error = nil }
         }
     }

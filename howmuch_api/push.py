@@ -117,6 +117,8 @@ def rebuild_jobs(storage,account,data,timezone_name,now=None):
         for (event,currency,day),shifts in due.items():
             fire=datetime.fromisoformat(day).replace(tzinfo=zone)+timedelta(minutes=options.dueMinute)
             job('payment_due',event+'|'+currency+'|'+day,shifts[0]['id'],fire,fire+timedelta(hours=12), 'Payment due today',f"{shifts[0]['event']} · {len(shifts)} unpaid {'shift' if len(shifts)==1 else 'shifts'}. Check payment, then mark paid." if options.showDetails else 'Check your unpaid work in HowMuch and mark payments received.' )
+    from .live_activity import rebuild_plans
+    rebuild_plans(storage,account,data,timezone_name,now)
     db=storage._conn
     wanted={row[0] for row in desired}
     with db:
@@ -196,6 +198,12 @@ async def worker(storage):
         try: await deliver_due(storage)
         except asyncio.CancelledError: raise
         except Exception:
-            # Never log APNs tokens, authorization headers, keys or job content.
             logger.error('Notification delivery check could not complete; it will retry.')
+        try:
+            from .live_activity import deliver
+            await deliver(storage)
+        except asyncio.CancelledError: raise
+        except Exception:
+            # Never log APNs tokens, authorization headers, keys or job content.
+            logger.error('Live shift card check could not complete; it will retry.')
         await asyncio.sleep(15)

@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var calendarDay = Date()
     @State private var adding = false
     @State private var finishing: Shift?
+    @State private var shared: SharedMessage?
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var store: TrackerStore
     var body: some View {
@@ -57,6 +58,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $adding) { ShiftEditor() }
         .sheet(item: $finishing, onDismiss: askNextFinish) { FinishShiftSheet(shift: $0) }
+        .sheet(item: $shared) { ShiftEditor(initialMessage: $0.text) }
         .onChange(of: scenePhase) { _, value in if value == .active { store.refreshReminders(); store.refreshWidgets(); refreshLiveShift() } }
         .task {
             // Keeps the Lock Screen card in step while the app stays open across a shift's start or end.
@@ -68,11 +70,15 @@ struct ContentView: View {
     }
     private func refreshLiveShift() {
         LiveShiftCenter.sync(store.data, accountID: store.accountID)
+        // A job shared from WhatsApp or another app comes first.
+        if shared == nil, finishing == nil, !adding, UIApplication.shared.applicationState == .active, let text = SharedJobInbox.take() {
+            shared = SharedMessage(text: text); return
+        }
         askNextFinish()
     }
     private func askNextFinish() {
         // Ask the app directly: the minute timer holds a launch-time copy of scenePhase.
-        guard finishing == nil, !adding, UIApplication.shared.applicationState == .active, push.widgetURL == nil else { return }
+        guard finishing == nil, shared == nil, !adding, UIApplication.shared.applicationState == .active, push.widgetURL == nil else { return }
         finishing = LiveShiftCenter.nextToConfirm(store.data, accountID: store.accountID)
     }
     private var navigationDock: some View {
@@ -383,4 +389,9 @@ struct UpcomingEventDetail: View {
             }.padding(20)
         }.detailStyle(event).accessibilityIdentifier("upcoming.eventDetail")
     }
+}
+
+private struct SharedMessage: Identifiable {
+    let id = UUID()
+    let text: String
 }

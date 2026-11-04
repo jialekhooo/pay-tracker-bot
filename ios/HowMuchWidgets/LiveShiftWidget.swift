@@ -82,14 +82,20 @@ private struct LiveShiftLockScreen: View {
 /// Start time, time left (centred) and end time under the progress bar.
 private struct TimeRow: View {
     let state: LiveShiftAttributes.ContentState
+    /// On a dimmed Lock Screen iOS hides a ticking clock's seconds as "--", so show the end time instead.
+    @Environment(\.isLuminanceReduced) private var dimmed
     var body: some View {
         ZStack {
             HStack { Text(state.start, style: .time); Spacer(); Text(state.end, style: .time) }
-            HStack(spacing: 4) {
-                Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit()
-                    .multilineTextAlignment(.trailing).frame(width: 64, alignment: .trailing)
-                Text("left")
-            }.fontWeight(.semibold)
+            if dimmed {
+                (Text("Ends ") + Text(state.end, style: .time)).fontWeight(.semibold)
+            } else {
+                HStack(spacing: 4) {
+                    Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit()
+                        .multilineTextAlignment(.trailing).frame(width: 64, alignment: .trailing)
+                    Text("left")
+                }.fontWeight(.semibold)
+            }
         }
     }
 }

@@ -39,6 +39,10 @@ final class AppleAccountStore: ObservableObject {
         if CommandLine.arguments.contains("--ui-test-signed-out") { restoring = false; return }
         if CommandLine.arguments.contains("--preview") || CommandLine.arguments.contains("--ui-test-account") {
             isDemo = true
+            // Stands in for Share → HowMuch from WhatsApp, which UI tests can't drive.
+            if CommandLine.arguments.contains("--ui-test-shared-job") {
+                try? SharedJobInbox.save("ni hao! you free for this?\n\nLocation: The Singapore EDITION Hotel\nAddress: 38 Cuscaden Rd, Singapore 249731\n\n12th Nov 1200-2100hrs\n13-14th Nov 0800-2000hrs\n15th Nov 0900-2000hrs")
+            }
             let id = CommandLine.arguments.contains("--ui-test-owner-b") ? "00000000-0000-4000-8000-000000000002" : "00000000-0000-4000-8000-000000000001"
             account = AccountIdentity(id: id, email: nil, displayName: "Preview", appleUserID: "ui-test")
             tracker = TrackerStore(accountID: id, suppressNotifications: true)
@@ -144,6 +148,22 @@ final class AppleAccountStore: ObservableObject {
         store.activateWidgets()
         store.onChange = { [weak self] in self?.scheduleSync() }
         PushCenter.shared.currentAccountID = value.id
+        if !isDemo { LiveShiftCenter.connect { [weak self] token in await self?.sendLiveToken(token, owner: value.id) } }
+    }
+    /// Lets the server start and renew the Lock Screen shift card for this account.
+    func sendLiveToken(_ token: LiveShiftCenter.Token, owner: String) async {
+        guard !isDemo, account?.id == owner else { return }
+        let environment = Bundle.main.object(forInfoDictionaryKey: "HowMuchAPNSEnvironment") as? String ?? "sandbox"
+        switch token {
+        case .start(let value):
+            guard let body = try? JSONEncoder().encode(["token": value, "environment": environment]) else { return }
+            _ = try? await api.request("/v1/devices/live-start", method: "PUT", body: body)
+        case .noStart:
+            _ = try? await api.request("/v1/devices/live-start", method: "DELETE")
+        case .activity(let shift, let value):
+            guard let body = try? JSONEncoder().encode(["token": value, "environment": environment, "shiftID": shift.uuidString]) else { return }
+            _ = try? await api.request("/v1/devices/live-activity", method: "PUT", body: body)
+        }
     }
     func scheduleSync() {
         guard !isDemo else { return }
@@ -235,6 +255,7 @@ final class AppleAccountStore: ObservableObject {
         let token = api.session?.revocationToken
         if revoke, let token { try? AccountVault.save(token, key: "pending-revocation") }
         syncTask?.cancel(); tracker?.onChange = nil
+        LiveShiftCenter.connect(nil)
         tracker?.deactivateWidgets(); SharedWidgetStorage.clear()
         let previousStore = tracker
         account = nil; tracker = nil; conflict = nil; notificationJob = nil

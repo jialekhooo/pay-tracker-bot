@@ -14,6 +14,7 @@ final class PushCenter: ObservableObject {
 
 final class HowMuchAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        Task { @MainActor in LiveShiftCenter.observeTokens() }
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         let categories = [("TRAVEL_PREPARE", "Check directions"), ("TRAVEL_LEAVE", "Check directions"), ("TRAVEL_UPDATE", "Check directions"), ("START", "View job"), ("UPCOMING", "View tomorrow’s work"), ("END", "Review hours & claims"), ("PAYMENT_DUE", "Review payment")].map { kind, title in

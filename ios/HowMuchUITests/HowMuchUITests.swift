@@ -379,6 +379,19 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertFalse(app.buttons["paste.type"].exists)
     }
     @MainActor
+    func testSharedJobFromAnotherAppOpensAddShiftFilledIn() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-shared-job"]; app.launch()
+        XCTAssertTrue(app.staticTexts["paste.summary"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["paste.summary"].label.contains("4 dates"))
+        XCTAssertEqual(app.textFields["Event name"].value as? String, "The Singapore EDITION Hotel")
+        attach("Shared job opened", app: app)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5))
+        // Offered once only.
+        XCUIDevice.shared.press(.home); app.activate()
+        XCTAssertFalse(app.staticTexts["paste.summary"].waitForExistence(timeout: 3))
+    }
+    @MainActor
     func testLiveShiftSettingsToggle() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))

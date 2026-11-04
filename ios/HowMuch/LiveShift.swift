@@ -23,14 +23,27 @@ enum LiveShiftCenter {
     static var systemAllows: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
 
     static func sync(_ data: TrackerData, accountID: String, now: Date = Date()) {
+        let details = data.settings.jobNotifications.showDetails
         let activities = Activity<LiveShiftAttributes>.activities
+        activities.forEach(watch)
+        // Keep only the newest card per shift (the server may have renewed one the app started).
+        var newest: [UUID: Activity<LiveShiftAttributes>] = [:]
+        for activity in activities where activity.activityState == .active {
+            let id = activity.attributes.shiftID
+            if let kept = newest[id], firstSeen[kept.id, default: .distantPast] >= firstSeen[activity.id, default: .distantPast] {
+                Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            } else {
+                if let kept = newest[id] { Task { await kept.end(nil, dismissalPolicy: .immediate) } }
+                newest[id] = activity
+            }
+        }
         for activity in activities {
             guard lockScreenEnabled, activity.attributes.accountID == accountID,
                   let shift = data.shifts.first(where: { $0.id == activity.attributes.shiftID }) else {
                 Task { await activity.end(nil, dismissalPolicy: .immediate) }
                 continue
             }
-            let content = ActivityContent(state: state(for: shift, accountID: accountID), staleDate: shift.endDate)
+            let content = ActivityContent(state: state(for: shift, accountID: accountID, details: details), staleDate: shift.endDate)
             if now >= shift.endDate {
                 // Leave the finished card up for a while so its tap can confirm the finish time.
                 if activity.activityState == .active {
@@ -43,18 +56,81 @@ enum LiveShiftCenter {
         guard lockScreenEnabled, systemAllows, let current = LiveShiftPlanner.current(in: data.shifts, at: now),
               !activities.contains(where: { $0.attributes.shiftID == current.id && $0.attributes.accountID == accountID && $0.activityState == .active })
         else { return }
-        let content = ActivityContent(state: state(for: current, accountID: accountID), staleDate: current.endDate)
-        _ = try? Activity.request(attributes: LiveShiftAttributes(shiftID: current.id, accountID: accountID), content: content, pushType: nil)
+        let content = ActivityContent(state: state(for: current, accountID: accountID, details: details), staleDate: current.endDate)
+        if let activity = try? Activity.request(attributes: LiveShiftAttributes(shiftID: current.id, accountID: accountID), content: content, pushType: .token) {
+            watch(activity)
+        }
     }
+
+    // MARK: Server push tokens
+    // The server starts the card at shift time without the app being opened (iOS 17.2+), and renews it
+    // before iOS's 8-hour limit. It needs this phone's push-to-start token and each running card's token.
+
+    enum Token { case start(String), activity(shift: UUID, token: String), noStart }
+    private static var reporter: ((Token) async -> Void)?
+    private static var startToken: String?
+    private static var cardTokens: [String: (shift: UUID, token: String)] = [:]
+    private static var watching = Set<String>()
+    private static var firstSeen: [String: Date] = [:]
+    private static var observing = false
+
+    /// Called once at launch, including when iOS launches the app in the background for a server-started card.
+    static func observeTokens() {
+        guard !observing else { return }
+        observing = true
+        if #available(iOS 17.2, *) {
+            Task { @MainActor in
+                for await data in Activity<LiveShiftAttributes>.pushToStartTokenUpdates {
+                    startToken = hex(data); await reportStart()
+                }
+            }
+        }
+        Task { @MainActor in
+            for await activity in Activity<LiveShiftAttributes>.activityUpdates { watch(activity) }
+        }
+        for activity in Activity<LiveShiftAttributes>.activities { watch(activity) }
+    }
+
+    private static func watch(_ activity: Activity<LiveShiftAttributes>) {
+        guard watching.insert(activity.id).inserted else { return }
+        firstSeen[activity.id] = Date()
+        Task { @MainActor in
+            for await data in activity.pushTokenUpdates {
+                let token = hex(data)
+                cardTokens[activity.id] = (activity.attributes.shiftID, token)
+                await reporter?(.activity(shift: activity.attributes.shiftID, token: token))
+            }
+        }
+    }
+
+    /// The signed-in account's way of sending tokens to the server; nil while signed out.
+    static func connect(_ send: ((Token) async -> Void)?) {
+        reporter = send
+        guard send != nil else { return }
+        Task { @MainActor in
+            await reportStart()
+            for card in cardTokens.values { await reporter?(.activity(shift: card.shift, token: card.token)) }
+        }
+    }
+
+    /// Re-sends (or withdraws) the push-to-start token, e.g. after the Lock Screen setting changes.
+    static func reportStart() async {
+        guard let reporter else { return }
+        if lockScreenEnabled, let startToken { await reporter(.start(startToken)) } else { await reporter(.noStart) }
+    }
+
+    private static func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0) }.joined() }
 
     static func endAll() {
         for activity in Activity<LiveShiftAttributes>.activities { Task { await activity.end(nil, dismissalPolicy: .immediate) } }
     }
 
-    private static func state(for shift: Shift, accountID: String) -> LiveShiftAttributes.ContentState {
+    private static func state(for shift: Shift, accountID: String, details: Bool) -> LiveShiftAttributes.ContentState {
+        // Names on the Lock Screen follow the job-notification privacy choice, as the server does.
         LiveShiftAttributes.ContentState(
-            event: shift.event, location: shift.location.split(separator: ",").first.map(String.init) ?? "",
-            start: shift.startDate, end: shift.endDate,
+            event: details ? shift.event : "Shift in progress",
+            location: details ? (shift.location.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? "") : "",
+            startTime: shift.startDate.timeIntervalSince1970, endTime: shift.endDate.timeIntervalSince1970,
             pay: NSDecimalNumber(decimal: shift.pay).doubleValue, currency: shift.currency,
             shiftURL: WidgetLink.shift(shift.id).url(accountID: accountID),
             finishURL: WidgetLink.finish(shift.id).url(accountID: accountID))
@@ -163,7 +239,7 @@ struct LiveShiftSettingsView: View {
         Form {
             Section {
                 Toggle("Show on Lock Screen", isOn: $lockScreen).accessibilityIdentifier("live.lockScreen")
-                Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears when you open HowMuch from 30 minutes before a shift, for example from its start reminder.")
+                Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears on its own when the shift starts, even if HowMuch is closed, and stays live through long shifts. Job names follow your Job notifications privacy setting.")
                     .font(.caption).foregroundStyle(Palette.muted)
                 if !LiveShiftCenter.systemAllows {
                     Text("Live Activities are turned off for HowMuch in iPhone Settings.").font(.caption).foregroundStyle(.orange)
@@ -176,6 +252,9 @@ struct LiveShiftSettingsView: View {
             }
         }
         .navigationTitle("Live shift")
-        .onChange(of: lockScreen) { _, _ in LiveShiftCenter.sync(store.data, accountID: store.accountID) }
+        .onChange(of: lockScreen) { _, _ in
+            LiveShiftCenter.sync(store.data, accountID: store.accountID)
+            Task { await LiveShiftCenter.reportStart() }
+        }
     }
 }

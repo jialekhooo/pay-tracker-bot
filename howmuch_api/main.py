@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager,suppress
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from .database import AppStorage
-from . import auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers
+from . import auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity
 
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
@@ -28,6 +28,7 @@ app=FastAPI(title='HowMuch iOS',lifespan=lifespan,docs_url=None,redoc_url=None)
 app.include_router(auth.router,prefix='/v1')
 app.include_router(documents.router,prefix='/v1')
 app.include_router(push.router,prefix='/v1')
+app.include_router(live_activity.router,prefix='/v1')
 app.include_router(accounts.router,prefix='/v1')
 app.include_router(gmail_payments.router,prefix='/v1')
 app.include_router(email_providers.router,prefix='/v1')

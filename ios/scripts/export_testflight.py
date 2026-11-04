@@ -12,6 +12,7 @@ IOS = Path(__file__).resolve().parents[1]
 TEAM = '8FSHKXDVJ2'
 BUNDLE = 'com.jialekhoo.howmuch'
 WIDGET_BUNDLE = BUNDLE + '.widgets'
+SHARE_BUNDLE = BUNDLE + '.share'
 WIDGET_GROUP = 'group.com.jialekhoo.howmuch.widgets'
 ARCHIVE = IOS / 'build/HowMuch-accounts.xcarchive'
 OUTPUT = IOS / 'build/TestFlight'
@@ -48,6 +49,13 @@ def main():
         widget_entitlements.write_bytes(plistlib.dumps(widget_requested))
         run('codesign', '--force', '--sign', '-', '--entitlements', widget_entitlements,
             ARCHIVE/'Products/Applications/HowMuch.app/PlugIns/HowMuchWidgets.appex')
+        share_requested = {'com.apple.security.application-groups': [WIDGET_GROUP],
+                           'application-identifier': TEAM+'.'+SHARE_BUNDLE,
+                           'com.apple.developer.team-identifier': TEAM, 'get-task-allow': False}
+        share_entitlements = scratch/'share-entitlements.plist'
+        share_entitlements.write_bytes(plistlib.dumps(share_requested))
+        run('codesign', '--force', '--sign', '-', '--entitlements', share_entitlements,
+            ARCHIVE/'Products/Applications/HowMuch.app/PlugIns/HowMuchShare.appex')
         run('codesign', '--force', '--sign', '-', '--entitlements', entitlements,
             ARCHIVE/'Products/Applications/HowMuch.app')
         options = scratch/'ExportOptions.plist'
@@ -102,6 +110,22 @@ def main():
         if (widget_profile.get('ProvisionedDevices') or widget_profile['Entitlements'].get('com.apple.security.application-groups') != [WIDGET_GROUP]):
             raise RuntimeError('Widget must have an App Store profile for the shared group')
         print('Verified embedded WidgetKit extension and shared app-group profiles')
+        share = app/'PlugIns/HowMuchShare.appex'
+        run('codesign', '--verify', '--strict', share)
+        share_actual = plistlib.loads(run('codesign', '-d', '--entitlements', ':-', share, capture_output=True).stdout)
+        for key, expected in share_requested.items():
+            if share_actual.get(key) != expected:
+                raise RuntimeError('Incorrect share extension entitlement: '+key)
+        share_info = plistlib.loads((share/'Info.plist').read_bytes())
+        if (share_info['CFBundleIdentifier'] != SHARE_BUNDLE or share_info['CFBundleVersion'] != info['CFBundleVersion']
+                or share_info['NSExtension']['NSExtensionPointIdentifier'] != 'com.apple.share-services'):
+            raise RuntimeError('Incorrect embedded share extension metadata')
+        share_profile = plistlib.loads(run('security', 'cms', '-D', '-i', share/'embedded.mobileprovision', capture_output=True).stdout)
+        if share_profile.get('ProvisionedDevices') or share_profile['Entitlements'].get('com.apple.security.application-groups') != [WIDGET_GROUP]:
+            raise RuntimeError('Share extension must have an App Store profile for the shared group')
+        if not info.get('NSSupportsLiveActivities'):
+            raise RuntimeError('Live Activities must be enabled in the release Info.plist')
+        print('Verified embedded share extension and Live Activity support')
         print('Verified signed TestFlight IPA:', OUTPUT/'HowMuch.ipa')
         print('Version:', info['CFBundleShortVersionString'], 'build:', info['CFBundleVersion'])
         if args.upload:
