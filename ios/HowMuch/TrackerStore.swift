@@ -1,0 +1,265 @@
+import Foundation
+import SwiftUI
+import HowMuchCore
+
+@MainActor
+final class TrackerStore: ObservableObject {
+    @Published private(set) var data = TrackerData()
+    @Published var error: String?
+    @Published private(set) var canUndo = false
+    @Published private(set) var reminderMessage = ""
+    let isPreview: Bool = {
+        #if DEBUG
+        return CommandLine.arguments.contains("--preview")
+        #else
+        return false
+        #endif
+    }()
+    @Published var widgetMessage = "Open HowMuch to refresh widget data."
+    private var publishesWidgets = false
+    let accountID: String
+    private let suppressNotifications: Bool
+    @Published var syncMessage = "Saved on this phone"
+    @Published var usesRemotePush = false
+    private(set) var lastSyncedData: TrackerData?
+    private(set) var syncRevision = 0
+    var hasPendingChanges: Bool { lastSyncedData.map { $0 != data } ?? (data != TrackerData()) }
+    var onChange: (() -> Void)?
+    private var previous: TrackerData?
+    private var undoBaseline: TrackerData?
+    private var reminderTask: Task<Void, Never>?
+    private var writable = true
+    private let url: URL
+
+    init(accountID: String, suppressNotifications: Bool = false) {
+        self.accountID = UUID(uuidString: accountID)?.uuidString.lowercased() ?? "invalid"
+        self.suppressNotifications = suppressNotifications
+        let folder = URL.applicationSupportDirectory.appending(path: "HowMuch/accounts/\(self.accountID)", directoryHint: .isDirectory)
+        url = folder.appending(path: "tracker.json")
+        guard self.accountID != "invalid" else { writable = false; error = "The account identity is invalid."; return }
+        if isPreview {
+            do { data = try Self.previewData() } catch { self.error = error.localizedDescription }
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: url.path) {
+                let saved = try JSONDecoder().decode(TrackerData.self, from: Data(contentsOf: url))
+                try saved.validate()
+                data = saved
+            }
+            let metadataURL = folder.appending(path: "sync.json")
+            if FileManager.default.fileExists(atPath: metadataURL.path) {
+                let metadata = try JSONDecoder().decode(SyncMetadata.self, from: Data(contentsOf: metadataURL))
+                try metadata.data.validate()
+                lastSyncedData = metadata.data; syncRevision = metadata.revision
+            }
+        } catch {
+            writable = false
+            self.error = "Your saved data could not be opened. It has been kept intact. \(error.localizedDescription)"
+        }
+    }
+
+    @discardableResult
+    func update(_ change: (inout TrackerData) throws -> Void) -> Bool {
+        guard writable else { error = "Storage is unavailable. Restart the app after resolving the storage problem."; return false }
+        do {
+            var next = data
+            try change(&next)
+            next = next.reimbursementsOnly
+            try next.validate()
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            if !isPreview { try encoder.encode(next).write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen]) }
+            previous = data
+            undoBaseline = next
+            canUndo = true
+            data = next
+            refreshWidgets()
+            refreshReminders()
+            onChange?()
+            return true
+        } catch { self.error = error.localizedDescription; return false }
+    }
+
+    @discardableResult
+    func updatePreferences(_ change: (inout AppPreferences) -> Void) -> Bool {
+        update { data in var settings = data.settings; change(&settings); data.preferences = settings }
+    }
+
+    func undo() {
+        guard let previous, let undoBaseline else { return }
+        do {
+            let restored = try AccountMerge.merge(base: undoBaseline, local: previous, remote: data)
+            if update({ $0 = restored }) { self.previous = nil; self.undoBaseline = nil; canUndo = false }
+        } catch { self.error = "This change can’t be undone because the same records changed elsewhere." }
+    }
+
+    func activateWidgets() { publishesWidgets = true; refreshWidgets() }
+    func deactivateWidgets() { publishesWidgets = false; SharedWidgetStorage.clear() }
+    func refreshWidgets() {
+        guard publishesWidgets else { return }
+        do {
+            try SharedWidgetStorage.publish(WidgetSnapshot(data: data, accountID: accountID))
+            widgetMessage = "Widgets updated from this account."
+        } catch { widgetMessage = error.localizedDescription }
+    }
+
+    func refreshReminders() {
+        guard !suppressNotifications else { return }
+        let previousTask = reminderTask
+        previousTask?.cancel()
+        let snapshot = data
+        reminderTask = Task {
+            await previousTask?.value
+            if Task.isCancelled { return }
+            do {
+                let count = try await ShiftNotifications.schedule(snapshot, accountID: accountID, remote: usesRemotePush)
+                if !Task.isCancelled { reminderMessage = usesRemotePush ? "Account push notifications are active." : "\(count) iPhone job reminders scheduled." }
+            } catch is CancellationError {} catch { if !Task.isCancelled { reminderMessage = "Reminders could not be scheduled: \(error.localizedDescription)" } }
+        }
+    }
+
+    func stopReminders() async {
+        let pending = reminderTask
+        reminderTask = nil
+        pending?.cancel()
+        await pending?.value
+    }
+
+    @discardableResult
+    func save(_ shift: Shift) -> Bool {
+        update { data in
+            if let index = data.shifts.firstIndex(where: { $0.id == shift.id }) { data.shifts[index] = shift }
+            else { data.shifts.append(shift) }
+        }
+    }
+
+    func delete(_ shift: Shift) {
+        update { data in
+            data.shifts.removeAll { $0.id == shift.id }
+            data.claims.removeAll { $0.shiftID == shift.id }
+            data.expenses?.removeAll { $0.shiftID == shift.id }
+        }
+    }
+
+    func importCSV(_ url: URL) throws -> (added: Int, skipped: Int) {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let values = try url.resourceValues(forKeys: [.fileSizeKey])
+        guard (values.fileSize ?? 0) <= 10_000_000 else { throw TrackerError.invalid("Choose a CSV smaller than 10 MB.") }
+        let incoming = try ShiftCSV.decode(String(contentsOf: url, encoding: .utf8))
+        var added = 0
+        let success = update { data in
+            added = data.importShifts(incoming)
+        }
+        guard success else { throw TrackerError.invalid(error ?? "The import could not be saved.") }
+        return (added, incoming.count - added)
+    }
+
+    func readArchive(_ url: URL) throws -> TrackerData {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size <= 10_000_000 else { throw TrackerError.invalid("Choose an archive smaller than 10 MB.") }
+        let archive = try JSONDecoder().decode(TrackerData.self, from: Data(contentsOf: url))
+        try archive.validate()
+        return archive
+    }
+
+    func applySynced(_ envelope: CloudEnvelope, current: TrackerData) throws {
+        try current.validate(); try envelope.data.validate()
+        if !isPreview {
+            try JSONEncoder().encode(current).write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
+            try JSONEncoder().encode(SyncMetadata(revision: envelope.revision, data: envelope.data))
+                .write(to: url.deletingLastPathComponent().appending(path: "sync.json"), options: [.atomic, .completeFileProtectionUnlessOpen])
+        }
+        data = current; refreshWidgets(); lastSyncedData = envelope.data; syncRevision = envelope.revision
+        syncMessage = hasPendingChanges ? "Saved on this phone · sync pending" : "Your account is up to date"
+        refreshReminders()
+    }
+
+    func preserveConflict(_ remote: TrackerData) throws {
+        guard !isPreview else { return }
+        let folder = url.deletingLastPathComponent().appending(path: "conflicts", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let suffix = UUID().uuidString
+        try JSONEncoder().encode(data).write(to: folder.appending(path: "phone-\(suffix).json"), options: [.atomic, .completeFileProtectionUnlessOpen])
+        try JSONEncoder().encode(remote).write(to: folder.appending(path: "cloud-\(suffix).json"), options: [.atomic, .completeFileProtectionUnlessOpen])
+    }
+
+    func removeAccountCache() throws {
+        reminderTask?.cancel()
+        guard !isPreview else { return }
+        let folder = url.deletingLastPathComponent()
+        if FileManager.default.fileExists(atPath: folder.path) { try FileManager.default.removeItem(at: folder) }
+    }
+
+    private var legacyURL: URL { URL.applicationSupportDirectory.appending(path: "HowMuch/tracker.json") }
+    private var legacyOwnerURL: URL { URL.applicationSupportDirectory.appending(path: "HowMuch/legacy-import.json") }
+    var hasLegacyImport: Bool {
+        guard !isPreview, FileManager.default.fileExists(atPath: legacyURL.path) else { return false }
+        guard let owner = try? JSONDecoder().decode(LegacyImport.self, from: Data(contentsOf: legacyOwnerURL)) else { return true }
+        return owner.accountID == accountID && !owner.complete
+    }
+    func importEarlierPhoneRecords() throws {
+        guard hasLegacyImport else { throw TrackerError.invalid("There are no unassigned earlier iPhone records to import.") }
+        let legacy = try JSONDecoder().decode(TrackerData.self, from: Data(contentsOf: legacyURL))
+        try legacy.validate()
+        // Claim before copying, so another account cannot see the convenience import on this phone.
+        try JSONEncoder().encode(LegacyImport(accountID: accountID, complete: false)).write(to: legacyOwnerURL, options: [.atomic, .completeFileProtectionUnlessOpen])
+        guard update({ data in
+            for shift in legacy.shifts where !data.shifts.contains(where: { $0.id == shift.id }) { data.shifts.append(shift) }
+            for claim in legacy.claims where !data.claims.contains(where: { $0.id == claim.id }) { data.claims.append(claim) }
+        }) else { throw TrackerError.invalid(error ?? "Couldn’t save the imported records.") }
+        try JSONEncoder().encode(LegacyImport(accountID: accountID, complete: true)).write(to: legacyOwnerURL, options: [.atomic, .completeFileProtectionUnlessOpen])
+    }
+
+    private static func previewData() throws -> TrackerData {
+        var data = TrackerData()
+        data.rules.rate = 20
+        var settings = AppPreferences(); settings.displayName = "Jia Le"; settings.payers["hermès private sale"] = "REFIX PTE. LTD."
+        settings.eventRates["hermès private sale"] = 18
+        data.preferences = settings
+        let calendar = TrackerCalendar.calendar
+        for (offset, event, location, rate) in [(-25, "Wedding reception", "Marina Bay Sands", 25), (-16, "Roadshow", "Suntec City", 20), (-9, "Hermès Private Sale", "Marina Bay Sands", 18), (-8, "Hermès Private Sale", "Marina Bay Sands", 18), (-2, "Brand launch", "Orchard Road", 22), (0, "Brand launch", "Orchard Road", 22), (1, "Hermès Private Sale", "Marina Bay Sands", 18), (3, "Weekend roadshow", "Suntec City", 20), (4, "Weekend roadshow", "Suntec City", 20), (8, "Wedding reception", "Fullerton Hotel", 25)] {
+            let date = calendar.date(byAdding: .day, value: offset, to: Date())!
+            data.shifts.append(try Shift(event: event, location: location, day: Shift.dayString(date), startMinute: 9 * 60, endMinute: 18 * 60, breakMinutes: 60, rate: Decimal(rate), rules: data.rules, paid: offset < -10,
+                                         paymentDue: Shift.dayString(calendar.date(byAdding: .day, value: 14, to: date)!)))
+        }
+        #if DEBUG
+        if CommandLine.arguments.contains("--ui-test-transit") || CommandLine.arguments.contains("--ui-test-live-transit") {
+            var options = TravelReminderOptions(); options.enabled = true; options.transit = true
+            options.origin = "Singapore Botanic Gardens, 1 Cluny Road, Singapore 259569"
+            data.preferences?.travel = options
+            if CommandLine.arguments.contains("--ui-test-live-transit") {
+                let date = Date().addingTimeInterval(7200)
+                let start = calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
+                data.shifts = [try Shift(event: "Public transit QA", location: "Marina Bay Sands, 10 Bayfront Avenue, Singapore 018956", day: Shift.dayString(date), startMinute: start, endMinute: (start + 240) % 1440, rate: 20)]
+            }
+        }
+        if CommandLine.arguments.contains("--ui-test-travel-error") {
+            var options = TravelReminderOptions(); options.enabled = true; options.origin = "Singapore Botanic Gardens, Singapore"
+            data.preferences?.travel = options
+        }
+        if CommandLine.arguments.contains("--ui-test-overnight-calendar") {
+            let yesterday = calendar.date(byAdding: .day, value: -1, to: Date())!
+            data.shifts.append(try Shift(event: "Overnight calendar QA", day: Shift.dayString(yesterday), startMinute: 22*60, endMinute: 6*60, rate: 20))
+        }
+        #endif
+        if let shift = data.shifts.first(where: { $0.event == "Hermès Private Sale" }) {
+            data.claims.append(CabClaim(shiftID: shift.id, day: shift.day, amount: Decimal(string: "24.60")!, note: "Taxi home after pack-down"))
+        }
+        return data
+    }
+}
+
+private struct SyncMetadata: Codable { let revision: Int; let data: TrackerData }
+private struct LegacyImport: Codable { let accountID: String; let complete: Bool }
+
+func money(_ value: Decimal, _ currency: String) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .currency
+    formatter.currencyCode = currency
+    return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(currency) \(value)"
+}

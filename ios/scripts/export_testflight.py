@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""Build and verify an App Store IPA using Xcode's cloud-managed signing."""
+import argparse
+import json
+import plistlib
+import subprocess
+import tempfile
+import zipfile
+from pathlib import Path
+
+IOS = Path(__file__).resolve().parents[1]
+TEAM = '8FSHKXDVJ2'
+BUNDLE = 'com.jialekhoo.howmuch'
+WIDGET_BUNDLE = BUNDLE + '.widgets'
+WIDGET_GROUP = 'group.com.jialekhoo.howmuch.widgets'
+ARCHIVE = IOS / 'build/HowMuch-accounts.xcarchive'
+OUTPUT = IOS / 'build/TestFlight'
+
+
+def run(*args, **kwargs):
+    return subprocess.run([str(a) for a in args], check=True, **kwargs)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--skip-archive', action='store_true', help='Use the existing Release archive.')
+    args = parser.parse_args()
+    if not args.skip_archive:
+        run('xcodebuild', '-project', IOS/'HowMuch.xcodeproj', '-scheme', 'HowMuch',
+            '-configuration', 'Release', '-destination', 'generic/platform=iOS',
+            '-archivePath', ARCHIVE, 'CODE_SIGNING_ALLOWED=NO', 'archive')
+    # Unsigned archives omit capability entitlements. Preserve them in a temporary
+    # ad-hoc signature so export can re-sign with Apple's distribution certificate.
+    with tempfile.TemporaryDirectory(prefix='howmuch-export-') as scratch:
+        scratch = Path(scratch)
+        requested = {'com.apple.developer.applesignin': ['Default'], 'aps-environment': 'production',
+                     'com.apple.security.application-groups': [WIDGET_GROUP],
+                     'application-identifier': TEAM+'.'+BUNDLE,
+                     'com.apple.developer.team-identifier': TEAM, 'get-task-allow': False}
+        entitlements = scratch/'entitlements.plist'
+        entitlements.write_bytes(plistlib.dumps(requested))
+        widget_requested = {'com.apple.security.application-groups': [WIDGET_GROUP],
+                            'application-identifier': TEAM+'.'+WIDGET_BUNDLE,
+                            'com.apple.developer.team-identifier': TEAM, 'get-task-allow': False}
+        widget_entitlements = scratch/'widget-entitlements.plist'
+        widget_entitlements.write_bytes(plistlib.dumps(widget_requested))
+        run('codesign', '--force', '--sign', '-', '--entitlements', widget_entitlements,
+            ARCHIVE/'Products/Applications/HowMuch.app/PlugIns/HowMuchWidgets.appex')
+        run('codesign', '--force', '--sign', '-', '--entitlements', entitlements,
+            ARCHIVE/'Products/Applications/HowMuch.app')
+        options = scratch/'ExportOptions.plist'
+        options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export',
+            'teamID': TEAM, 'signingStyle': 'automatic', 'manageAppVersionAndBuildNumber': True,
+            'uploadSymbols': True}))
+        run('xcodebuild', '-exportArchive', '-archivePath', ARCHIVE, '-exportPath', OUTPUT,
+            '-exportOptionsPlist', options, '-allowProvisioningUpdates')
+        with zipfile.ZipFile(OUTPUT/'HowMuch.ipa') as package:
+            package.extractall(scratch/'package')
+        app = scratch/'package/Payload/HowMuch.app'
+        run('codesign', '--verify', '--deep', '--strict', app)
+        actual = plistlib.loads(run('codesign', '-d', '--entitlements', ':-', app,
+                                   capture_output=True).stdout)
+        for key, expected in requested.items():
+            if actual.get(key) != expected:
+                raise RuntimeError('Incorrect signed entitlement: '+key)
+        info = plistlib.loads((app/'Info.plist').read_bytes())
+        if info.get('HowMuchAPNSEnvironment') != 'production' or info['CFBundleIdentifier'] != BUNDLE:
+            raise RuntimeError('Incorrect release push environment or bundle identifier')
+        primary_icon = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})
+        if primary_icon.get('CFBundleIconName') != 'HowMuchHIcon':
+            raise RuntimeError('Release must use the H app icon set')
+        icon_assets = json.loads(run('xcrun', 'assetutil', '--info', app/'Assets.car',
+                                    capture_output=True).stdout)
+        for pixels, scale in ((40, 2), (60, 3)):
+            if not any(asset.get('Name') == 'HowMuchHIcon' and asset.get('AssetType') == 'Icon Image'
+                       and asset.get('Idiom') == 'phone' and asset.get('Scale') == scale
+                       and asset.get('PixelWidth') == pixels and asset.get('PixelHeight') == pixels
+                       and asset.get('RenditionName') == f'HowMuch-H-{pixels}.png' for asset in icon_assets):
+                raise RuntimeError(f'Missing H notification icon: {pixels}px @{scale}x')
+        print('Verified H primary icon and explicit 20pt notification icons at 2x and 3x')
+        profile = plistlib.loads(run('security', 'cms', '-D', '-i', app/'embedded.mobileprovision',
+                                    capture_output=True).stdout)
+        if profile.get('ProvisionedDevices') or not profile['Entitlements'].get('beta-reports-active'):
+            raise RuntimeError('Expected an App Store distribution profile')
+        for key in ('aps-environment', 'com.apple.developer.applesignin', 'com.apple.security.application-groups'):
+            if profile['Entitlements'].get(key) != requested[key]:
+                raise RuntimeError('Distribution profile lacks capability: '+key)
+        widget = app/'PlugIns/HowMuchWidgets.appex'
+        run('codesign', '--verify', '--strict', widget)
+        widget_actual = plistlib.loads(run('codesign', '-d', '--entitlements', ':-', widget, capture_output=True).stdout)
+        for key, expected in widget_requested.items():
+            if widget_actual.get(key) != expected:
+                raise RuntimeError('Incorrect widget entitlement: '+key)
+        widget_info = plistlib.loads((widget/'Info.plist').read_bytes())
+        if (widget_info['CFBundleIdentifier'] != WIDGET_BUNDLE
+                or widget_info['CFBundleVersion'] != info['CFBundleVersion']
+                or widget_info['NSExtension']['NSExtensionPointIdentifier'] != 'com.apple.widgetkit-extension'):
+            raise RuntimeError('Incorrect embedded WidgetKit extension metadata')
+        widget_profile = plistlib.loads(run('security', 'cms', '-D', '-i', widget/'embedded.mobileprovision', capture_output=True).stdout)
+        if (widget_profile.get('ProvisionedDevices') or widget_profile['Entitlements'].get('com.apple.security.application-groups') != [WIDGET_GROUP]):
+            raise RuntimeError('Widget must have an App Store profile for the shared group')
+        print('Verified embedded WidgetKit extension and shared app-group profiles')
+        print('Verified signed TestFlight IPA:', OUTPUT/'HowMuch.ipa')
+        print('Version:', info['CFBundleShortVersionString'], 'build:', info['CFBundleVersion'])
+
+
+if __name__ == '__main__':
+    main()

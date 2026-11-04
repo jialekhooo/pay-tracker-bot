@@ -1,0 +1,1115 @@
+import XCTest
+
+final class HowMuchUITests: XCTestCase {
+    @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        let window = app.windows.firstMatch
+        for _ in 0..<10 {
+            let top = window.frame.minY + 110
+            let bottom = window.frame.maxY - 100
+            if element.exists && element.isHittable && element.frame.midY > top && element.frame.midY < bottom { return }
+            if element.exists && element.frame.midY < top { app.swipeDown() } else { app.swipeUp() }
+        }
+    }
+    @MainActor
+    func testProfilePhotoReplacementFailureAndRemovalKeepCurrentPhotoUntilConfirmed() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-profile-photo"]; app.launch()
+        app.buttons["Profile settings"].tap()
+        let sample = app.buttons["profile.samplePhoto"]
+        XCTAssertTrue(sample.waitForExistence(timeout: 5)); sample.tap()
+        XCTAssertTrue(app.alerts["Use selected profile photo?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Use photo"].tap()
+        let image = app.images["Profile photo"]
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+        sample.tap(); app.alerts.buttons["Cancel"].tap()
+        XCTAssertTrue(image.exists)
+        app.buttons["profile.invalidPhoto"].tap()
+        XCTAssertTrue(app.alerts["Photo kept"].waitForExistence(timeout: 5)); app.alerts.buttons["OK"].tap()
+        XCTAssertTrue(image.exists)
+        app.buttons["profile.removePhoto"].tap()
+        XCTAssertTrue(app.alerts["Remove profile photo?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Cancel"].tap(); XCTAssertTrue(image.exists)
+        attach("Profile photo preserved and removal requires confirmation", app: app)
+        app.buttons["profile.removePhoto"].tap(); app.alerts.buttons["Remove photo"].tap()
+        XCTAssertFalse(image.exists)
+        sample.tap(); app.alerts.buttons["Use photo"].tap(); XCTAssertTrue(image.waitForExistence(timeout: 5))
+        app.buttons["profile.save"].tap(); app.alerts.buttons["OK"].tap()
+        app.navigationBars.buttons.firstMatch.tap(); app.buttons["Profile settings"].tap()
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testAllShiftsGroupingIncludesCompletedWorkAndKeepsFiltersAndSort() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["Search shifts"].tap()
+        let toggle = app.switches["upcoming.groupEvents"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        if toggle.value as? String != "1" { toggle.tap() }
+        let wedding = app.buttons["shifts.event.SGD|wedding reception"]
+        reveal(wedding, in: app); XCTAssertTrue(wedding.exists)
+        XCTAssertTrue(wedding.label.contains("2 shifts"))
+        attach("All shifts grouped by event including completed work", app: app)
+        tapTrailingArea(wedding, in: app)
+        XCTAssertTrue(app.navigationBars["Wedding reception"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        for _ in 0..<6 { app.swipeDown() }
+        app.buttons["Earliest first"].exists ? app.buttons["Earliest first"].tap() : app.buttons["Latest first"].tap()
+        app.buttons["Unpaid"].tap()
+        XCTAssertTrue(toggle.exists)
+        app.buttons["All"].tap(); toggle.tap()
+        let cards = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Wedding reception,"))
+        reveal(cards.firstMatch, in: app); XCTAssertEqual(cards.count, 2)
+    }
+
+    @MainActor
+    private func openShift(_ name: String, in app: XCUIApplication) {
+        app.buttons["Search shifts"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText(name)
+        XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
+        let cards = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + ","))
+        guard let card = cards.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("No visible shift card for " + name); return
+        }
+        card.tap()
+    }
+    @MainActor
+    private func attach(_ name: String, app: XCUIApplication) {
+        let item = XCTAttachment(screenshot: app.screenshot())
+        item.name = name; item.lifetime = .keepAlways; add(item)
+    }
+    @MainActor
+    func testFoodMiscAndCabClaimsPersistEditDeleteAndUndo() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()
+        let name = "C" + String(UUID().uuidString.prefix(4))
+        app.buttons["nav.add"].tap()
+        XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 5))
+        app.textFields["Event name"].tap(); app.textFields["Event name"].typeText(name); app.buttons["Save"].tap()
+        openShift(name, in: app)
+        for (kind,amount,note) in [("food","12.34","Food QA"),("miscellaneous","3.21","Misc QA"),("cab","1.25","Cab QA")] {
+            tapTrailingArea(app.buttons["Add claim"], in: app)
+            XCTAssertTrue(app.buttons["claim.category." + kind].waitForExistence(timeout: 5))
+            app.buttons["claim.category." + kind].tap()
+            app.textFields["claim.amount"].tap(); app.textFields["claim.amount"].typeText(amount)
+            let noteField = app.textFields["claim.note"]; reveal(noteField, in: app); noteField.tap(); noteField.typeText(note)
+            app.buttons["Save"].tap()
+            XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 5))
+        }
+        app.terminate(); app.launch(); openShift(name, in: app)
+        let foodMenu = app.buttons["Food claim actions: Food QA"]; reveal(foodMenu, in: app)
+        attach("All three claim categories", app: app)
+        XCTAssertTrue(foodMenu.exists); let claimID = foodMenu.identifier
+        foodMenu.tap(); app.buttons["Edit claim"].tap()
+        XCTAssertTrue(app.buttons["claim.category.food"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["claim.category.food"].isSelected)
+        app.buttons["claim.category.miscellaneous"].tap(); app.buttons["Save"].tap()
+        let editedMenu = app.buttons["Miscellaneous claim actions: Food QA"]
+        XCTAssertTrue(editedMenu.waitForExistence(timeout: 5)); XCTAssertEqual(editedMenu.identifier, claimID)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "claim.actions.")).count, 3)
+        attach("Cab food and miscellaneous reimbursements", app: app)
+        reveal(editedMenu, in: app); editedMenu.tap(); app.buttons["Delete claim"].tap(); app.sheets.buttons["Delete claim"].tap()
+        XCTAssertFalse(app.staticTexts["Food QA"].exists)
+        tapTrailingArea(app.buttons["Undo last change"], in: app)
+        XCTAssertTrue(app.buttons["Miscellaneous claim actions: Food QA"].waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testUpcomingGroupsSwitchViewsAndRespectDateRangeAndEarnings() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        tapTrailingArea(app.buttons["overview.upcoming"], in: app)
+        let toggle = app.switches["upcoming.groupEvents"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5)); toggle.tap()
+        let weekend = app.buttons["upcoming.event.SGD|weekend roadshow"]
+        XCTAssertTrue(weekend.waitForExistence(timeout: 5)); reveal(weekend, in: app)
+        attach("Upcoming grouped by event", app: app); weekend.tap()
+        let detail = app.scrollViews["upcoming.eventDetail"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 5))
+        XCTAssertEqual(detail.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Weekend roadshow,")).count, 2)
+        attach("Grouped upcoming event and its shifts", app: app)
+        app.navigationBars["Weekend roadshow"].buttons.firstMatch.tap()
+        app.buttons["Tomorrow"].tap(); XCTAssertFalse(weekend.exists)
+        app.buttons["7 days"].tap(); XCTAssertTrue(weekend.waitForExistence(timeout: 5))
+        for _ in 0..<3 { app.swipeDown() }
+        toggle.tap(); XCTAssertFalse(weekend.exists)
+        app.navigationBars["Upcoming shifts"].buttons.firstMatch.tap()
+        app.buttons["nav.earnings"].tap(); app.buttons["Upcoming"].tap()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5)); XCTAssertEqual(toggle.value as? String, "0"); toggle.tap()
+        let wedding = app.buttons["upcoming.event.SGD|wedding reception"]; reveal(wedding, in: app); wedding.tap()
+        XCTAssertTrue(app.staticTexts["1 upcoming shift"].waitForExistence(timeout: 5))
+        XCTAssertEqual(detail.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Wedding reception,")).count, 1)
+        tapTrailingArea(app.buttons["View all event earnings"], in: app)
+        let earnings = app.scrollViews["event.detail"]; XCTAssertTrue(earnings.waitForExistence(timeout: 5))
+        XCTAssertEqual(earnings.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Wedding reception,")).count, 2)
+    }
+    @MainActor
+    func testUpcomingGroupingPreferencePersistsAndIsAccountScoped() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()
+        tapTrailingArea(app.buttons["overview.upcoming"], in: app)
+        let toggle = app.switches["upcoming.groupEvents"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        if toggle.value as? String != "1" { toggle.tap() }
+        app.terminate(); app.launch(); tapTrailingArea(app.buttons["overview.upcoming"], in: app)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5)); XCTAssertEqual(toggle.value as? String, "1")
+        app.terminate(); app.launchArguments = ["--ui-test-account", "--ui-test-owner-b"]; app.launch()
+        tapTrailingArea(app.buttons["overview.upcoming"], in: app)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5)); XCTAssertEqual(toggle.value as? String, "0")
+        app.terminate(); app.launchArguments = ["--ui-test-account"]; app.launch(); tapTrailingArea(app.buttons["overview.upcoming"], in: app)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5)); XCTAssertEqual(toggle.value as? String, "1"); toggle.tap()
+    }
+    @MainActor
+    func testHourlyAndLumpSumBreakdownAndStaticEventSummary() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        openShift("Roadshow", in: app)
+        let breakdown = app.buttons["Pay breakdown"]
+        tapTrailingArea(breakdown, in: app)
+        XCTAssertTrue(app.staticTexts["Hourly Rate, $20.00/h"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Paid hours, 8"].exists)
+        XCTAssertTrue(app.staticTexts["Break, 60 min · unpaid"].exists)
+        XCTAssertFalse(app.staticTexts["Pay type"].exists)
+        attach("Hourly pay breakdown", app: app)
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 5))
+        let lump = app.buttons["Lump sum"]; reveal(lump, in: app); lump.tap()
+        let amount = app.textFields["shift.amount"]; XCTAssertTrue(amount.waitForExistence(timeout: 5)); amount.tap()
+        amount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (amount.value as? String ?? "").count)); amount.typeText("200")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5))
+        if !app.staticTexts["Lump Sum Rate, $200.00"].exists { tapTrailingArea(breakdown, in: app) }
+        XCTAssertTrue(app.staticTexts["Lump Sum Rate, $200.00"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Hourly Rate, $20.00/h"].exists)
+        attach("Lump sum pay breakdown", app: app)
+        tapTrailingArea(app.buttons["View event earnings"], in: app)
+        XCTAssertTrue(app.scrollViews["event.detail"].waitForExistence(timeout: 5))
+        attach("Event summary without navigation chevron", app: app)
+    }
+    @MainActor
+    func testSharedJobDetailsPersistAndEarningsUndoKeepsGrouping() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()
+        let suffix = String(UUID().uuidString.prefix(4))
+        let original = "QA" + suffix, renamed = "Job" + suffix, final = "End" + suffix
+        app.buttons["nav.add"].tap()
+        XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 5))
+        app.textFields["Event name"].tap(); app.textFields["Event name"].typeText(original)
+        app.textFields["Location (optional)"].tap(); app.textFields["Location (optional)"].typeText("Old site")
+        tapTrailingArea(app.buttons["shift.addDate"], in: app)
+        app.buttons["Save"].tap()
+        openShift(original, in: app); app.buttons["Edit"].tap()
+        let name = app.textFields["Event name"], location = app.textFields["Location (optional)"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: original.count)); name.typeText(renamed)
+        location.tap(); location.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8)); location.typeText("Venue QA")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars[renamed].waitForExistence(timeout: 5))
+        app.terminate(); app.launch()
+        openShift(renamed, in: app)
+        tapTrailingArea(app.buttons["View event earnings"], in: app)
+        let body = app.scrollViews["event.detail"]
+        XCTAssertTrue(body.waitForExistence(timeout: 5))
+        XCTAssertEqual(body.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", renamed + ",", "Venue QA")).count, 2)
+        tapTrailingArea(app.buttons["event.editDetails"], in: app)
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: renamed.count)); name.typeText(final)
+        location.tap(); location.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8)); location.typeText("Next site")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars[final].waitForExistence(timeout: 5))
+        XCTAssertEqual(body.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", final + ",", "Next site")).count, 2)
+        attach("Shared event name and location in Earnings", app: app)
+        tapTrailingArea(body.buttons["Undo last change"], in: app)
+        XCTAssertTrue(app.navigationBars[renamed].waitForExistence(timeout: 5))
+        XCTAssertEqual(body.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", renamed + ",", "Venue QA")).count, 2)
+    }
+    @MainActor
+    func testEarningsCanSetSharedLocationForMixedVenueEvent() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.earnings"].tap()
+        tapTrailingArea(app.staticTexts["Wedding reception"].firstMatch, in: app)
+        XCTAssertTrue(app.buttons["event.editDetails"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["event.editDetails"], in: app)
+        let location = app.textFields["Location (optional)"]
+        XCTAssertTrue(location.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["These shifts currently have different locations. Enter a shared location to replace them all."].exists)
+        location.tap(); location.typeText("Shared venue")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Wedding reception"].waitForExistence(timeout: 5))
+        let body = app.scrollViews["event.detail"]
+        XCTAssertTrue(body.staticTexts["Shared venue"].firstMatch.exists)
+        XCTAssertEqual(body.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Wedding reception,", "Shared venue")).count, 2)
+        attach("Earnings shared location and edit controls", app: app)
+    }
+    @MainActor
+    func testLiveAppleMapsPlaceSearchAndDirections() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        openShift("Roadshow", in: app)
+        app.buttons["Edit"].tap()
+        let find = app.buttons["shift.findLocation"]
+        XCTAssertTrue(find.waitForExistence(timeout: 5)); find.tap()
+        XCTAssertTrue(app.textFields["location.query"].waitForExistence(timeout: 5))
+        let suggestion = app.buttons["location.suggestion.0"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 30), "Live Apple Maps should return place suggestions")
+        attach("Live Apple Maps place suggestions", app: app)
+        suggestion.tap()
+        XCTAssertTrue(app.buttons["shift.findLocation"].waitForExistence(timeout: 5))
+        let location = app.textFields["Location (optional)"]
+        XCTAssertTrue((location.value as? String ?? "").localizedCaseInsensitiveContains("Suntec"))
+        app.buttons["Save"].tap()
+        let directions = app.buttons["shift.directions"]
+        XCTAssertTrue(directions.waitForExistence(timeout: 5)); directions.tap()
+        XCTAssertTrue(app.navigationBars["Map & directions"].waitForExistence(timeout: 5))
+        let transit = app.buttons["location.transit"]
+        let match = app.buttons["location.destination.0"]
+        let resolved = app.buttons.matching(NSPredicate(format: "identifier == %@ OR identifier == %@", "location.destination.0", "location.transit")).firstMatch
+        XCTAssertTrue(resolved.waitForExistence(timeout: 25))
+        if match.exists { match.tap() }
+        XCTAssertTrue(transit.waitForExistence(timeout: 5), "Resolved destination should provide transport actions")
+        attach("Live workplace map and directions", app: app)
+        XCTAssertTrue(app.buttons["location.driving"].exists)
+        XCTAssertTrue(app.buttons["location.walking"].exists)
+        tapTrailingArea(app.buttons["location.walking"], in: app)
+        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
+        XCTAssertTrue(maps.wait(for: .runningForeground, timeout: 12), "Directions should launch the real Apple Maps app")
+        attach("Apple Maps directions handoff", app: maps)
+        app.activate()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["shift.directions"].waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testTypedLocationFallbackAndCancel() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.add"].tap()
+        XCTAssertTrue(app.buttons["shift.findLocation"].waitForExistence(timeout: 5))
+        app.buttons["shift.findLocation"].tap()
+        let query = app.textFields["location.query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Do not save this")
+        app.buttons["Cancel"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["shift.findLocation"].waitForExistence(timeout: 5))
+        XCTAssertFalse((app.textFields["Location (optional)"].value as? String ?? "").contains("Do not save"))
+        app.buttons["shift.findLocation"].tap()
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Meet at site entrance")
+        tapTrailingArea(app.buttons["location.useTyped"], in: app)
+        XCTAssertTrue(app.buttons["shift.findLocation"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["Location (optional)"].value as? String, "Meet at site entrance")
+        app.buttons["Cancel"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testJobEditorCardsPayModesAndValidation() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.add"].tap()
+        XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 5))
+        attach("Job editor work and schedule", app: app)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["shift.error"].waitForExistence(timeout: 5))
+        let event = app.textFields["Event name"]; event.tap(); event.typeText("Editor design QA")
+        let overtime = app.switches["Overtime"]; reveal(overtime, in: app)
+        if overtime.value as? String != "1" { overtime.switches.firstMatch.exists ? overtime.switches.firstMatch.tap() : overtime.tap() }
+        XCTAssertTrue(app.textFields["After hours"].waitForExistence(timeout: 5))
+        let lump = app.buttons["Lump sum"]; lump.tap()
+        let amount = app.textFields["shift.amount"]; amount.tap()
+        amount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (amount.value as? String ?? "").count))
+        amount.typeText("200")
+        app.swipeUp()
+        let minutes = app.textFields["Minutes"]; reveal(minutes, in: app); minutes.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        minutes.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (minutes.value as? String ?? "").count)); minutes.typeText("30")
+        app.swipeUp()
+        let paidBreak = app.switches["Paid break"]; reveal(paidBreak, in: app); paidBreak.tap()
+        let due = app.switches["Payment due date"]; reveal(due, in: app); due.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["shift.due"].firstMatch.exists)
+        attach("Job editor pay and breaks", app: app)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["nav.overview"].waitForExistence(timeout: 5))
+        app.buttons["Search shifts"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Editor design QA")
+        let result = app.staticTexts.matching(identifier: "Editor design QA").allElementsBoundByIndex.last!
+        XCTAssertTrue(result.waitForExistence(timeout: 5)); result.tap()
+        XCTAssertTrue(app.navigationBars["Editor design QA"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["$200.00"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 5))
+        let editedAmount = app.textFields["shift.amount"]; reveal(editedAmount, in: app)
+        attach("Edit job payout", app: app)
+        XCTAssertEqual(editedAmount.value as? String, "200")
+        editedAmount.tap(); editedAmount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3)); editedAmount.typeText("250")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["$250.00"].firstMatch.waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testShiftAndClaimSurviveRelaunch() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()
+        let name = "Beta QA \(UUID().uuidString.prefix(8))"
+        app.buttons["nav.add"].tap()
+        let event = app.textFields["Event name"]
+        XCTAssertTrue(event.waitForExistence(timeout: 5))
+        event.tap(); event.typeText(name)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["nav.overview"].waitForExistence(timeout: 5))
+        openShift(name, in: app)
+        let claim = app.buttons["Add claim"]
+        reveal(claim, in: app); claim.tap()
+        let amount = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH %@", "Amount (")).firstMatch
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap(); amount.typeText("12.34")
+        let note = app.textFields["Note (optional)"]
+        note.tap(); note.typeText("Airport cab QA")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["Airport cab QA"].waitForExistence(timeout: 5))
+        app.terminate(); app.launch()
+        openShift(name, in: app)
+        reveal(app.staticTexts["Airport cab QA"], in: app)
+        XCTAssertTrue(app.staticTexts["Airport cab QA"].exists)
+        attach("Saved shift and reimbursement", app: app)
+    }
+    @MainActor
+    func testCalendarEarningsAndMultiDateEntry() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.calendar"].waitForExistence(timeout: 5))
+        attach("Overview", app: app)
+        app.buttons["nav.calendar"].tap()
+        XCTAssertTrue(app.buttons["calendar.today"].waitForExistence(timeout: 5))
+        app.buttons["Next month"].tap(); app.buttons["Previous month"].tap(); app.buttons["calendar.today"].tap()
+        attach("Calendar", app: app)
+        let add = app.buttons["calendar.add"]
+        reveal(add, in: app); add.tap()
+        let event = app.textFields["Event name"]
+        XCTAssertTrue(event.waitForExistence(timeout: 5)); event.tap(); event.typeText("Calendar QA")
+        let another = app.buttons["shift.addDate"]
+        reveal(another, in: app); another.tap()
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["nav.earnings"].waitForExistence(timeout: 5))
+        reveal(app.staticTexts["Calendar QA"], in: app)
+        XCTAssertTrue(app.staticTexts["Calendar QA"].exists)
+        app.buttons["nav.earnings"].tap()
+        XCTAssertTrue(app.buttons["Week"].waitForExistence(timeout: 5))
+        app.buttons["Week"].tap(); XCTAssertTrue(app.buttons["Next period"].waitForExistence(timeout: 5)); attach("Earnings week tap", app: app); app.buttons["Next period"].tap(); app.buttons["Previous period"].tap()
+        app.buttons["All time"].tap()
+        let months = app.buttons["Months"]
+        reveal(months, in: app); months.tap()
+        XCTAssertTrue(months.isSelected)
+        attach("Earnings by month", app: app)
+        app.buttons["nav.settings"].tap()
+        XCTAssertTrue(app.staticTexts["Calendar & sync"].waitForExistence(timeout: 5))
+        attach("Settings", app: app)
+    }
+    @MainActor
+    func testAccountSwitchingNeverShowsAnotherUsersRecords() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()
+        let name = "Private A " + String(UUID().uuidString.prefix(8))
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5))
+        app.buttons["nav.add"].tap()
+        let event = app.textFields["Event name"]
+        XCTAssertTrue(event.waitForExistence(timeout: 5)); event.tap(); event.typeText(name)
+        app.buttons["Save"].tap()
+        app.terminate(); app.launchArguments = ["--ui-test-account", "--ui-test-owner-b"]; app.launch()
+        XCTAssertTrue(app.buttons["Search shifts"].waitForExistence(timeout: 5))
+        app.buttons["Search shifts"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText(name)
+        XCTAssertFalse(app.staticTexts[name].exists)
+        app.terminate(); app.launchArguments = ["--ui-test-account"]; app.launch()
+        openShift(name, in: app)
+        XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testSignedOutAppRequiresAppleAccount() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-signed-out"]; app.launch()
+        XCTAssertTrue(app.buttons["account.signInApple"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["nav.overview"].exists)
+        XCTAssertFalse(app.buttons["nav.calendar"].exists)
+        attach("Apple sign-in required", app: app)
+    }
+
+    @MainActor
+    func testSettingsDestinationsOpenAndControlsRespond() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
+        app.buttons["nav.settings"].tap()
+        let destinations = [
+            ("Pay & breaks", "Pay & breaks"),
+            ("Job notifications", "Job notifications"),
+            ("Calendar & sync", "Calendar & sync"),
+            ("Data & backups", "Data & backups"),
+            ("Account & sync", "Account & sync"),
+            ("Payment detection", "Payment detection")
+        ]
+        for (row, title) in destinations {
+            let entry = app.staticTexts[row].firstMatch
+            reveal(entry, in: app)
+            XCTAssertTrue(entry.isHittable, "Settings row must be tappable: " + row)
+            entry.tap()
+            let navigation = app.navigationBars[title]
+            guard navigation.waitForExistence(timeout: 5) else {
+                XCTFail("Settings row did not open its destination: " + row)
+                attach("Blocked settings destination " + row, app: app)
+                return
+            }
+            if row == "Pay & breaks" {
+                let save = app.buttons["Save defaults"]
+                reveal(save, in: app); save.tap()
+                XCTAssertTrue(app.alerts["Defaults saved"].waitForExistence(timeout: 3))
+                app.alerts.buttons["OK"].tap()
+            }
+            if row == "Job notifications" {
+                let starts = app.switches["Job start reminders"]
+                let previous = starts.value as? String
+                starts.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+                XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value != %@", previous ?? ""), object: starts)], timeout: 3), .completed)
+                let save = app.buttons["notifications.save"]
+                reveal(save, in: app); save.tap()
+                XCTAssertTrue(app.alerts["Preferences saved"].waitForExistence(timeout: 3))
+                app.alerts.buttons["OK"].tap()
+            }
+            navigation.buttons.firstMatch.tap()
+        }
+        app.buttons["Profile settings"].tap()
+        XCTAssertTrue(app.navigationBars["Account settings"].waitForExistence(timeout: 5))
+        let profile = app.buttons["profile.save"]
+        reveal(profile, in: app); profile.tap()
+        XCTAssertTrue(app.alerts["Profile saved"].waitForExistence(timeout: 3))
+        app.alerts.buttons["OK"].tap()
+        attach("Working profile settings", app: app)
+    }
+
+    @MainActor
+    func testSettingsRowsRespondAcrossTheirFullWidth() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
+        app.buttons["nav.settings"].tap()
+        for title in ["Pay & breaks", "Job notifications", "Calendar & sync", "Data & backups", "Account & sync", "Payment detection"] {
+            let label = app.staticTexts[title].firstMatch
+            reveal(label, in: app)
+            XCTAssertTrue(label.isHittable)
+            // Tap the row's empty trailing area, as a finger often does, rather
+            // than limiting coverage to the text glyphs.
+            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0))
+                .withOffset(CGVector(dx: 0, dy: label.frame.midY - app.windows.firstMatch.frame.minY)).tap()
+            let navigation = app.navigationBars[title]
+            guard navigation.waitForExistence(timeout: 5) else {
+                XCTFail("The full Settings row must respond to taps: " + title)
+                attach("Settings trailing touch area", app: app)
+                return
+            }
+            navigation.buttons.firstMatch.tap()
+        }
+    }
+
+    @MainActor
+    private func tapTrailingArea(_ element: XCUIElement, in app: XCUIApplication) {
+        reveal(element, in: app)
+        XCTAssertTrue(element.isHittable)
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: element.frame.midY - app.windows.firstMatch.frame.minY)).tap()
+    }
+    @MainActor
+    func testPaidButtonsRespondAcrossWholeSurfaceAndUndo() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        openShift("Roadshow", in: app)
+        tapTrailingArea(app.buttons["Mark as unpaid"], in: app)
+        XCTAssertTrue(app.buttons["Mark as paid"].waitForExistence(timeout: 3))
+        tapTrailingArea(app.buttons["Mark as paid"], in: app)
+        XCTAssertTrue(app.buttons["Mark as unpaid"].waitForExistence(timeout: 3))
+        tapTrailingArea(app.buttons["View event earnings"], in: app)
+        let mark = app.buttons["Mark event as unpaid"]
+        tapTrailingArea(mark, in: app)
+        guard app.buttons["Mark event as paid"].waitForExistence(timeout: 3) else {
+            XCTFail("The whole event payment button must be tappable")
+            attach("Event payment touch area", app: app)
+            return
+        }
+        tapTrailingArea(app.buttons["Undo payment change"], in: app)
+        XCTAssertTrue(app.buttons["Mark event as unpaid"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testReusablePayerCanBeSelectedForEventAndInheritedByShift() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Payers"], in: app)
+        XCTAssertTrue(app.staticTexts["REFIX PTE. LTD."].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["payers.add"], in: app)
+        let name = app.textFields["payers.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Reusable company")
+        let banks = app.descendants(matching: .any).matching(identifier: "payers.bankNames").firstMatch
+        banks.tap(); banks.typeText("BANK COMPANY LTD\nALT BANK NAME")
+        app.buttons["payers.save"].tap()
+        XCTAssertTrue(app.staticTexts["Reusable company"].waitForExistence(timeout: 5))
+        attach("Saved payer with multiple exact bank names", app: app)
+        app.navigationBars.buttons.firstMatch.tap()
+        let earnings = app.buttons["nav.earnings"]
+        XCTAssertTrue(earnings.waitForExistence(timeout: 5))
+        XCTAssertTrue(earnings.isHittable)
+        earnings.tap()
+        XCTAssertTrue(earnings.isSelected)
+        tapTrailingArea(app.staticTexts["Wedding reception"].firstMatch, in: app)
+        tapTrailingArea(app.buttons["event.payer"], in: app)
+        let chosen = app.buttons["payer.select.Reusable company"]
+        XCTAssertTrue(chosen.waitForExistence(timeout: 5)); chosen.tap()
+        XCTAssertTrue(app.buttons["event.payer"].label.contains("Reusable company"))
+        attach("Event payer dropdown selection", app: app)
+        let card = app.scrollViews["event.detail"].buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Wedding reception,")).firstMatch
+        tapTrailingArea(card, in: app)
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(app.buttons["shift.payer"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["shift.payer"].label.contains("Reusable company"))
+        attach("Job editor inherits shared event payer", app: app)
+        app.buttons["Cancel"].tap()
+    }
+    @MainActor
+    func testSavedPayerValidationKeepsTypedCompany() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Payers"], in: app)
+        tapTrailingArea(app.buttons["payers.add"], in: app)
+        let name = app.textFields["payers.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("KEEP THIS COMPANY\n")
+        app.buttons["payers.save"].tap()
+        XCTAssertEqual(name.value as? String, "KEEP THIS COMPANY")
+        XCTAssertTrue(app.staticTexts["Add a company name and 1–20 exact bank payer names."].waitForExistence(timeout: 5))
+        attach("Saved payer validation preserves typed company", app: app)
+    }
+    @MainActor
+    func testPaymentServiceErrorStopsLoadingAndAllowsRetry() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments", "--ui-test-payments-offline"]; app.launch()
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Payment detection"], in: app)
+        XCTAssertTrue(app.staticTexts["Payment detection couldn’t be loaded. Refresh to try again."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.progressIndicators.firstMatch.exists)
+        XCTAssertTrue(app.buttons["Refresh connection status"].isEnabled)
+        app.buttons["Refresh connection status"].tap()
+        XCTAssertTrue(app.staticTexts["Payment service is temporarily unavailable."].waitForExistence(timeout: 5))
+        attach("Payment service error and retry", app: app)
+    }
+    @MainActor
+    func testMonthlyEarningsReflectEditedAndDeletedShift() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.earnings"].tap(); app.buttons["Months"].tap()
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM"
+        let month = formatter.string(from: Date())
+        tapTrailingArea(app.buttons["earnings.month." + month], in: app)
+        let initialTotal = app.staticTexts["earnings.total"].firstMatch.label
+        let cards = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Brand launch,"))
+        let initialCount = cards.count
+        XCTAssertGreaterThan(initialCount, 0)
+        tapTrailingArea(cards.firstMatch, in: app)
+        app.buttons["Edit"].tap()
+        app.buttons["Lump sum"].tap()
+        let amount = app.textFields["shift.amount"]; reveal(amount, in: app); amount.tap()
+        amount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (amount.value as? String ?? "").count)); amount.typeText("999")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Brand launch"].waitForExistence(timeout: 5))
+        app.navigationBars["Brand launch"].buttons.firstMatch.tap()
+        let updatedTotal = app.staticTexts["earnings.total"].firstMatch.label
+        XCTAssertNotEqual(updatedTotal, initialTotal)
+        XCTAssertTrue(app.staticTexts["$999.00"].firstMatch.exists)
+        tapTrailingArea(cards.firstMatch, in: app)
+        tapTrailingArea(app.buttons["Delete shift"], in: app)
+        app.sheets.buttons["Delete shift"].tap()
+        // Offscreen cards are omitted from SwiftUI's accessibility tree. Verify
+        // the exact remaining payout rather than treating visible cards as the DB.
+        for _ in 0..<3 { app.swipeDown() }
+        let total = app.staticTexts["earnings.total"].firstMatch
+        XCTAssertTrue(total.waitForExistence(timeout: 5))
+        let before = try XCTUnwrap(Decimal(string: updatedTotal.filter { $0.isNumber || $0 == "." }))
+        let after = try XCTUnwrap(Decimal(string: total.label.filter { $0.isNumber || $0 == "." }))
+        XCTAssertEqual(after, before - 999)
+        XCTAssertFalse(app.staticTexts["$999.00"].firstMatch.exists)
+        attach("Monthly earnings updates after edit and deletion", app: app)
+    }
+    @MainActor
+    func testPaymentReviewControlsWithIsolatedDBSResponses() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Payment detection"], in: app)
+        XCTAssertTrue(app.staticTexts["Gmail connected"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["payment.scan"], in: app)
+        let confirm = app.buttons["payment.receipt.1.confirm"]
+        tapTrailingArea(confirm, in: app)
+        let undo = app.buttons["payment.receipt.1.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        tapTrailingArea(undo, in: app)
+        XCTAssertTrue(app.staticTexts["Undone"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["payment.receipt.2.dismiss"], in: app)
+        XCTAssertTrue(app.staticTexts["Ignored"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic scan completed"].exists)
+        for _ in 0..<5 { app.swipeDown() }
+        let auto = app.switches["Mark exact verified matches paid"]
+        reveal(auto, in: app)
+        auto.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: auto)], timeout: 3), .completed)
+        let saved = app.buttons["payment.payers"]
+        reveal(saved, in: app); saved.tap()
+        XCTAssertTrue(app.navigationBars["Payers"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        for _ in 0..<5 { app.swipeDown() }
+        tapTrailingArea(app.buttons["payment.disconnect"], in: app)
+        app.buttons["Disconnect"].tap()
+        XCTAssertTrue(app.staticTexts["No email connected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["payment.connect"].isEnabled)
+        attach("Payment scan review undo rules and disconnect", app: app)
+    }
+    @MainActor
+    func testICloudConnectionRetryAndBankConfirmation() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments", "--ui-test-email-providers"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Payment detection"], in: app)
+        XCTAssertTrue(app.buttons["payment.connect.icloud"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["payment.connect.microsoft"].isEnabled)
+        tapTrailingArea(app.buttons["payment.connect.icloud"], in: app)
+        let save = app.buttons["payment.icloud.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5)); XCTAssertFalse(save.isEnabled)
+        let email = app.textFields["payment.icloud.email"]
+        email.tap(); email.typeText("synthetic@me.com")
+        let password = app.secureTextFields["payment.icloud.password"]
+        password.tap(); password.typeText("aaaa-bbbb-cccc-dddd\n")
+        let consent = app.switches["payment.icloud.consent"]
+        reveal(consent, in: app); consent.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        XCTAssertEqual(consent.value as? String, "1")
+        tapTrailingArea(save, in: app)
+        XCTAssertTrue(app.staticTexts["Synthetic iCloud connection failed. Check the app-specific password."].waitForExistence(timeout: 5))
+        XCTAssertTrue(save.isEnabled)
+        attach("iCloud failed connection preserves editable input", app: app)
+        tapTrailingArea(save, in: app)
+        XCTAssertTrue(app.staticTexts["iCloud Mail connected"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.switches["Mark exact verified matches paid"].isEnabled)
+        tapTrailingArea(app.buttons["payment.receipt.1.confirm"], in: app)
+        XCTAssertTrue(app.alerts["Confirm bank payment"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["payment.receipt.1.confirm"].exists)
+        tapTrailingArea(app.buttons["payment.receipt.1.confirm"], in: app)
+        app.alerts.buttons["I checked my bank · Mark paid"].tap()
+        XCTAssertTrue(app.buttons["payment.receipt.1.undo"].waitForExistence(timeout: 5))
+        attach("iCloud detection requires explicit bank confirmation", app: app)
+    }
+    @MainActor
+    func testBackupAndCalendarButtonsOpenSystemPickers() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Data & backups"], in: app)
+        for name in ["Export shifts as CSV", "Export full archive", "Import Telegram CSV", "Restore full archive"] {
+            tapTrailingArea(app.buttons[name], in: app)
+            let cancel = app.buttons["Cancel"].firstMatch
+            XCTAssertTrue(cancel.waitForExistence(timeout: 5), "File picker must open: " + name)
+            attach(name, app: app)
+            cancel.tap()
+            XCTAssertTrue(app.navigationBars["Data & backups"].waitForExistence(timeout: 5))
+        }
+        app.navigationBars.buttons.firstMatch.tap()
+        tapTrailingArea(app.staticTexts["Calendar & sync"], in: app)
+        tapTrailingArea(app.buttons["calendar.exportICS"], in: app)
+        XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Cancel"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Calendar & sync"].waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testEditDuplicateDeleteAndCalendarEditor() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        openShift("Roadshow", in: app)
+        app.buttons["Edit"].tap()
+        let field = app.textFields["Event name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (field.value as? String ?? "").count))
+        field.typeText("Audit original"); app.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Audit original"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["Add to Apple Calendar"], in: app)
+        XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Cancel"].firstMatch.tap()
+        tapTrailingArea(app.buttons["Duplicate as new shift"], in: app)
+        XCTAssertTrue(app.navigationBars["Add shift"].waitForExistence(timeout: 5))
+        let copy = app.textFields["Event name"]; copy.tap()
+        copy.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (copy.value as? String ?? "").count))
+        copy.typeText("Audit duplicate"); app.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Audit original"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["Delete shift"], in: app)
+        app.sheets.buttons["Delete shift"].tap()
+        // Active iOS search hides the navigation bar after returning to results.
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (search.value as? String ?? "").count))
+        search.typeText("Audit")
+        XCTAssertTrue(app.staticTexts["Audit duplicate"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Audit original"].exists)
+        attach("Edit duplicate and delete completed", app: app)
+    }
+    @MainActor
+    func testSignOutReturnsToMandatoryAppleScreen() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Account & sync"], in: app)
+        tapTrailingArea(app.buttons["account.signOut"], in: app)
+        app.sheets.buttons["Sign out"].tap()
+        XCTAssertTrue(app.buttons["account.signInApple"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["nav.overview"].exists)
+    }
+
+    @MainActor
+    func testWidgetPreviewsPrivacyRefreshAndDeepLink() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-widgets"]; app.launch()
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Widgets"], in: app)
+        XCTAssertTrue(app.navigationBars["Widgets"].waitForExistence(timeout: 5))
+        let pay = app.switches["widgets.previewPay"]
+        XCTAssertTrue(pay.exists); XCTAssertEqual(pay.value as? String, "0")
+        pay.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(pay.value as? String, "1")
+        attach("Next Shift widget preview", app: app)
+        tapTrailingArea(app.buttons["widgets.refresh"], in: app)
+        XCTAssertTrue(app.staticTexts["Widgets updated from this account."].waitForExistence(timeout: 5))
+        attach("Upcoming Events and This Month widget previews", app: app)
+        app.open(URL(string: "howmuch://widget/earnings?account=00000000-0000-4000-8000-000000000001")!)
+        XCTAssertTrue(app.buttons["nav.earnings"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["nav.earnings"].isSelected)
+        app.buttons["nav.settings"].tap()
+        app.open(URL(string: "howmuch://widget/earnings?account=00000000-0000-4000-8000-000000000002")!)
+        XCTAssertFalse(app.buttons["nav.earnings"].isSelected)
+    }
+    @MainActor
+    func testCalendarListsShiftContinuingFromYesterday() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-overnight-calendar"]; app.launch()
+        app.buttons["nav.calendar"].tap()
+        let overnight = app.staticTexts["Overnight calendar QA"].firstMatch
+        reveal(overnight, in: app)
+        XCTAssertTrue(overnight.exists)
+        attach("Calendar includes overnight work from yesterday", app: app)
+        overnight.tap()
+        XCTAssertTrue(app.navigationBars["Overnight calendar QA"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["22:00–06:00 (+1 day)"].firstMatch.exists)
+    }
+    @MainActor
+    func testCalendarWidgetPreviewAndDateNavigation() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-widgets"]; app.launch()
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Widgets"], in: app)
+        XCTAssertTrue(app.staticTexts["Work Calendar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Work Calendar"].isHittable)
+        attach("Work Calendar medium preview", app: app)
+        app.open(URL(string: "howmuch://widget/calendar?account=00000000-0000-4000-8000-000000000001&day=2026-11-06")!)
+        XCTAssertTrue(app.buttons["nav.calendar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["nav.calendar"].isSelected)
+        XCTAssertTrue(app.buttons["calendar.day.2026-11-06"].isSelected)
+        attach("Widget opens selected calendar day", app: app)
+        app.open(URL(string: "howmuch://widget/calendar?account=00000000-0000-4000-8000-000000000002&day=2026-12-01")!)
+        XCTAssertFalse(app.buttons["nav.calendar"].isSelected)
+    }
+    @MainActor
+    func testWidgetAppearsInSystemGallery() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-widgets"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)).press(forDuration: 1.5)
+        print(springboard.debugDescription)
+        let edit = springboard.buttons["Edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        print(springboard.debugDescription)
+        springboard.buttons["Add Widget"].tap()
+        print(springboard.debugDescription)
+        let search = springboard.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("HowMuch")
+        print(springboard.debugDescription)
+        let howmuch = springboard.cells["HowMuch"]
+        XCTAssertTrue(howmuch.waitForExistence(timeout: 5)); howmuch.tap()
+        print(springboard.debugDescription)
+        attach("HowMuch in system widget gallery", app: springboard)
+        springboard.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "Add Widget")).firstMatch.tap()
+        let done = springboard.buttons["Done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5)); done.tap()
+        Thread.sleep(forTimeInterval: 2)
+        print(springboard.debugDescription)
+        let nextName = Calendar.current.component(.hour, from: Date()) < 18 ? "Brand launch" : "Hermès Private Sale"
+        let liveJob = springboard.staticTexts[nextName].firstMatch
+        XCTAssertTrue(liveJob.waitForExistence(timeout: 15))
+        attach("Next Shift on the Home Screen", app: springboard)
+        liveJob.tap()
+        XCTAssertTrue(app.navigationBars[nextName].waitForExistence(timeout: 8))
+        app.navigationBars[nextName].buttons.firstMatch.tap()
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Account & sync"], in: app)
+        tapTrailingArea(app.buttons["account.signOut"], in: app)
+        app.sheets.buttons["Sign out"].tap()
+        XCTAssertTrue(app.buttons["account.signInApple"].waitForExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(springboard.staticTexts["Open HowMuch"].firstMatch.waitForExistence(timeout: 30))
+        attach("Widget cleared after sign-out", app: springboard)
+    }
+
+    @MainActor
+    func testTravelRequiresAddressAndConsentAndCanBeDisabled() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-travel"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Time to leave"], in: app)
+        let enabled = app.switches["travel.enabled"]
+        XCTAssertTrue(enabled.waitForExistence(timeout: 5))
+        if enabled.value as? String == "1" { enabled.switches.firstMatch.tap() }
+        enabled.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        let save = app.buttons["travel.save"]
+        reveal(save, in: app); XCTAssertFalse(save.isEnabled)
+        for _ in 0..<4 { app.swipeDown() }
+        let origin = app.textFields["travel.origin"]
+        if origin.exists { origin.tap(); origin.typeText("Singapore Botanic Gardens, Singapore") }
+        else { let field = app.textViews["travel.origin"]; field.tap(); field.typeText("Singapore Botanic Gardens, Singapore") }
+        if app.buttons["Continue"].firstMatch.waitForExistence(timeout: 2) { app.buttons["Continue"].firstMatch.tap() }
+        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
+        app.swipeUp()
+        tapTrailingArea(save, in: app)
+        XCTAssertTrue(app.buttons["Enable & save"].waitForExistence(timeout: 3))
+        app.buttons["Cancel"].tap()
+        tapTrailingArea(save, in: app)
+        app.buttons["Enable & save"].tap()
+        reveal(app.staticTexts["travel.message"], in: app)
+        XCTAssertTrue(app.staticTexts["travel.message"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["travel.check"], in: app)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Leave at")).firstMatch.waitForExistence(timeout: 5))
+        attach("Travel reminders and saved origin", app: app)
+        for _ in 0..<5 { app.swipeDown() }
+        enabled.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        tapTrailingArea(save, in: app)
+        XCTAssertFalse(app.buttons["Enable & save"].exists)
+    }
+
+    @MainActor
+    func testTravelRouteFailureKeepsSavedPreferences() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-travel", "--ui-test-travel-error"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Time to leave"], in: app)
+        tapTrailingArea(app.buttons["travel.check"], in: app)
+        let error = app.staticTexts["Route estimates are temporarily unavailable. Check Apple Maps before travelling."]
+        reveal(error, in: app); XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["travel.check"].isEnabled)
+        attach("Travel route unavailable and retry", app: app)
+        for _ in 0..<5 { app.swipeDown() }
+        XCTAssertEqual(app.textFields["travel.origin"].value as? String, "Singapore Botanic Gardens, Singapore")
+        XCTAssertEqual(app.switches["travel.enabled"].value as? String, "1")
+    }
+
+    @MainActor
+    func testTravelNotificationOpensDirectionsForOwnedJob() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-travel", "--ui-test-travel-notification"]; app.launch()
+        XCTAssertTrue(app.buttons["Open route in Apple Maps"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["View job details"].exists)
+        attach("Travel notification directions", app: app)
+    }
+
+    @MainActor
+    func testWeeklyTemplatesCreateFourShiftsAndReuseSavedDetails() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5)); app.buttons["nav.add"].tap()
+        let name = app.textFields["Event name"]; name.tap(); name.typeText("Weekly QA")
+        let location = app.textFields["Location (optional)"]; location.tap(); location.typeText("Marina Bay Sands")
+        reveal(app.buttons["shift.repeat"], in: app); app.buttons["shift.repeat"].tap()
+        app.buttons["Weekly"].tap()
+        let template = app.switches["shift.saveTemplate"]; reveal(template, in: app)
+        template.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        let title = app.textFields["shift.templateName"]; title.tap(); title.typeText("Usual crew")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Job templates"], in: app)
+        XCTAssertTrue(app.staticTexts["Usual crew"].waitForExistence(timeout: 5))
+        app.buttons["Template actions: Usual crew"].tap(); app.buttons["Edit template"].tap()
+        let renamed = app.textFields["shift.templateName"]; reveal(renamed, in: app)
+        renamed.tap(); renamed.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10)); renamed.typeText("Updated crew")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["Updated crew"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["template.use"], in: app)
+        XCTAssertEqual(app.textFields["Event name"].value as? String, "Weekly QA")
+        XCTAssertEqual(app.textFields["Location (optional)"].value as? String, "Marina Bay Sands")
+        attach("Reusable job template", app: app)
+        app.buttons["Cancel"].tap(); app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["nav.earnings"].tap()
+        tapTrailingArea(app.staticTexts["Weekly QA"].firstMatch, in: app)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "4 shifts")).firstMatch.waitForExistence(timeout: 5))
+        attach("Weekly series with four shifts", app: app)
+    }
+
+    @MainActor
+    func testReceiptUploadRetryKeepsPhotoAndCanRemoveAttachment() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-receipts", "--ui-test-receipt-upload-error"]; app.launch()
+        XCTAssertTrue(app.buttons["Search shifts"].waitForExistence(timeout: 5)); openShift("Brand launch", in: app)
+        tapTrailingArea(app.buttons["Add claim"], in: app)
+        app.buttons["claim.category.food"].tap()
+        let note = app.textFields["claim.note"]; reveal(note, in: app); note.tap(); note.typeText("Photo QA")
+        tapTrailingArea(app.buttons["receipt.sample"], in: app)
+        XCTAssertTrue(app.images["receipt.preview"].waitForExistence(timeout: 15))
+        let save = app.buttons["claim.save"]
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: save)], timeout: 20), .completed)
+        let detectedAmount = app.textFields["claim.amount"]
+        reveal(detectedAmount, in: app)
+        XCTAssertEqual(detectedAmount.value as? String, "12.5")
+        save.tap()
+        let failure = app.staticTexts["Receipt upload unavailable. Try again."]
+        reveal(failure, in: app); XCTAssertTrue(failure.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["receipt.preview"].exists)
+        attach("Receipt retained after upload failure", app: app)
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Photo QA"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["Food claim actions: Photo QA"], in: app); app.buttons["Edit claim"].tap()
+        reveal(app.images["receipt.preview"], in: app); XCTAssertTrue(app.images["receipt.preview"].waitForExistence(timeout: 10))
+        attach("Private receipt attachment", app: app)
+        tapTrailingArea(app.buttons["receipt.view"], in: app)
+        XCTAssertTrue(app.images["receipt.fullImage"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["receipt.download"], in: app)
+        XCTAssertTrue(app.staticTexts["receipt.saved"].waitForExistence(timeout: 5))
+        attach("Receipt downloaded and verified in Files", app: app)
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["claim.save"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["receipt.remove"], in: app); save.tap()
+        XCTAssertTrue(app.staticTexts["Photo QA"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testEventSummaryUsesOnlyReimbursementsAndKeepsWorkPay() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.earnings"].tap()
+        tapTrailingArea(app.staticTexts["Wedding reception"].firstMatch, in: app)
+        let net = app.staticTexts["event.netWork"]
+        reveal(net, in: app); XCTAssertTrue(net.label.contains("400.00"))
+        XCTAssertFalse(app.staticTexts["Personal expenses"].exists)
+        XCTAssertFalse(app.buttons["Add personal expense"].exists)
+        attach("Event earnings and reimbursements", app: app)
+    }
+
+    @MainActor
+    func testPublicTransportRoutePreview() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-travel", "--ui-test-transit"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Time to leave"], in: app)
+        tapTrailingArea(app.buttons["travel.check"], in: app)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "From: Singapore Botanic Gardens")).firstMatch.waitForExistence(timeout: 10))
+        attach("Public transport departure preview", app: app)
+    }
+
+    @MainActor
+    func testLiveAppleTransitEstimateFromPublicSingaporePlaces() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-live-transit"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Time to leave"], in: app)
+        tapTrailingArea(app.buttons["travel.check"], in: app)
+        let estimate = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "From: ")).firstMatch
+        XCTAssertTrue(estimate.waitForExistence(timeout: 40))
+        attach("Live Apple Maps public transit estimate", app: app)
+    }
+
+    @MainActor
+    func testPublicTransportReminderAppearsWithAppClosedAndOpensDirections() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-travel", "--ui-test-transit", "--ui-test-transit-notification", "--ui-test-notifications"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Time to leave"], in: app)
+        tapTrailingArea(app.buttons["Enable iPhone notifications"], in: app)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if springboard.alerts.buttons["Allow"].waitForExistence(timeout: 2) { springboard.alerts.buttons["Allow"].tap() }
+        tapTrailingArea(app.buttons["travel.testPlan"], in: app)
+        let planned = app.staticTexts["1 planned transit reminder."]
+        reveal(planned, in: app); XCTAssertTrue(planned.waitForExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        let banner = springboard.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Time to leave for public transport")).firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 25))
+        attach("Public transit reminder while HowMuch is closed", app: springboard)
+        banner.tap()
+        XCTAssertTrue(app.buttons["Open route in Apple Maps"].waitForExistence(timeout: 8))
+        attach("Transit notification opens owned job directions", app: app)
+    }
+
+    @MainActor
+    func testFreshSystemNotificationIcon() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-account", "--ui-test-notifications"]
+        app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Job notifications"], in: app)
+        tapTrailingArea(app.buttons["Enable notifications on this iPhone"], in: app)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: 3) { allow.tap() }
+        XCTAssertTrue(app.staticTexts["Notifications allowed on this iPhone"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["notifications.test"], in: app)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Test scheduled in 5 seconds")).firstMatch.waitForExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(springboard.staticTexts["HowMuch reminders are ready"].waitForExistence(timeout: 12))
+        Thread.sleep(forTimeInterval: 1) // Let the system banner finish its entrance animation before visual inspection.
+        attach("Fresh system notification with H app icon", app: springboard)
+    }
+
+    @MainActor
+    func testNotificationPreviewPrivacyAndTestButton() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Job notifications"], in: app)
+        let details = app.switches["notifications.details"]
+        reveal(details, in: app)
+        if details.value as? String == "1" { details.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+        reveal(app.staticTexts["Open HowMuch for your location and job details."], in: app)
+        XCTAssertTrue(app.staticTexts["Open HowMuch for your location and job details."].exists)
+        for _ in 0..<4 { app.swipeDown() }
+        reveal(details, in: app)
+        details.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: details)], timeout: 3), .completed)
+        app.swipeUp()
+        XCTAssertFalse(app.staticTexts["Open HowMuch for your location and job details."].exists)
+        tapTrailingArea(app.buttons["notifications.test"], in: app)
+        let notice = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Enable notifications above first", "Test scheduled in 5 seconds")).firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        attach("Notification privacy preview and test", app: app)
+    }
+
+    @MainActor
+    func testMultipleStartReminderChoicesPersistTogether() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Job notifications"], in: app)
+        for minutes in [120, 60, 0] {
+            let option = app.switches["notifications.start.\(minutes)"]
+            reveal(option, in: app)
+            XCTAssertTrue(option.isHittable)
+            if option.value as? String != "1" { option.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+            XCTAssertEqual(option.value as? String, "1")
+        }
+        tapTrailingArea(app.buttons["notifications.save"], in: app)
+        XCTAssertTrue(app.alerts["Preferences saved"].waitForExistence(timeout: 5)); app.alerts.buttons["OK"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        tapTrailingArea(app.staticTexts["Job notifications"], in: app)
+        for minutes in [120, 60, 30, 0] {
+            let option = app.switches["notifications.start.\(minutes)"]; reveal(option, in: app)
+            XCTAssertEqual(option.value as? String, "1", "Multiple start times must be saved together")
+        }
+        attach("Multiple reminder times selected", app: app)
+    }
+
+    @MainActor
+    func testCabClaimRedesignEditDeleteAndUndo() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.earnings"].waitForExistence(timeout: 5)); app.buttons["nav.earnings"].tap()
+        XCTAssertTrue(app.buttons["Week"].waitForExistence(timeout: 5))
+        attach("Clean event cards", app: app)
+        tapTrailingArea(app.staticTexts["Roadshow"].firstMatch, in: app)
+        XCTAssertTrue(app.navigationBars["Roadshow"].waitForExistence(timeout: 5))
+        tapTrailingArea(app.buttons["Add claim"], in: app)
+        XCTAssertTrue(app.textFields["claim.amount"].waitForExistence(timeout: 5))
+        attach("Clean cab claim editor", app: app)
+        app.textFields["claim.amount"].tap(); app.textFields["claim.amount"].typeText("12.34")
+        app.textFields["claim.note"].tap(); app.textFields["claim.note"].typeText("QA cab ride")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["QA cab ride"].waitForExistence(timeout: 5))
+        for _ in 0..<4 { app.swipeDown() }
+        let menu = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "claim.actions.")).firstMatch
+        reveal(menu, in: app)
+        let identity = menu.identifier
+        menu.tap(); app.buttons["Edit claim"].tap()
+        let amount = app.textFields["claim.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5)); amount.tap()
+        amount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (amount.value as? String ?? "").count))
+        amount.typeText("0"); app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["Enter an amount of at least 0.01."].waitForExistence(timeout: 5))
+        amount.tap(); amount.typeText(XCUIKeyboardKey.delete.rawValue + "18.75")
+        let note = app.textFields["claim.note"]; note.tap()
+        note.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (note.value as? String ?? "").count)); note.typeText("QA cab ride updated")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["QA cab ride updated"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "claim.actions.")).count, 1)
+        XCTAssertTrue(app.buttons[identity].exists, "Editing must keep the existing claim identity")
+        XCTAssertTrue(app.staticTexts["$178.75"].exists)
+        attach("Updated cab reimbursement", app: app)
+        reveal(app.buttons[identity], in: app); app.buttons[identity].tap(); app.buttons["Delete claim"].tap()
+        app.buttons["Delete claim"].tap()
+        XCTAssertFalse(app.staticTexts["QA cab ride updated"].exists)
+        tapTrailingArea(app.buttons["Undo last change"], in: app)
+        XCTAssertTrue(app.staticTexts["QA cab ride updated"].waitForExistence(timeout: 5))
+    }
+
+}

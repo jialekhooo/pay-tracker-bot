@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+build/
+build-device/
+*.xcuserstate
+xcuserdata/
+*.xcarchive
+*.ipa
