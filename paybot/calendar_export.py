@@ -1,5 +1,3 @@
-"""Turn stored shifts into calendar entries (.ics file and Google Calendar links)."""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -18,14 +16,12 @@ def _stamp(moment: datetime) -> str:
 
 
 def _escape(text: str) -> str:
-    """Escape the characters iCalendar treats specially."""
     for old, new in (("\\", "\\\\"), (";", "\\;"), (",", "\\,"), ("\n", "\\n")):
         text = text.replace(old, new)
     return text
 
 
 def _fold(line: str) -> list[str]:
-    """iCalendar lines must be at most 75 octets; continuations start with a space."""
     chunks = [line[:73]]
     remainder = line[73:]
     while remainder:
@@ -49,7 +45,6 @@ def description(record: ShiftRecord) -> str:
 
 
 def to_ics(records: Iterable[ShiftRecord], now: datetime | None = None) -> str:
-    """A VCALENDAR of the shifts, in floating local time so any calendar app works."""
     created = _stamp(now or datetime.now())
     lines = [
         "BEGIN:VCALENDAR",
@@ -82,7 +77,6 @@ def to_ics(records: Iterable[ShiftRecord], now: datetime | None = None) -> str:
 
 
 def google_link(record: ShiftRecord, utc_offset_minutes: int) -> str:
-    """A "add to Google Calendar" URL; Google wants the times in UTC."""
     start, end = span(record.day, record.start, record.end)
     offset = timedelta(minutes=utc_offset_minutes)
     params = [

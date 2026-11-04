@@ -1,5 +1,3 @@
-"""Day-before reminders for booked shifts."""
-
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
@@ -8,7 +6,7 @@ from typing import Iterable
 from .storage import Reminder
 
 DEFAULT_SEND_AT = "20:00"
-DEFAULT_UTC_OFFSET_MINUTES = 480  # UTC+8
+DEFAULT_UTC_OFFSET_MINUTES = 480
 
 
 def local_now(reminder: Reminder, now_utc: datetime) -> datetime:
@@ -16,18 +14,15 @@ def local_now(reminder: Reminder, now_utc: datetime) -> datetime:
 
 
 def local_clock(utc_offset_minutes: int, now_utc: datetime | None = None) -> datetime:
-    """The current time in the user's timezone — the server clock runs on UTC."""
     now = now_utc or datetime.now(timezone.utc).replace(tzinfo=None)
     return now + timedelta(minutes=utc_offset_minutes)
 
 
 def local_today(utc_offset_minutes: int, now_utc: datetime | None = None) -> date:
-    """The current date in the user's timezone."""
     return local_clock(utc_offset_minutes, now_utc).date()
 
 
 def due(reminder: Reminder, now_utc: datetime) -> date | None:
-    """The day to remind about, or None when this reminder isn't due yet."""
     now = local_now(reminder, now_utc)
     if not reminder.enabled or reminder.last_sent_on == now.date():
         return None
@@ -44,7 +39,6 @@ def due_reminders(
 
 
 def parse_offset(raw: str) -> int:
-    """Read a timezone offset such as "+8", "8", "-5.5" or "+05:30" as minutes."""
     text = raw.strip().lstrip("+")
     sign = -1 if text.startswith("-") else 1
     text = text.lstrip("-")

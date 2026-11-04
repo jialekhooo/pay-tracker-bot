@@ -1,4 +1,3 @@
-"""Read-only Gmail OAuth and periodic DBS alert import. Credentials stay server-side."""
 from __future__ import annotations
 
 import asyncio
@@ -28,7 +27,6 @@ _locks: dict[int, asyncio.Lock] = {}
 
 
 class OAuthAccessFilter(logging.Filter):
-    """Keep one-time OAuth credentials out of Uvicorn's access logs."""
     def filter(self, record):
         if isinstance(record.args, tuple):
             record.args = tuple(
@@ -226,7 +224,6 @@ async def receipt_action(receipt_id: int, action: str, request: Request, payload
 @router.delete("/connection")
 async def disconnect(request: Request, authorization: str | None = Header(default=None)):
     store, user_id = store_for(request, authorization)
-    # Clear local credentials even if Google's revocation endpoint is unavailable.
     connection = store.connection(user_id)
     with store.db:
         store.db.execute("DELETE FROM payment_connections WHERE user_id=?", (user_id,))
@@ -294,7 +291,7 @@ async def scan_mailbox(storage, user_id: int) -> None:
             raise ValueError("Connect Gmail first.")
         payers = sorted(store.allowed_payers(user_id))
         if not payers:
-            return  # No job companies configured: do not access Gmail at all.
+            return
         started = int(time.time())
         try:
             refresh = cipher().decrypt(connection["refresh_token"].encode()).decode()
@@ -307,7 +304,6 @@ async def scan_mailbox(storage, user_id: int) -> None:
                 token = response.json()
                 headers = {"Authorization": "Bearer " + token["access_token"]}
                 since = max(connection["connected_at"] - 30 * 86400, connection["last_scan"] - 300)
-                # Keep company names inside quoted search terms, never query operators.
                 phrases = ['"' + payer.replace('\\', ' ').replace('"', ' ') + '"' for payer in payers]
                 base_query = f'from:{DBS_SENDER} subject:"digibank Alerts" subject:received subject:transfer after:{since} before:{started + 1}'
                 queries = [base_query + ' {' + ' '.join(phrases[i:i + 20]) + '}' for i in range(0, len(phrases), 20)]
@@ -349,9 +345,7 @@ async def _scan_query(client, headers, query, store, user_id, connection, payers
             values = {h["name"].lower(): h["value"] for h in mail_headers if h["name"].lower() in {"subject", "from"}}
             parsed = parse_dbs_alert(values.get("subject", ""), values.get("from", ""), message_text(payload))
             if not still_current():
-                return False  # Disconnected or replaced while requests were in flight.
-            # Gmail can match a name elsewhere in the message. Verify the
-            # actual From: payer line again against the latest saved rules.
+                return False
             if parsed and store.accepts_payer(user_id, parsed["payer"]):
                 store.ingest(user_id, item["id"], parsed, gmail_authenticated(mail_headers, message.get("labelIds", [])))
         page_token = page.get("nextPageToken")
@@ -381,9 +375,8 @@ async def poll_mailboxes(storage):
                 try:
                     await scan_mailbox(storage, user_id)
                 except ValueError:
-                    pass  # A reconnect/check error is already visible in Settings.
+                    pass
                 except Exception:
-                    # One bad mailbox must not terminate the background worker.
                     logging.getLogger(__name__).error("Payment detection check failed for user %s", user_id)
                     with store.db:
                         store.db.execute("UPDATE payment_connections SET error=? WHERE user_id=?", ("Payment detection could not complete. Try checking again.", user_id))

@@ -1,11 +1,3 @@
-"""A tiny HTTP server serving each user a private, always-current .ics feed.
-
-Calendar apps (Google, Apple, Outlook) poll a subscription URL and keep the
-events in sync, so shifts logged or deleted in Telegram show up without any
-re-import. Apps that read your phone's calendars — TimeTree among them — then
-pick the shifts up from there.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -24,7 +16,6 @@ FUTURE_DAYS = 400
 
 
 def issue_token(storage: Storage, user_id: int, refresh: bool = False) -> str:
-    """The user's feed token, creating (or rotating) it when needed."""
     token = None if refresh else storage.get_feed_token(user_id)
     if token is None:
         token = secrets.token_urlsafe(24)
@@ -33,7 +24,6 @@ def issue_token(storage: Storage, user_id: int, refresh: bool = False) -> str:
 
 
 def feed_body(storage: Storage, token: str, today: date | None = None) -> str | None:
-    """The .ics for the feed's owner, or None when the token is unknown."""
     user_id = storage.user_for_feed_token(token)
     if user_id is None:
         return None
@@ -47,7 +37,7 @@ def feed_body(storage: Storage, token: str, today: date | None = None) -> str | 
 class _Handler(BaseHTTPRequestHandler):
     storage: Storage
 
-    def do_GET(self) -> None:  # noqa: N802 - name fixed by BaseHTTPRequestHandler
+    def do_GET(self) -> None:
         token = self.path.strip("/").removesuffix(".ics")
         body = feed_body(self.storage, token) if token else None
         if body is None:
@@ -57,8 +47,6 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/calendar; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
-        # No Content-Disposition: attachment here — forcing a download stops Safari/Calendar
-        # from recognizing text/calendar and offering their native "Add to Calendar" screen.
         self.end_headers()
         self.wfile.write(payload)
 
@@ -67,7 +55,6 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def serve(storage: Storage, port: int) -> ThreadingHTTPServer:
-    """Start the feed server on a daemon thread and return it."""
     handler = type("FeedHandler", (_Handler,), {"storage": storage})
     server = ThreadingHTTPServer(("0.0.0.0", port), handler)
     threading.Thread(target=server.serve_forever, daemon=True, name="ics-feed").start()

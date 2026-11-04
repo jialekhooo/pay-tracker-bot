@@ -69,7 +69,6 @@ def test_overnight_shift_wraps_past_midnight():
 
 
 def test_parse_day_month_name_with_military_time_range():
-    """A 4-digit military start time (e.g. 0800) must not be read as a year."""
     shift = parse_shift("29 Sep 0800-1730 Fund Forum @ MBS 18/h", today=TODAY)
     assert shift.day == date(2026, 9, 29)
     assert shift.start == time(8, 0)
@@ -431,7 +430,7 @@ def test_every_command_is_listed_and_unique():
         for command in section:
             assert command.usage.startswith(f"/{command.name}")
             assert command.usage in listing
-            assert len(command.summary) <= 60  # Telegram's menu limit is 256
+            assert len(command.summary) <= 60
             for alias in command.names:
                 assert alias not in seen
                 seen.add(alias)
@@ -450,12 +449,10 @@ def _reminder(send_at=time(20, 0), offset=480, enabled=True, last_sent_on=None):
 
 
 def test_reminder_is_due_once_per_day_in_local_time():
-    # 12:30 UTC is 20:30 in UTC+8, past the 20:00 send time.
     now = datetime(2026, 8, 12, 12, 30)
     assert due(_reminder(), now) == date(2026, 8, 13)
     assert due(_reminder(last_sent_on=date(2026, 8, 12)), now) is None
     assert due(_reminder(enabled=False), now) is None
-    # 10:00 UTC is 18:00 locally — too early.
     assert due(_reminder(), datetime(2026, 8, 12, 10, 0)) is None
 
 
@@ -574,7 +571,6 @@ def test_storage_roundtrip(tmp_path):
 
 
 def _signed_init_data(token: str, **fields: str) -> str:
-    """A Telegram-style ``initData`` string signed the way the client would."""
     data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
     secret_key = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
     signature = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
@@ -884,7 +880,7 @@ def test_webapp_update_shift_recomputes_hours_and_pay_on_time_change(tmp_path):
     assert body["start"] == "10:00"
     assert body["end"] == "20:00"
     assert body["hours"] == "10"
-    assert body["pay"] == "150.00"  # same SGD 15/h rate, 10h instead of 8h
+    assert body["pay"] == "150.00"
     storage.close()
 
 
@@ -1026,7 +1022,7 @@ def test_four_digit_times_are_read_as_24_hour_clock(text, start, end, hours):
 @pytest.mark.parametrize(
     "now_utc, expected",
     [
-        (datetime(2026, 8, 13, 16, 30), date(2026, 8, 14)),  # already the 14th in SGT
+        (datetime(2026, 8, 13, 16, 30), date(2026, 8, 14)),
         (datetime(2026, 8, 13, 10, 0), date(2026, 8, 13)),
         (datetime(2026, 8, 13, 23, 59), date(2026, 8, 14)),
     ],
@@ -1188,8 +1184,6 @@ def test_webapp_create_lump_sum_shift_requires_amount(tmp_path):
 
 
 def test_webapp_bulk_create_splits_lump_sum_across_dates_by_hours(tmp_path):
-    """A lump sum quotes the whole booking, however many days it spans — the amount is
-    split across the shifts in proportion to their hours, never repeated per day."""
     storage = Storage(tmp_path / "webapp.sqlite3")
     client = _webapp_client(storage)
     response = client.post(
@@ -1200,8 +1194,8 @@ def test_webapp_bulk_create_splits_lump_sum_across_dates_by_hours(tmp_path):
             "rate": "450",
             "pay_is_fixed": True,
             "shifts": [
-                {"day": "2026-10-07", "start": "06:30", "end": "18:30"},  # 12h
-                {"day": "2026-10-08", "start": "10:00", "end": "16:00"},  # 6h
+                {"day": "2026-10-07", "start": "06:30", "end": "18:30"},
+                {"day": "2026-10-08", "start": "10:00", "end": "16:00"},
             ],
         },
     )
@@ -1214,8 +1208,6 @@ def test_webapp_bulk_create_splits_lump_sum_across_dates_by_hours(tmp_path):
 
 
 def test_webapp_bulk_create_lump_sum_total_survives_rounding(tmp_path):
-    """Three equal days of a 100.00 lump sum can't each round to 33.33 and lose a cent —
-    the last shift absorbs the remainder so the booking still totals exactly 100.00."""
     storage = Storage(tmp_path / "webapp.sqlite3")
     client = _webapp_client(storage)
     response = client.post(
@@ -1250,8 +1242,8 @@ def test_webapp_bulk_create_hourly_still_pays_each_shift_by_its_hours(tmp_path):
             "rate": "20",
             "pay_is_fixed": False,
             "shifts": [
-                {"day": "2026-10-05", "start": "09:00", "end": "17:00"},  # 8h
-                {"day": "2026-10-06", "start": "09:00", "end": "13:00"},  # 4h
+                {"day": "2026-10-05", "start": "09:00", "end": "17:00"},
+                {"day": "2026-10-06", "start": "09:00", "end": "13:00"},
             ],
         },
     )

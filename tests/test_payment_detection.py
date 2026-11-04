@@ -222,12 +222,10 @@ def test_shift_form_and_job_card_share_payer(store):
     sid = response.json()['id']
     cards = client.get('/webapp/api/cab-claims', headers=headers).json()
     assert cards['events'][0]['payers'] == ['refix pte. ltd.']
-    # A normal shift edit preserves the shared setting; payer-only edits replace it.
     assert client.patch(f'/webapp/api/shifts/{sid}', json={'location': 'Hall'}, headers=headers).status_code == 200
     assert store.rules(42)[0]['payer'] == 'refix pte. ltd.'
     assert client.patch(f'/webapp/api/shifts/{sid}', json={'payer': 'Other company'}, headers=headers).status_code == 200
     assert store.rules(42)[0]['payer'] == 'other company'
-    # Editing the card changes the same rule used by the form and automatic detection.
     assert client.put('/webapp/api/payment-detection/event-payer', json={'event':'New job','payer':'REFIX PTE. LTD.'}, headers=headers).status_code == 200
     assert client.get('/webapp/api/cab-claims', headers=headers).json()['events'][0]['payers'] == ['refix pte. ltd.']
     assert client.patch(f'/webapp/api/shifts/{sid}', json={'payer':''}, headers=headers).status_code == 200
@@ -277,7 +275,7 @@ def test_oauth_single_use_state_browser_binding_and_rejection(store, monkeypatch
     response = client.get(link, follow_redirects=False)
     assert response.status_code == 303
     state = parse_qs(urlparse(response.headers['location']).query)['state'][0]
-    assert client.get(link).status_code == 200  # expired ticket result page
+    assert client.get(link).status_code == 200
     other = TestClient(client.app, base_url='https://app.test')
     result = other.get('/webapp/api/payment-detection/gmail/callback', params={'state':state,'code':'stolen'})
     assert 'could not be verified' in result.text
@@ -516,7 +514,7 @@ def test_company_search_and_actual_payer_filter_exclude_personal_transfers(store
     assert '{"refix pte. ltd."}' in queries[0] and 'khoo' not in queries[0]
     assert [row[0] for row in store.db.execute('SELECT message_id FROM payment_receipts')] == ['relevant']
     assert store.status(42)['receipts'][0]['payer'] == 'REFIX PTE. LTD.'
-    assert not store.storage.list_shifts(42)[0].paid  # Automatic marking stays off.
+    assert not store.storage.list_shifts(42)[0].paid
 
 
 def test_legacy_unrelated_alerts_hidden_before_history_limit_and_suggestions(store):

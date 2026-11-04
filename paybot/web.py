@@ -1,10 +1,3 @@
-"""Run the bot and its calendar feed together as one always-on web service.
-
-The Telegram bot polls in the background while FastAPI serves each user's
-private .ics subscription, so a single deployment keeps reminders and calendar
-sync alive.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -30,7 +23,6 @@ TOKEN_FILE = os.environ.get("PAYBOT_TOKEN_FILE", ".paybot-token")
 
 
 def bot_token() -> str | None:
-    """The bot token from the environment, falling back to a token file."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if token:
         return token
@@ -42,7 +34,6 @@ def bot_token() -> str | None:
 
 
 def database_path() -> str:
-    """Prefer the mounted volume so shifts survive a redeploy."""
     default = "/data/paybot.sqlite3" if os.path.isdir("/data") else "paybot.sqlite3"
     path = os.environ.get("PAYBOT_DB", default)
     seed = os.environ.get("PAYBOT_SEED_DB", "paybot-seed.sqlite3")
@@ -60,7 +51,6 @@ def feed_base_url() -> str | None:
 
 
 def webapp_url() -> str | None:
-    """The mini app's address — same host as the calendar feed, under /webapp."""
     if os.environ.get("PAYBOT_WEBAPP_URL"):
         return os.environ["PAYBOT_WEBAPP_URL"]
     base = feed_base_url()
@@ -77,7 +67,6 @@ async def lifespan(app: FastAPI):
     app.state.bot_token = token
     app.state.feed_base_url = feed_base_url()
     await application.initialize()
-    # initialize() (unlike run_polling()) doesn't call post_init, so publish the menu ourselves.
     await _publish_commands(application)
     await application.start()
     await application.updater.start_polling(drop_pending_updates=True)
@@ -111,6 +100,4 @@ async def calendar_feed(token: str) -> Response:
     body = feed_body(app.state.storage, token)
     if body is None:
         raise HTTPException(status_code=404, detail="Unknown calendar feed")
-    # No Content-Disposition: attachment here — forcing a download stops Safari/Calendar
-    # from recognizing text/calendar and offering their native "Add to Calendar" screen.
     return Response(content=body, media_type="text/calendar; charset=utf-8")

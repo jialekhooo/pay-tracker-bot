@@ -1,5 +1,3 @@
-"""Parsing of free-form shift entries like "12/8 6pm-11.30pm Wedding gig"."""
-
 from __future__ import annotations
 
 import re
@@ -47,7 +45,6 @@ class Shift:
 
     @property
     def hours(self) -> float:
-        """Paid hours: elapsed time minus any unpaid break."""
         return max(self.gross_hours - self.rest.unpaid_hours, 0.0)
 
     def with_break(self, rest: Break) -> "Shift":
@@ -129,7 +126,6 @@ def parse_time(token: str) -> time:
 
 
 def _split_tokens(text: str) -> list[str]:
-    """Split into [date, start, end, *event] without breaking up an ISO date."""
     parts = text.strip().split(maxsplit=1)
     if len(parts) < 2:
         return parts
@@ -170,7 +166,6 @@ def _break_hours(amount: str, unit: str) -> float:
 
 
 def extract_break(text: str, default_paid: bool = False) -> tuple[str, Break | None]:
-    """Pull a break phrase (e.g. "1h unpaid break") out of the message."""
     no_break = _NO_BREAK_RE.search(text)
     if no_break:
         return _NO_BREAK_RE.sub(" ", text, count=1), NO_BREAK
@@ -207,7 +202,6 @@ _FIXED_PAY_RE = re.compile(
 
 
 def extract_fixed_pay(text: str) -> tuple[str, Decimal | None]:
-    """Pull an inline lump-sum amount (e.g. "$200 flat") out of the message."""
     match = _FIXED_PAY_RE.search(text)
     if not match:
         return text, None
@@ -219,7 +213,6 @@ def extract_fixed_pay(text: str) -> tuple[str, Decimal | None]:
 
 
 def extract_rate(text: str) -> tuple[str, Decimal | None]:
-    """Pull an inline hourly rate (e.g. "15/h", "$20 per hour") out of the message."""
     match = _RATE_RE.search(text)
     if not match:
         return text, None
@@ -251,12 +244,11 @@ _TRAILING_FIXED_PAY_RE = re.compile(
 
 
 def _pay_starts_at(place: str) -> int:
-    """Where a pay expression written after a location begins."""
     match = _TRAILING_RATE_RE.search(place) or _TRAILING_FIXED_PAY_RE.search(place)
     if match is None:
         return len(place)
     if match.group("currency") and not place[: match.start()].strip():
-        return match.start("amount")  # the "currency" was the place itself, e.g. "MBS 15/h"
+        return match.start("amount")
     return match.start()
 
 
@@ -287,7 +279,6 @@ _TIME_RANGE_RE = re.compile(
 
 
 def _parse_anywhere(text: str, today: date) -> tuple[date, time, time, str]:
-    """Find the date, the time range and the event name wherever they appear."""
     for date_match in _DATE_CANDIDATE_RE.finditer(text):
         try:
             day = parse_date(date_match.group(0), today)
@@ -312,7 +303,6 @@ def _parse_anywhere(text: str, today: date) -> tuple[date, time, time, str]:
 
 
 def extract_location(text: str) -> tuple[str, str]:
-    """Pull a location marked with "@" or "at" (e.g. "@ Marina Bay Sands")."""
     match = _LOCATION_RE.search(text)
     if not match:
         return text, ""
@@ -339,7 +329,6 @@ def extract_location(text: str) -> tuple[str, str]:
 def parse_shift(
     text: str, today: date | None = None, default_break_paid: bool = False
 ) -> Shift:
-    """Parse a line holding a date, a time range and an event name, in any order."""
     today = today or date.today()
     text, rest = extract_break(text, default_paid=default_break_paid)
     text, location = extract_location(text)
@@ -376,7 +365,6 @@ def parse_shift(
 def parse_shifts(
     text: str, today: date | None = None, default_break_paid: bool = False
 ) -> list[tuple[str, Shift | ParseError]]:
-    """Parse one shift per non-empty line, keeping per-line errors."""
     results: list[tuple[str, Shift | ParseError]] = []
     for raw_line in text.splitlines():
         line = raw_line.strip().lstrip("-\u2022*").strip()

@@ -73,6 +73,6 @@ these attributes — checking the DOM right after a click is reliable.
 - The editor sheet has no "pay" field — pay is derived from `Rate / hour` × hours; edit the rate
   to change a row's amount.
 
-## Devin Secrets Needed
+## Test credentials
 
 None — the harness fakes Telegram `initData` and signs its own token.

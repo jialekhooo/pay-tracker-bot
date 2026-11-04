@@ -1,10 +1,3 @@
-"""JSON API behind the Telegram Mini App dashboard.
-
-The frontend (``static/webapp``) is a Telegram Web App: it opens inside
-Telegram, signs every request with the ``initData`` Telegram hands it, and we
-verify that signature here with the bot token before touching a user's data.
-"""
-
 from __future__ import annotations
 
 import calendar
@@ -55,10 +48,6 @@ logger = logging.getLogger(__name__)
 
 
 def parse_init_data(init_data: str, bot_token: str) -> dict | None:
-    """The Telegram user encoded in ``initData``, once its signature checks out.
-
-    See https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
-    """
     try:
         pairs = dict(parse_qsl(init_data, strict_parsing=True))
     except ValueError:
@@ -88,7 +77,6 @@ def parse_init_data(init_data: str, bot_token: str) -> dict | None:
 
 
 def _authed_user_info(request: Request, authorization: str | None) -> tuple[Storage, dict]:
-    """Like _authed_user, but also returns the raw Telegram user dict (e.g. for username)."""
     storage: Storage | None = getattr(request.app.state, "storage", None)
     bot_token: str | None = getattr(request.app.state, "bot_token", None)
     if storage is None or not bot_token:
@@ -229,11 +217,6 @@ def _cab_claim_event(storage: Storage, user_id: int, event: str) -> tuple[str, s
 
 
 async def _fetch_avatar(bot_token: str, user_id: int) -> tuple[bytes, str] | None:
-    """The user's Telegram profile photo via the Bot API.
-
-    More reliable than initData's ``photo_url`` field, which is frequently
-    missing (older clients, or the user's "who can see my photo" privacy setting).
-    """
     api = f"https://api.telegram.org/bot{bot_token}"
     async with httpx.AsyncClient(timeout=10.0) as client:
         photos_resp = await client.get(
@@ -243,7 +226,7 @@ async def _fetch_avatar(bot_token: str, user_id: int) -> tuple[bytes, str] | Non
         if not photos.get("ok") or not photos["result"]["photos"]:
             logger.info("No avatar for user %s: %s", user_id, photos)
             return None
-        file_id = photos["result"]["photos"][0][-1]["file_id"]  # largest size
+        file_id = photos["result"]["photos"][0][-1]["file_id"]
         file_resp = await client.get(f"{api}/getFile", params={"file_id": file_id})
         file_info = file_resp.json()
         if not file_info.get("ok"):
@@ -262,12 +245,6 @@ _OG_IMAGE_RE = re.compile(r'<meta\s+property="og:image"\s+content="([^"]+)"')
 
 
 async def _fetch_public_avatar(username: str) -> tuple[bytes, str] | None:
-    """The photo shown on a user's public t.me/<username> page, if they have one.
-
-    This is a plain, unauthenticated public webpage — the same preview anyone
-    gets from sharing a t.me link — so it's a legitimate fallback for users whose
-    "who can see my photo" setting blocks the Bot API from seeing it directly.
-    """
     if not _USERNAME_RE.fullmatch(username):
         return None
     async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
@@ -327,8 +304,6 @@ class AvatarUpload(BaseModel):
 async def upload_avatar(
     payload: AvatarUpload, request: Request, authorization: str | None = Header(default=None)
 ) -> dict:
-    """Stores a user-picked image so the mini app can show it without needing
-    Telegram's Bot API access, which some users' privacy settings block."""
     storage, user_id = _authed_user(request, authorization)
     match = _DATA_URL_RE.fullmatch(payload.data_url)
     if not match:
@@ -359,8 +334,6 @@ async def remove_avatar(
 
 
 class ShiftUpdate(BaseModel):
-    """A partial edit from the mini app's shift editor — unset fields are left alone."""
-
     event: str | None = None
     location: str | None = None
     rate: str | None = None
@@ -376,8 +349,6 @@ class ShiftUpdate(BaseModel):
 
 
 class ShiftCreate(BaseModel):
-    """A new shift logged from the mini app's "+" button."""
-
     event: str
     payer: str | None = Field(default=None, max_length=200)
     location: str = ""
@@ -392,18 +363,12 @@ class ShiftCreate(BaseModel):
 
 
 class ShiftBulkEntry(BaseModel):
-    """One date within a bulk create — each can have its own timing."""
-
     day: str
     start: str
     end: str
 
 
 class ShiftBulkCreate(BaseModel):
-    """Several shifts for the same event logged in one go — same rate/location, one row
-    per date (each with its own timing), so a multi-day booking doesn't mean retyping
-    everything each time."""
-
     event: str
     payer: str | None = Field(default=None, max_length=200)
     location: str = ""
@@ -427,32 +392,24 @@ class CabClaimEventUpdate(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
-    """A partial edit from the mini app's Settings tab — unset fields are left alone."""
-
     display_name: str | None = None
     default_rate: str | None = None
     currency: str | None = None
 
 
 class ReminderUpdate(BaseModel):
-    """The day-before reminder, edited as a whole from the Settings tab."""
-
     enabled: bool
     send_at: str | None = None
     utc_offset: str | None = None
 
 
 def _payment_status(state: str, paid: bool) -> str:
-    """A shift's payment status is only ever "pending"/"completed" once it has actually
-    happened — a shift that hasn't started (or is still running) is always "upcoming",
-    whatever a stale ``paid`` flag might say."""
     if state != "done":
         return "upcoming"
     return "payment_completed" if paid else "pending_payment"
 
 
 def _event_payment_status(shifts_json: list[dict]) -> str:
-    """One status for a whole event: completed once nothing finished is left unpaid."""
     statuses = {s["payment_status"] for s in shifts_json}
     if statuses <= {"upcoming"}:
         return "upcoming"
@@ -462,21 +419,16 @@ def _event_payment_status(shifts_json: list[dict]) -> str:
 
 
 def _next_friday_on_or_after(day: date_cls) -> date_cls:
-    """Rolls a date forward to the next Friday, or leaves it if it's already one."""
     return day + timedelta(days=(4 - day.weekday()) % 7)
 
 
 def _default_payment_due(storage: Storage, user_id: int, event: str, day: date_cls) -> date_cls:
-    """Two weeks after the last day of this same event, rounded forward to the nearest
-    Friday — payouts are almost always weekly, on a Friday, after the whole gig wraps up."""
     return _default_payment_due_for_days(storage, user_id, event, [day])
 
 
 def _default_payment_due_for_days(
     storage: Storage, user_id: int, event: str, days: list[date_cls]
 ) -> date_cls:
-    """Same as ``_default_payment_due``, but for a batch of shifts created together — the
-    due date is anchored to whichever of them (new or already booked) falls last."""
     last_day = max(days + [r.day for r in storage.shifts_for_event(user_id, event)])
     return _next_friday_on_or_after(last_day + timedelta(days=14))
 
@@ -511,7 +463,6 @@ def _shift_json(record: ShiftRecord, now: datetime | None = None) -> dict:
 
 
 def _tally_json(label: str, records: list[ShiftRecord], now) -> dict:
-    """A block of shifts scored against the clock: earned so far vs. still to come."""
     tally = earned_by(records, now)
     return {
         "label": label,
@@ -535,7 +486,6 @@ def _tally_json(label: str, records: list[ShiftRecord], now) -> dict:
 
 
 def _all_time_json(records: list[ShiftRecord], now) -> dict:
-    """Same earned-vs-to-come split as a tally block, but across every shift ever logged."""
     tally = earned_by(records, now)
     return {
         "label": "All time",
@@ -678,7 +628,6 @@ def _clash_summaries(
     end: time_cls,
     exclude_id: int | None = None,
 ) -> list[dict]:
-    """Other booked shifts that overlap this slot, for warning the user at save time."""
     nearby = storage.shifts_between(user_id, day - timedelta(days=1), day + timedelta(days=1))
     if exclude_id is not None:
         nearby = [r for r in nearby if r.id != exclude_id]
@@ -695,7 +644,7 @@ def _clash_summaries(
 
 
 _UPCOMING_SPANS = {"7": 6, "14": 14, "30": 30}
-_UPCOMING_ALL_DAYS = 3650  # ~10 years; effectively "everything booked ahead"
+_UPCOMING_ALL_DAYS = 3650
 
 
 @router.get("/upcoming/{scope}")
@@ -888,7 +837,6 @@ async def update_shift(
         if pay_is_fixed:
             fields["pay"] = str(record.pay)
         else:
-            # the time or break changed but not the rate — keep the same hourly rate, new hours
             old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
             fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
     elif pay_is_fixed != record.pay_is_fixed and not pay_is_fixed:
@@ -960,7 +908,6 @@ async def create_shift(
             raise HTTPException(status_code=400, detail="Invalid break hours") from exc
         break_paid = payload.break_paid
     else:
-        # no break given — fall back to the user's /break default, same as logging by text
         break_hours = config.default_break_hours
         break_paid = config.default_break_paid
     if break_hours < 0:
@@ -974,7 +921,6 @@ async def create_shift(
                 status_code=400, detail="Invalid date, expected YYYY-MM-DD"
             ) from exc
     else:
-        # left unset — two weeks after the last day of this same event, on a Friday
         payment_due = _default_payment_due(storage, user_id, event, day)
 
     begins, ends = span(day, start, end)
@@ -1094,7 +1040,6 @@ async def create_shifts_bulk(
                 status_code=400, detail="Invalid date, expected YYYY-MM-DD"
             ) from exc
     else:
-        # left unset — two weeks after the last day of the whole batch, on a Friday
         payment_due = _default_payment_due_for_days(
             storage, user_id, event, [day for day, _, _ in entries]
         )
@@ -1119,9 +1064,6 @@ async def create_shifts_bulk(
             worked -= break_hours
         hours_per_entry.append(max(worked, Decimal("0")))
 
-    # A lump sum covers the whole booking, however many days it spans — split it across
-    # the shifts in proportion to their hours (evenly if no hours), with the last shift
-    # absorbing the rounding remainder so the total always matches the quoted amount.
     if payload.pay_is_fixed:
         total = round_money(rate_override)
         total_hours = sum(hours_per_entry)
@@ -1179,8 +1121,6 @@ async def delete_shift(
 async def payments_due(
     request: Request, authorization: str | None = Header(default=None)
 ) -> dict:
-    """Unpaid shifts whose payment due date has arrived — surfaced by the mini app so it
-    can prompt the user to confirm marking them as paid."""
     storage, user_id = _authed_user(request, authorization)
     now = local_clock(_offset(storage, user_id))
     records = storage.due_payments(user_id, now.date())
@@ -1254,8 +1194,6 @@ async def event_shifts(
 async def mark_event_paid(
     event: str, request: Request, authorization: str | None = Header(default=None)
 ) -> dict:
-    """Marks every shift for this event as paid in one action — most gigs pay out as a
-    single lump sum for the whole booking, not shift by shift."""
     storage, user_id = _authed_user(request, authorization)
     updated = storage.mark_event_paid(user_id, event)
     if not updated:
@@ -1272,8 +1210,6 @@ def _calendar_url(request: Request, storage: Storage, user_id: int) -> str | Non
 
 
 def _webcal_url(calendar_url: str | None) -> str | None:
-    """webcal:// hands the URL straight to the OS's Calendar app for subscribing,
-    instead of the browser just downloading the file."""
     if not calendar_url:
         return None
     return re.sub(r"^https?://", "webcal://", calendar_url)
@@ -1281,7 +1217,6 @@ def _webcal_url(calendar_url: str | None) -> str | None:
 
 @router.get("/export/csv")
 async def export_csv(request: Request, authorization: str | None = Header(default=None)) -> Response:
-    """Downloads every logged shift in a spreadsheet-friendly CSV file."""
     storage, user_id = _authed_user(request, authorization)
     return _csv_response(storage, user_id)
 
@@ -1468,6 +1403,5 @@ async def rotate_calendar_link(
     return {"calendar_url": calendar_url, "webcal_url": _webcal_url(calendar_url)}
 
 
-# Keep payment detection behind the same Telegram authentication as the Mini App.
 from .gmail_payments import router as payment_detection_router
 router.include_router(payment_detection_router)

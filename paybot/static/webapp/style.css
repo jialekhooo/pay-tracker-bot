@@ -1,5 +1,3 @@
-/* Fixed palette: every user gets the same light teal palette, independent of the
-   Telegram client's theme (--tg-theme-*) and of the OS dark mode preference. */
 :root {
   color-scheme: light;
   --bg: #ffffff;
@@ -47,9 +45,6 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
-
-/* iOS/WebKit still rubber-bands the outer document on touch-drag even with overflow:hidden;
-   pinning body to the viewport is the only reliable way to stop it. */
 body {
   position: fixed;
   inset: 0;
@@ -64,8 +59,6 @@ body {
   height: var(--app-height, 100vh);
   overflow: hidden;
 }
-
-/* Header artwork, tall enough on Overview to hold the earnings card and the two stats. */
 #app::before {
   content: "";
   position: absolute;
@@ -291,15 +284,10 @@ main {
   flex: 1 1 auto;
   min-height: 0;
 }
-
-/* Not scrollable — sits above the list, unaffected by its scroll. */
 #content-head {
   flex: none;
   padding: 6px 20px 0;
 }
-
-/* The only scrollable region, so the scrollbar/scroll indicator is confined to the list
-   itself instead of spanning the whole screen. */
 #content-list {
   flex: 1 1 auto;
   min-height: 0;
@@ -338,8 +326,6 @@ main {
     transform: rotate(360deg);
   }
 }
-
-/* Quick actions — a row of pill cards, sitting just under the header artwork */
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -415,8 +401,6 @@ main {
   background: var(--section-bg);
   color: var(--text);
 }
-
-/* Segmented control for choosing how the All Time list is grouped (months vs. events) */
 .group-toggle {
   display: flex;
   background: var(--fill);
@@ -495,9 +479,6 @@ main {
 .event-payout-filter.active span {
   background: rgba(255, 255, 255, 0.2);
 }
-
-/* Sits at the top of the scrolling list, often over the header artwork — the same glass
-   treatment as .day-head keeps the label and inactive segment legible on any backdrop. */
 .event-sort {
   display: flex;
   align-items: center;
@@ -542,9 +523,6 @@ main {
   background: var(--section-bg);
   color: var(--text);
 }
-
-/* Chip row for choosing the Upcoming tab's date range; one swipeable line instead of
-   wrapping, so it stays a tidy single row on narrow iPhones. */
 .range-toggle {
   display: flex;
   flex-wrap: nowrap;
@@ -581,8 +559,6 @@ main {
   border: 1px solid var(--separator);
   padding: 7px 15px;
 }
-
-/* Deep card floating over the header artwork; opaque so it reads the same wherever it lands. */
 .hero {
   background: var(--glass);
   border: 1px solid var(--glass-border);
@@ -697,8 +673,6 @@ main {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  /* A touch darker than --hint plus a soft white glow: list tops often scroll over the
-     header artwork, where the plain grey used to wash out. */
   color: #5d5d63;
   text-shadow: 0 1px 4px rgba(255, 255, 255, 0.6);
   margin: 18px 4px 8px;
@@ -711,8 +685,6 @@ main {
   border: 1px solid rgba(60, 60, 67, 0.1);
   box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.45);
 }
-
-/* One card per day, headed by a pill that reads on both the light page and the artwork. */
 .day-group + .day-group {
   margin-top: 14px;
 }
@@ -755,8 +727,6 @@ main {
   gap: 12px;
   padding: 13px 14px;
 }
-
-/* Separators are inset to the start of the text, as in iOS grouped lists. */
 .row:not(:last-child)::after {
   content: "";
   position: absolute;
@@ -816,9 +786,6 @@ main {
 .shift-card .row .sub {
   -webkit-line-clamp: 1;
 }
-
-/* The venue gets its own single line under the times, instead of being ellipsized away
-   at the end of a shared one — locations were nearly always cut off on iPhone widths. */
 .row .sub-location {
   margin-top: 1px;
   -webkit-line-clamp: 1;
@@ -887,9 +854,6 @@ main {
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
-
-/* State reads as a small tinted pill with a leading status dot, instead of a bare label —
-   shared by list rows, the event page's status, and the edit sheet's payment badge. */
 .tag {
   display: inline-flex;
   align-items: center;
@@ -932,8 +896,6 @@ main {
   font-size: 10.5px;
   padding: 4px 9px 4px 7px;
 }
-
-/* The whole-event payment status shown on an event's own page, next to the bulk action. */
 .event-payment-row {
   display: flex;
   align-items: center;
@@ -1409,8 +1371,6 @@ main {
 .month-nav-btn:disabled {
   opacity: 0.4;
 }
-
-/* Both nav labels sit inside the header artwork. */
 .month-nav-label {
   flex: 1;
   text-align: center;
@@ -1418,8 +1378,6 @@ main {
   font-weight: 700;
   color: #fff;
 }
-
-/* Interactive month grid for the Calendar tab. */
 .calendar-nav {
   display: flex;
   align-items: center;
@@ -1469,7 +1427,6 @@ main {
   min-width: 0;
   width: 100%;
   max-width: 44px;
-  /* min-height keeps the day circles round on Android WebViews without aspect-ratio. */
   min-height: 38px;
   aspect-ratio: 1;
   border: none;
@@ -1517,8 +1474,6 @@ main {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   padding: 22px 12px;
 }
-
-/* Fade the scrolling list out behind and around the floating tab bar. */
 #app::after {
   content: "";
   position: fixed;
@@ -1535,8 +1490,6 @@ main {
   pointer-events: none;
   z-index: 9;
 }
-
-/* Floating pill tab bar, inset from the edges. */
 .bottom-nav {
   position: fixed;
   left: 16px;
@@ -1603,8 +1556,6 @@ main {
   border: 1.5px solid currentColor;
   border-radius: 7px;
 }
-
-/* Floating "+" button to log a new shift */
 .fab {
   position: fixed;
   right: 18px;
@@ -1624,8 +1575,6 @@ main {
 .fab:active {
   opacity: 0.85;
 }
-
-/* Edit-shift modal */
 .modal-backdrop {
   position: fixed;
   left: 0;
@@ -1781,9 +1730,6 @@ main {
   color: var(--hint);
   opacity: 0.6;
 }
-
-/* Older Android WebViews have no backdrop-filter, so nothing dims or blurs behind the
-   translucent sheet; there they get an opaque sheet over a stronger dim instead. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   #edit-backdrop,
   #search-backdrop,
@@ -1919,10 +1865,6 @@ main {
   background: var(--button);
   border-color: var(--button);
 }
-
-/* -webkit-tap-highlight-color is disabled app-wide, so every other tappable control defines
-   its own :active feedback; without one here a tap gave no visible response until release,
-   making the segment look unpressable on touch devices. */
 .segment:active {
   opacity: 0.6;
 }
@@ -1989,7 +1931,6 @@ main {
   border: none;
   border-radius: 0;
   padding: 0;
-  /* 16px is the iOS threshold below which focusing an input zooms the whole page. */
   font-size: 16px;
   text-align: right;
   box-sizing: border-box;
@@ -2107,9 +2048,6 @@ main {
 .detail-row.action + .detail-row.action::before {
   left: 12px;
 }
-
-/* Extra dates in the bulk-create sheet: one card per day, evenly spaced, never nested
-   inside another card. */
 #edit-extra-dates {
   display: flex;
   flex-direction: column;
@@ -2251,8 +2189,6 @@ main {
   color: var(--destructive);
   margin: 4px 0 14px;
 }
-
-/* Settings tab */
 .profile-card {
   display: flex;
   align-items: center;
@@ -2436,8 +2372,6 @@ main {
 .switch input:checked + .slider::before {
   transform: translateX(20px);
 }
-
-/* Shared finishing details keep the same hierarchy across every view. */
 .brand-label {
   margin-bottom: 5px;
   color: #b9dacb;
@@ -2504,7 +2438,6 @@ button:disabled { cursor: default; }
   .modal-sheet { max-width: 600px; margin-inline: auto; }
   .toast { max-width: 560px; margin-inline: auto; }
 }
-/* Short screens and enlarged text must still allow the overview to scroll. */
 @media (max-height: 700px) {
   main { overflow-y: auto; }
   #content-wrap { flex: none; min-height: 100%; }
@@ -2513,8 +2446,6 @@ button:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
-
-/* A single surface with open rows and dividers, rather than nested cards. */
 #edit-save {
   justify-self: end;
   min-width: 66px;
@@ -2583,8 +2514,6 @@ button:disabled { cursor: default; }
 #edit-form input[type="number"] { -moz-appearance: textfield; }
 #edit-form input[type="number"]::-webkit-inner-spin-button,
 #edit-form input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-
-/* Payment detection follows the open, single-surface form styling. */
 .payment-detection { background: #fff; border-radius: 20px; padding: 22px; margin-top: 8px; }
 .payment-detection h2 { margin: 0; font-size: 23px; letter-spacing: -0.03em; }
 .payment-detection h3 { margin: 0 0 10px; font-size: 16px; }

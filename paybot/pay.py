@@ -1,5 +1,3 @@
-"""Pay calculation rules."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,8 +6,6 @@ from decimal import ROUND_HALF_UP, Decimal
 
 @dataclass(frozen=True)
 class RateConfig:
-    """Rates for one user. ``event_rates`` keys are lowercased event names."""
-
     default_rate: Decimal
     event_rates: dict[str, Decimal]
     overtime_after_hours: Decimal | None = None
@@ -28,14 +24,12 @@ def round_money(amount: Decimal) -> Decimal:
 
 
 def format_hours(hours: Decimal) -> str:
-    """Shortest plain form of an hour count — 30, not Decimal's "3E+1"."""
     return f"{round_money(hours).normalize():f}"
 
 
 def calculate_pay(
     hours: float, event: str, config: RateConfig, rate_override: Decimal | None = None
 ) -> Decimal:
-    """Pay for a shift, applying an overtime multiplier beyond a threshold."""
     worked = Decimal(str(hours))
     rate = config.rate_for(event) if rate_override is None else rate_override
     threshold = config.overtime_after_hours
