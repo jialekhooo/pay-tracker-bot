@@ -35,6 +35,8 @@ struct SettingsView: View {
                 Divider()
                 settingsRow("Widgets", "Calendar · next shift · events · this month", "rectangle.on.rectangle") { WidgetsSettingsView() }
                 Divider()
+                settingsRow("Live shift", "Lock Screen timer · confirm finish time", "timer") { LiveShiftSettingsView() }
+                Divider()
                 settingsRow("Calendar & sync", "Apple Calendar · subscription · export", "calendar") { CalendarSettingsView() }
                 Divider()
                 settingsRow("Data & backups", "CSV import · export · restore", "square.and.arrow.down") { DataToolsView() }

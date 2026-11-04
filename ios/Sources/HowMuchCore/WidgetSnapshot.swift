@@ -91,13 +91,14 @@ public struct WidgetSnapshot: Codable, Equatable {
 }
 
 public enum WidgetLink: Hashable {
-    case shift(UUID), event(UUID), earnings, calendar(String)
+    case shift(UUID), event(UUID), earnings, calendar(String), finish(UUID)
     public func url(accountID: String) -> URL {
         var parts = URLComponents(); parts.scheme = "howmuch"; parts.host = "widget"
         var query = [URLQueryItem(name: "account", value: accountID.lowercased())]
         switch self {
         case .shift(let id): parts.path = "/shift"; query.append(URLQueryItem(name: "id", value: id.uuidString))
         case .event(let id): parts.path = "/event"; query.append(URLQueryItem(name: "id", value: id.uuidString))
+        case .finish(let id): parts.path = "/finish"; query.append(URLQueryItem(name: "id", value: id.uuidString))
         case .earnings: parts.path = "/earnings"
         case .calendar(let day): parts.path = "/calendar"; query.append(URLQueryItem(name: "day", value: day))
         }
@@ -117,7 +118,7 @@ public enum WidgetLink: Hashable {
         }
         guard query.filter({ $0.name == "id" }).count == 1,
               let id = query.first(where: { $0.name == "id" })?.value.flatMap(UUID.init(uuidString:)) else { return nil }
-        switch parts.path { case "/shift": return .shift(id); case "/event": return .event(id); default: return nil }
+        switch parts.path { case "/shift": return .shift(id); case "/event": return .event(id); case "/finish": return .finish(id); default: return nil }
     }
 }
 

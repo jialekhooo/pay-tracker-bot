@@ -8,6 +8,7 @@ struct ContentView: View {
     @ObservedObject private var push = PushCenter.shared
     @State private var calendarDay = Date()
     @State private var adding = false
+    @State private var finishing: Shift?
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var store: TrackerStore
     var body: some View {
@@ -35,6 +36,7 @@ struct ContentView: View {
                 else { Text("This event is no longer available.") }
             case .earnings: EarningsView()
             case .calendar(let day): WorkCalendarView(initialDay: TrackerCalendar.localDate(day) ?? Date())
+            case .finish(let id): ShiftDetailView(shiftID: id)
             }
         }
         }
@@ -43,13 +45,35 @@ struct ContentView: View {
             guard let url = push.widgetURL else { return }
             push.widgetURL = nil
             guard let route = WidgetLink.parse(url, accountID: store.accountID) else { return }
+            if case .finish(let id) = route {
+                if let shift = store.data.shifts.first(where: { $0.id == id && $0.endDate <= Date() }) { adding = false; finishing = shift }
+                else { widgetPath = [.shift(id)] }
+                return
+            }
             adding = false; widgetPath = []; navigationID = UUID()
             if case .calendar(let day) = route { calendarDay = TrackerCalendar.localDate(day) ?? Date(); tab = "Calendar" }
             else if route == .earnings { tab = "Earnings" }
             else { widgetPath = [route] }
         }
         .sheet(isPresented: $adding) { ShiftEditor() }
-        .onChange(of: scenePhase) { _, value in if value == .active { store.refreshReminders(); store.refreshWidgets() } }
+        .sheet(item: $finishing, onDismiss: askNextFinish) { FinishShiftSheet(shift: $0) }
+        .onChange(of: scenePhase) { _, value in if value == .active { store.refreshReminders(); store.refreshWidgets(); refreshLiveShift() } }
+        .task {
+            // Keeps the Lock Screen card in step while the app stays open across a shift's start or end.
+            while !Task.isCancelled {
+                refreshLiveShift()
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
+    }
+    private func refreshLiveShift() {
+        LiveShiftCenter.sync(store.data, accountID: store.accountID)
+        askNextFinish()
+    }
+    private func askNextFinish() {
+        // Ask the app directly: the minute timer holds a launch-time copy of scenePhase.
+        guard finishing == nil, !adding, UIApplication.shared.applicationState == .active, push.widgetURL == nil else { return }
+        finishing = LiveShiftCenter.nextToConfirm(store.data, accountID: store.accountID)
     }
     private var navigationDock: some View {
         HStack(spacing: 10) {

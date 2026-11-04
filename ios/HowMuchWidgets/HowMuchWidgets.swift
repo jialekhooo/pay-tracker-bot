@@ -84,5 +84,5 @@ struct WorkCalendarWidget: Widget {
     }
 }
 @main struct HowMuchWidgets: WidgetBundle {
-    var body: some Widget { NextShiftWidget(); UpcomingEventsWidget(); ThisMonthWidget(); WorkCalendarWidget() }
+    var body: some Widget { NextShiftWidget(); UpcomingEventsWidget(); ThisMonthWidget(); WorkCalendarWidget(); LiveShiftWidget() }
 }

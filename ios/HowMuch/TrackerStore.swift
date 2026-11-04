@@ -77,6 +77,7 @@ final class TrackerStore: ObservableObject {
             data = next
             refreshWidgets()
             refreshReminders()
+            if !suppressNotifications { LiveShiftCenter.sync(next, accountID: accountID) }
             onChange?()
             return true
         } catch { self.error = error.localizedDescription; return false }
@@ -96,7 +97,7 @@ final class TrackerStore: ObservableObject {
     }
 
     func activateWidgets() { publishesWidgets = true; refreshWidgets() }
-    func deactivateWidgets() { publishesWidgets = false; SharedWidgetStorage.clear() }
+    func deactivateWidgets() { publishesWidgets = false; SharedWidgetStorage.clear(); LiveShiftCenter.endAll() }
     func refreshWidgets() {
         guard publishesWidgets else { return }
         do {

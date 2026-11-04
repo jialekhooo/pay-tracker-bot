@@ -359,6 +359,37 @@ final class HowMuchUITests: XCTestCase {
         attach("Saved shift and reimbursement", app: app)
     }
     @MainActor
+    func testPastedJobMessageFillsEveryDateForReview() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5))
+        app.buttons["nav.add"].tap()
+        XCTAssertTrue(app.buttons["paste.type"].waitForExistence(timeout: 5))
+        app.buttons["paste.type"].tap()
+        let text = app.textViews["paste.text"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        text.typeText("ni hao! you free for this?\n\nLocation: The Singapore EDITION Hotel\nAddress: 38 Cuscaden Rd, Singapore 249731\n\n12th Nov 1200-2100hrs\n13-14th Nov 0800-2000hrs\n15th Nov 0900-2000hrs")
+        app.buttons["paste.fill"].tap()
+        XCTAssertTrue(app.staticTexts["paste.summary"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["paste.summary"].label.contains("4 dates"))
+        XCTAssertEqual(app.textFields["Event name"].value as? String, "The Singapore EDITION Hotel")
+        attach("Pasted job filled in", app: app)
+        let save = app.buttons["Save"]
+        save.tap()
+        XCTAssertTrue(app.buttons["nav.calendar"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["paste.type"].exists)
+    }
+    @MainActor
+    func testLiveShiftSettingsToggle() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
+        app.buttons["nav.settings"].tap()
+        let row = app.staticTexts["Live shift"]
+        reveal(row, in: app); row.tap()
+        let toggle = app.switches["live.askFinish"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        attach("Live shift settings", app: app)
+    }
+    @MainActor
     func testCalendarEarningsAndMultiDateEntry() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.calendar"].waitForExistence(timeout: 5))

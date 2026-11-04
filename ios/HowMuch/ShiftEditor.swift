@@ -39,12 +39,16 @@ struct ShiftEditor: View {
     @State private var repeatCount = 4
     @State private var keepTemplate = false
     @State private var templateName = ""
+    @State private var pasted: PastedJob?
     private func minute(_ date: Date) -> Int { Calendar.current.component(.hour, from: date) * 60 + Calendar.current.component(.minute, from: date) }
     private var preview: Shift? { try? makeShift() }
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if existing == nil && template == nil && !templateOnly {
+                        PasteJobCard(result: pasted) { applyPasted($0) }
+                    }
                     workCard
                     planningCard
                     scheduleCard
@@ -160,6 +164,27 @@ struct ShiftEditor: View {
                 Text("Includes location, times, rate and breaks. Saving a name that already exists updates that template.").font(.caption).foregroundStyle(Palette.muted)
             }
         }
+    }
+    private func applyPasted(_ job: PastedJob) {
+        pasted = job
+        guard let first = job.dates.first else {
+            error = "No date and time found in that message. Check it has dates like “12 Nov” and times like “9am-6pm”."
+            return
+        }
+        func at(_ key: String, _ minute: Int) -> Date {
+            Calendar.current.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: TrackerCalendar.localDate(key) ?? Date())!
+        }
+        if !job.name.isEmpty { event = job.name }
+        if let place = job.location { location = place }
+        day = at(first.day, 12 * 60); start = at(first.day, first.startMinute); end = at(first.day, first.endMinute)
+        extraDates = job.dates.dropFirst().map { ExtraShiftDate(day: at($0.day, 12 * 60), start: at($0.day, $0.startMinute), end: at($0.day, $0.endMinute)) }
+        repeatDays = 0; hasDue = false
+        if let rate = job.rate { fixed = false; amount = "\(rate)" }
+        else if let pay = job.fixedPay { fixed = true; amount = "\(pay)" }
+        else if let saved = store.data.settings.eventRates[event.lowercased()] { fixed = false; amount = "\(saved)" }
+        if let code = job.currency { currency = code }
+        if let minutes = job.breakMinutes { breakMinutes = "\(minutes)" }
+        error = nil
     }
     private func applyTemplate(_ template: JobTemplate) {
         let work = template.shift

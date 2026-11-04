@@ -24,6 +24,8 @@ def run(*args, **kwargs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--skip-archive', action='store_true', help='Use the existing Release archive.')
+    parser.add_argument('--upload', action='store_true',
+                        help='After verifying the IPA, upload the same archive to App Store Connect using Xcode\'s signed-in account.')
     args = parser.parse_args()
     if not args.skip_archive:
         run('xcodebuild', '-project', IOS/'HowMuch.xcodeproj', '-scheme', 'HowMuch',
@@ -102,6 +104,14 @@ def main():
         print('Verified embedded WidgetKit extension and shared app-group profiles')
         print('Verified signed TestFlight IPA:', OUTPUT/'HowMuch.ipa')
         print('Version:', info['CFBundleShortVersionString'], 'build:', info['CFBundleVersion'])
+        if args.upload:
+            upload = scratch/'UploadOptions.plist'
+            upload.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'upload',
+                'teamID': TEAM, 'signingStyle': 'automatic', 'manageAppVersionAndBuildNumber': False,
+                'uploadSymbols': True}))
+            run('xcodebuild', '-exportArchive', '-archivePath', ARCHIVE, '-exportPath', scratch/'upload',
+                '-exportOptionsPlist', upload, '-allowProvisioningUpdates')
+            print('Uploaded build', info['CFBundleVersion'], 'to App Store Connect')
 
 
 if __name__ == '__main__':
