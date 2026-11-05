@@ -68,6 +68,11 @@ final class HowMuchUITests: XCTestCase {
         search.tap(); search.typeText(name)
         XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
         let cards = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + ","))
+        // Other matches (e.g. "Weekend roadshow") can push the card behind the keyboard: dismiss it and scroll to the card.
+        if !(cards.allElementsBoundByIndex.contains { $0.isHittable }) {
+            search.typeText("\n")
+            if let card = cards.allElementsBoundByIndex.first { reveal(card, in: app) }
+        }
         guard let card = cards.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
             XCTFail("No visible shift card for " + name); return
         }
@@ -189,8 +194,14 @@ final class HowMuchUITests: XCTestCase {
         app.buttons["nav.add"].tap()
         XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 5))
         app.textFields["Event name"].tap(); app.textFields["Event name"].typeText(original)
-        app.textFields["Location (optional)"].tap(); app.textFields["Location (optional)"].typeText("Old site")
-        tapTrailingArea(app.buttons["shift.addDate"], in: app)
+        app.textFields["Location (optional)"].tap(); app.textFields["Location (optional)"].typeText("Old site\n")
+        // With the keyboard up, a tap can only dismiss it; make sure the second date was really added.
+        let anotherDate = app.staticTexts["ANOTHER DATE"]
+        for _ in 0..<3 where !anotherDate.exists {
+            tapTrailingArea(app.buttons["shift.addDate"], in: app)
+            _ = anotherDate.waitForExistence(timeout: 2)
+        }
+        XCTAssertTrue(anotherDate.exists)
         app.buttons["Save"].tap()
         openShift(original, in: app); app.buttons["Edit"].tap()
         let name = app.textFields["Event name"], location = app.textFields["Location (optional)"]
@@ -263,7 +274,14 @@ final class HowMuchUITests: XCTestCase {
         attach("Live workplace map and directions", app: app)
         XCTAssertTrue(app.buttons["location.driving"].exists)
         XCTAssertTrue(app.buttons["location.walking"].exists)
-        tapTrailingArea(app.buttons["location.walking"], in: app)
+        // Walking sits below the fold, and a swipe in the middle of the screen pans the map instead of scrolling,
+        // so drag from the route buttons below the map.
+        let walking = app.buttons["location.walking"], window = app.windows.firstMatch
+        for _ in 0..<3 where walking.frame.maxY > window.frame.maxY - 40 {
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+                .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+        }
+        tapTrailingArea(walking, in: app)
         let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
         XCTAssertTrue(maps.wait(for: .runningForeground, timeout: 12), "Directions should launch the real Apple Maps app")
         attach("Apple Maps directions handoff", app: maps)
@@ -973,9 +991,14 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5)); app.buttons["nav.add"].tap()
         let name = app.textFields["Event name"]; name.tap(); name.typeText("Weekly QA")
-        let location = app.textFields["Location (optional)"]; location.tap(); location.typeText("Marina Bay Sands")
-        reveal(app.buttons["shift.repeat"], in: app); app.buttons["shift.repeat"].tap()
-        app.buttons["Weekly"].tap()
+        let location = app.textFields["Location (optional)"]; location.tap(); location.typeText("Marina Bay Sands\n")
+        // With the keyboard still up, the first tap only dismisses it; retry until the menu opens.
+        let weekly = app.buttons["Weekly"]
+        for _ in 0..<3 where !weekly.exists {
+            reveal(app.buttons["shift.repeat"], in: app); app.buttons["shift.repeat"].tap()
+            _ = weekly.waitForExistence(timeout: 2)
+        }
+        weekly.tap()
         let template = app.switches["shift.saveTemplate"]; reveal(template, in: app)
         template.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
         let title = app.textFields["shift.templateName"]; title.tap(); title.typeText("Usual crew")
@@ -1095,11 +1118,18 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
         app.buttons["nav.settings"].tap()
         tapTrailingArea(app.staticTexts["Job notifications"], in: app)
-        tapTrailingArea(app.buttons["Enable notifications on this iPhone"], in: app)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let allow = springboard.alerts.buttons["Allow"]
-        if allow.waitForExistence(timeout: 3) { allow.tap() }
-        XCTAssertTrue(app.staticTexts["Notifications allowed on this iPhone"].waitForExistence(timeout: 5))
+        // Enable only appears before permission is chosen; a simulator that already allowed it goes straight to "on".
+        let enable = app.buttons["notifications.enable"]
+        if enable.waitForExistence(timeout: 3) {
+            tapTrailingArea(enable, in: app)
+            let allow = springboard.alerts.buttons["Allow"]
+            if allow.waitForExistence(timeout: 3) { allow.tap() }
+        }
+        let status = app.descendants(matching: .any).matching(identifier: "notifications.deliveryStatus").firstMatch
+        reveal(status, in: app)
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(NSPredicate(format: "label CONTAINS %@", "Notifications are on").evaluate(with: status) || app.staticTexts["Notifications are on"].waitForExistence(timeout: 5))
         tapTrailingArea(app.buttons["notifications.test"], in: app)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Test scheduled in 5 seconds")).firstMatch.waitForExistence(timeout: 5))
         XCUIDevice.shared.press(.home)

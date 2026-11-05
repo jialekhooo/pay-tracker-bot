@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS live_segments (
 
 def ensure_schema(db):
     db.executescript(SCHEMA)
+    # Added after the first release: the card details last pushed to each running card.
+    if 'pushed_state' not in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}:
+        db.execute('ALTER TABLE live_segments ADD COLUMN pushed_state TEXT')
+        db.commit()
+
+
+def _plan_state(db, account_id, shift_id):
+    row = db.execute('SELECT state FROM live_plans WHERE account_id=? AND shift_id=?', (account_id, shift_id)).fetchone()
+    return row['state'] if row else None
 
 
 class StartToken(BaseModel):
@@ -102,8 +111,10 @@ async def register_activity_token(payload: ActivityToken, request: Request, auth
             db.execute('UPDATE live_segments SET token=?,environment=? WHERE session_id=? AND shift_id=? AND started=?',
                        (payload.token.lower(), payload.environment, account['session_id'], shift_id, latest['started']))
         else:
-            db.execute('INSERT OR IGNORE INTO live_segments(session_id,account_id,shift_id,started,token,environment) VALUES(?,?,?,?,?,?)',
-                       (account['session_id'], account['account_id'], shift_id, now, payload.token.lower(), payload.environment))
+            # A card the app started shows the shift as the app last saw it, which the server's plan reflects.
+            db.execute('INSERT OR IGNORE INTO live_segments(session_id,account_id,shift_id,started,token,environment,pushed_state) VALUES(?,?,?,?,?,?,?)',
+                       (account['session_id'], account['account_id'], shift_id, now, payload.token.lower(), payload.environment,
+                        _plan_state(db, account['account_id'], shift_id)))
     return {'registered': True}
 
 
@@ -146,6 +157,8 @@ def _payload(event, state, now, plan=None, account_id=None):
                     'attributes': {'shiftID': plan['shift_id'], 'accountID': account_id},
                     'stale-date': plan['end_at'],
                     'alert': {'title': state['event'], 'body': 'Your shift is live on the Lock Screen.'}})
+    elif event == 'update':
+        aps['stale-date'] = int(state['endTime'])
     else:
         aps['dismissal-date'] = now
     return {'aps': aps}
@@ -202,8 +215,8 @@ async def deliver(storage, client=None, now=None):
             with db:
                 if status == 'sent':
                     started += 1
-                    db.execute('INSERT OR IGNORE INTO live_segments(session_id,account_id,shift_id,started) VALUES(?,?,?,?)',
-                               (plan['session_id'], plan['account_id'], plan['shift_id'], now))
+                    db.execute('INSERT OR IGNORE INTO live_segments(session_id,account_id,shift_id,started,pushed_state) VALUES(?,?,?,?,?)',
+                               (plan['session_id'], plan['account_id'], plan['shift_id'], now, plan['state']))
                 elif status == 'invalid':
                     db.execute('DELETE FROM live_start_tokens WHERE session_id=?', (plan['session_id'],))
                 else:
@@ -220,6 +233,22 @@ async def deliver(storage, client=None, now=None):
                                      (segment['account_id'], segment['shift_id'])).fetchone()
             if replaced or deleted:
                 await _end(db, client, segment, now)
+                continue
+            # The shift was edited (times, pay, name) while its card is showing: push the new details to the card.
+            state = _plan_state(db, segment['account_id'], segment['shift_id'])
+            if state and state != segment['pushed_state'] and _configured(segment['environment'] or 'production'):
+                try:
+                    status = await _send(client, segment['token'], segment['environment'] or 'production',
+                                         _payload('update', json.loads(state), now))
+                except (httpx.HTTPError, ValueError):
+                    continue
+                with db:
+                    if status == 'sent':
+                        db.execute('UPDATE live_segments SET pushed_state=? WHERE session_id=? AND shift_id=? AND started=?',
+                                   (state, segment['session_id'], segment['shift_id'], segment['started']))
+                    elif status == 'invalid':
+                        db.execute('UPDATE live_segments SET ended=1 WHERE session_id=? AND shift_id=? AND started=?',
+                                   (segment['session_id'], segment['shift_id'], segment['started']))
         with db:
             db.execute('DELETE FROM live_segments WHERE started<?', (now - 3 * 86400,))
     finally:

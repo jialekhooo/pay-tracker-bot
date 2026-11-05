@@ -128,3 +128,38 @@ def test_invalid_start_token_is_dropped_and_other_accounts_are_untouched(setup, 
     assert count == 0 and all('f' * 64 not in url for url, _, _ in sent)
     tokens = [r[0] for r in setup.storage._conn.execute('SELECT token FROM live_start_tokens')]
     assert tokens == ['f' * 64]
+
+
+def test_editing_a_shift_updates_its_running_card_once(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    row = plan(setup)
+    monkeypatch.setattr(live_activity, 'time', SimpleNamespace(time=lambda: row['start_at'] + 60))
+    setup.client.put('/v1/devices/live-activity', json={'token': 'd' * 64, 'environment': 'production',
+                     'shiftID': data['shifts'][0]['id']}, headers=headers(session))
+    # Unchanged shift: nothing to push.
+    assert [p['aps']['event'] for _, _, p in run(setup, row['start_at'] + 120)[1]] == []
+    # Staying an hour later: the running card gets the new end time and pay.
+    data['shifts'][0]['endMinute'] += 60
+    data['shifts'][0]['pay'] = 135
+    assert write(setup, session, data, 1).status_code == 200
+    sent = run(setup, row['start_at'] + 180)[1]
+    assert [p['aps']['event'] for _, _, p in sent] == ['update']
+    url, headers_sent, payload = sent[0]
+    assert url.endswith('/3/device/' + 'd' * 64) and headers_sent['apns-push-type'] == 'liveactivity'
+    state = payload['aps']['content-state']
+    assert state['endTime'] == row['end_at'] + 3600 and state['pay'] == 135.0
+    assert payload['aps']['stale-date'] == row['end_at'] + 3600
+    # Sent once only.
+    assert run(setup, row['start_at'] + 240)[1] == []
+
+
+def test_older_database_gains_the_pushed_state_column(tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / 'old.sqlite3')
+    db.executescript('CREATE TABLE live_segments (session_id TEXT, account_id TEXT, shift_id TEXT, started INTEGER, '
+                     'token TEXT, environment TEXT, ended INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(session_id, shift_id, started));')
+    live_activity.ensure_schema(db)
+    assert 'pushed_state' in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}
