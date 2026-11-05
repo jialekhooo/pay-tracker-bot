@@ -444,10 +444,29 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.textFields["pet.name"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["pet.name"].value as? String, "Penny")
         attach("Pet page", app: app)
-        let stages = app.staticTexts["Stages"]
-        reveal(stages, in: app)
-        XCTAssertTrue(app.staticTexts["Golden coin"].exists)
-        attach("Pet stages", app: app)
+        // Buy and wear a party hat with the demo's coins, then try on a background.
+        let partyHat = app.buttons["pet.item.party-hat"]
+        reveal(partyHat, in: app)
+        attach("Pet wardrobe", app: app)
+        partyHat.tap()
+        let buy = app.buttons["Buy Party hat"]
+        XCTAssertTrue(buy.waitForExistence(timeout: 5))
+        buy.tap()
+        XCTAssertTrue(partyHat.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        app.buttons["Backgrounds"].tap()
+        let mint = app.buttons["pet.item.mint"]
+        XCTAssertTrue(mint.waitForExistence(timeout: 5))
+        attach("Pet in a party hat", app: app)
+        app.buttons["Glasses"].tap()
+        let sunglasses = app.buttons["pet.item.sunglasses"]
+        XCTAssertTrue(sunglasses.waitForExistence(timeout: 5))
+        sunglasses.tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5) || app.buttons["Buy Sunglasses"].exists)
+        attach("Not enough coins or buy sunglasses", app: app)
+        if app.alerts.firstMatch.exists { app.alerts.buttons["OK"].tap() } else { app.buttons["Cancel"].firstMatch.tap() }
+        let badges = app.staticTexts["Badges"].firstMatch
+        reveal(badges, in: app)
+        attach("Pet badges", app: app)
     }
     @MainActor
     func testPayInTrackingShowsBankNotificationSetup() {

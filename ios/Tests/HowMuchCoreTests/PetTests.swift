@@ -50,4 +50,56 @@ final class PetTests: XCTestCase {
         XCTAssertNil(pet.next)
         XCTAssertEqual(pet.progress, 1)
     }
+
+    func testLevelsKeepGoingAfterTheGoldenCoin() throws {
+        var shifts: [Shift] = []
+        for offset in 1...30 { shifts.append(try shift(Shift.dayString(calendar.date(byAdding: .day, value: -offset, to: now)!), paid: true)) }
+        let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
+        XCTAssertEqual(pet.stage, .golden)
+        XCTAssertEqual(pet.xp, 750)
+        XCTAssertEqual(pet.level, 19)
+        XCTAssertEqual(pet.xpToNextLevel, 10)
+        XCTAssertEqual(pet.message(name: "Penny", currency: "SGD"), "Penny is happy! 10 XP to level 20.")
+    }
+
+    func testCoinsComeFromShiftsAndAchievements() throws {
+        // 2 worked (10) + 1 paid (10) + badges: First shift, Payday (50) = 70 coins.
+        let shifts = [try shift("2026-11-02", paid: true), try shift("2026-11-03")]
+        let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
+        XCTAssertEqual(Set(pet.achievements.filter(\.earned).map(\.id)), ["first-shift", "payday"])
+        XCTAssertEqual(pet.coinsEarned, 70)
+    }
+
+    func testBestStreakAndShiftTimeBadges() throws {
+        let night = try Shift(event: "Gala", day: "2026-10-20", startMinute: 20 * 60, endMinute: 2 * 60, rate: 20)
+        let early = try Shift(event: "Setup", day: "2026-10-27", startMinute: 6 * 60, endMinute: 12 * 60, rate: 20)
+        let shifts = [night, early, try shift("2026-10-13"), try shift("2026-10-06"), try shift("2026-09-01")]
+        let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
+        XCTAssertEqual(pet.bestStreakWeeks, 4)
+        XCTAssertEqual(pet.streakWeeks, 0)
+        XCTAssertTrue(pet.hasAchievement("on-a-roll"))
+        XCTAssertTrue(pet.hasAchievement("night-owl"))
+        XCTAssertTrue(pet.hasAchievement("early-bird"))
+    }
+
+    func testWardrobeBuyingSpendsCoinsAndUnlocksAreEarned() throws {
+        let shifts = try (1...8).map { try shift(Shift.dayString(calendar.date(byAdding: .day, value: -$0, to: now)!), paid: true) }
+        let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
+        var closet = PetCloset()
+        let start = closet.balance(pet)
+        let partyHat = PetItem.named("party-hat")!
+        try closet.buy(partyHat, pet)
+        XCTAssertEqual(closet.balance(pet), start - 40)
+        XCTAssertEqual(closet.wearing(.hat, pet), partyHat)
+        try closet.toggle(partyHat, pet)
+        XCTAssertNil(closet.wearing(.hat, pet))
+        XCTAssertThrowsError(try closet.toggle(PetItem.named("royal-crown")!, pet)) // level 15 needed
+        XCTAssertEqual(closet.wearing(.background, pet)?.id, "mint")
+        var broke = PetCloset(); broke.spent = pet.coinsEarned
+        XCTAssertThrowsError(try broke.buy(PetItem.named("wizard-hat")!, pet)) { error in
+            XCTAssertEqual(error as? PetCloset.ClosetError, .notEnoughCoins(needed: 200))
+        }
+        let saved = try JSONDecoder().decode(PetCloset.self, from: JSONEncoder().encode(closet))
+        XCTAssertEqual(saved, closet)
+    }
 }
