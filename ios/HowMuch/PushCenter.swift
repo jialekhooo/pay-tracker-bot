@@ -9,6 +9,8 @@ final class PushCenter: ObservableObject {
     @Published var registrationError: String?
     var currentAccountID: String?
     @Published var widgetURL: URL?
+    /// Set by Siri or Control Center to open Add shift (filled in from a copied job message).
+    @Published var addJobRequest: UUID?
     @Published var pendingRoute: [AnyHashable: Any]?
 }
 

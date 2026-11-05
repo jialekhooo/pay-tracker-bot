@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct HowMuchApp: App {
     @UIApplicationDelegateAdaptor(HowMuchAppDelegate.self) private var appDelegate
-    @StateObject private var account = AppleAccountStore()
+    @StateObject private var account = AppleAccountStore.shared
     var body: some Scene {
         WindowGroup {
             AccountRootView().environmentObject(account)

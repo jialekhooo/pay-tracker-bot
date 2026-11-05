@@ -15,6 +15,8 @@ struct NotificationJobRoute: Identifiable {
 
 @MainActor
 final class AppleAccountStore: ObservableObject {
+    /// One account store for the app, so Siri and live-card buttons see the same records as the screens.
+    static let shared = AppleAccountStore()
     @Published private(set) var account: AccountIdentity?
     @Published private(set) var tracker: TrackerStore?
     @Published private(set) var restoring = true
@@ -42,6 +44,14 @@ final class AppleAccountStore: ObservableObject {
             // Stands in for Share → HowMuch from WhatsApp, which UI tests can't drive.
             if CommandLine.arguments.contains("--ui-test-shared-job") {
                 try? SharedJobInbox.save("ni hao! you free for this?\n\nLocation: The Singapore EDITION Hotel\nAddress: 38 Cuscaden Rd, Singapore 249731\n\n12th Nov 1200-2100hrs\n13-14th Nov 0800-2000hrs\n15th Nov 0900-2000hrs")
+            }
+            // Stands in for Siri or Control Center's "Add a job", with a copied job message or an empty clipboard.
+            if CommandLine.arguments.contains("--ui-test-add-job") {
+                UIPasteboard.general.string = "Raffles City roadshow\nLocation: Raffles City\n20th Nov 1000-1900hrs\n21st Nov 1000-1900hrs\nPay: $14/hr"
+                IntentActions.addJob()
+            } else if CommandLine.arguments.contains("--ui-test-add-job-blank") {
+                UIPasteboard.general.items = []
+                IntentActions.addJob()
             }
             let id = CommandLine.arguments.contains("--ui-test-owner-b") ? "00000000-0000-4000-8000-000000000002" : "00000000-0000-4000-8000-000000000001"
             account = AccountIdentity(id: id, email: nil, displayName: "Preview", appleUserID: "ui-test")

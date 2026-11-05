@@ -10,6 +10,14 @@ public extension Shift {
                          rate: rate, fixedPay: fixedPay, rules: rules, paid: paid, paymentDue: paymentDue)
     }
 
+    /// The same shift finishing `minutes` later (the live card's "+30 min"), kept under 24 hours long.
+    func extended(byMinutes minutes: Int) throws -> Shift {
+        guard minutes > 0, durationMinutes + minutes < 24 * 60 else {
+            throw TrackerError.invalid("A shift can't run 24 hours or longer.")
+        }
+        return try finishing(atMinute: (endMinute + minutes) % (24 * 60))
+    }
+
     /// Hourly shifts are the ones where the actual finishing time changes pay.
     var paysByTheHour: Bool { fixedPay == nil && rate > 0 }
 }

@@ -410,6 +410,19 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["paste.summary"].waitForExistence(timeout: 3))
     }
     @MainActor
+    func testAddJobShortcutFillsInACopiedMessage() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-add-job"]; app.launch()
+        XCTAssertTrue(app.staticTexts["paste.summary"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["paste.summary"].label.contains("2 dates"))
+        attach("Add a job from the clipboard", app: app)
+        app.terminate()
+        // Nothing usable copied: Add shift opens empty instead.
+        app.launchArguments = ["--preview", "--ui-test-add-job-blank"]; app.launch()
+        XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["paste.summary"].exists)
+        XCTAssertTrue(["", "Event name"].contains(app.textFields["Event name"].value as? String ?? ""))
+    }
+    @MainActor
     func testLiveShiftSettingsToggle() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
@@ -556,6 +569,9 @@ final class HowMuchUITests: XCTestCase {
     @MainActor
     private func tapTrailingArea(_ element: XCUIElement, in app: XCUIApplication) {
         reveal(element, in: app)
+        // Scrolling can still be settling when reveal returns.
+        let settled = Date().addingTimeInterval(3)
+        while !element.isHittable && Date() < settled { RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
         XCTAssertTrue(element.isHittable)
         app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0))
             .withOffset(CGVector(dx: 0, dy: element.frame.midY - app.windows.firstMatch.frame.minY)).tap()

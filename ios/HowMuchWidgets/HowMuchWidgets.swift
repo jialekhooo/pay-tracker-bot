@@ -84,5 +84,8 @@ struct WorkCalendarWidget: Widget {
     }
 }
 @main struct HowMuchWidgets: WidgetBundle {
-    var body: some Widget { NextShiftWidget(); UpcomingEventsWidget(); ThisMonthWidget(); WorkCalendarWidget(); LiveShiftWidget() }
+    var body: some Widget {
+        NextShiftWidget(); UpcomingEventsWidget(); ThisMonthWidget(); WorkCalendarWidget(); LiveShiftWidget()
+        if #available(iOSApplicationExtension 18.0, *) { AddJobControl() }
+    }
 }

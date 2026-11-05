@@ -56,6 +56,16 @@ struct ContentView: View {
             else if route == .earnings { tab = "Earnings" }
             else { widgetPath = [route] }
         }
+        .task(id: push.addJobRequest) {
+            // Siri or Control Center: open Add shift, filled in when a job message is on the clipboard.
+            guard push.addJobRequest != nil else { return }
+            push.addJobRequest = nil
+            finishing = nil; shared = nil; adding = false
+            try? await Task.sleep(for: .milliseconds(400))
+            if UIPasteboard.general.hasStrings, let text = UIPasteboard.general.string,
+               !JobMessageParser.parse(text).dates.isEmpty { shared = SharedMessage(text: text) }
+            else { adding = true }
+        }
         .sheet(isPresented: $adding) { ShiftEditor() }
         .sheet(item: $finishing, onDismiss: askNextFinish) { FinishShiftSheet(shift: $0) }
         .sheet(item: $shared) { ShiftEditor(initialMessage: $0.text) }
