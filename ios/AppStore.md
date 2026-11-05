@@ -76,7 +76,9 @@ Tracking: **No**. For each type below: *Linked to the user*, purpose *App Functi
 | User Content → Other User Content | Shifts, events, venues, claims and notes synced to the account |
 | Location → Precise Location | Only with Time to leave on: the saved departure address, to work out when to leave |
 
-Not collected: Emails or Text Messages (Payment detection is left out of 1.0), contacts, browsing, usage data, diagnostics.
+Not collected in 1.0: Emails or Text Messages (Payment detection was left out of 1.0).
+
+**From 1.1** add *User Content → Emails or Text Messages* (linked, App Functionality, no tracking): Pay-in tracking reads DBS alert emails from a connected Gmail/Outlook/iCloud mailbox or forwarded to the private address, and bank notification text. Before submitting 1.1, note in App Review that Gmail connection only works for accounts added as Google test users until Google verifies the restricted Gmail scope (Outlook and iCloud work for everyone).
 This matches `HowMuch/PrivacyInfo.xcprivacy` and the privacy policy at /privacy.
 
 ## App Review information

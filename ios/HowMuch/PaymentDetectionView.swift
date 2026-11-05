@@ -54,8 +54,7 @@ struct PaymentDetectionView: View {
                         Text("Coming soon: a private address you can forward bank alert emails to.").font(.subheadline).foregroundStyle(Palette.muted)
                     }
                 }
-                #if DEBUG
-                Section("Email & DBS alerts") {
+                Section("Connect your email") {
                     Label(status.connected ? "\(status.providerName) connected" : "No email connected", systemImage: status.connected ? "checkmark.shield" : "envelope")
                     if let email = status.email { Text(email).font(.caption).foregroundStyle(Palette.muted) }
                     if !status.available { Text("Email connection is not available yet for this app. Manual payment tracking remains available.").font(.caption).foregroundStyle(Palette.muted) }
@@ -76,7 +75,6 @@ struct PaymentDetectionView: View {
                     Toggle("Mark exact verified matches paid", isOn: Binding(get: { status.autoEnabled }, set: { enabled in Task { await action("", method: "PATCH", body: ["auto_enabled": enabled]) } })).disabled(!status.connected || !status.available || status.provider != nil && status.provider != "gmail" || busy)
                     Text("Automatic marking is supported for verified Gmail alerts. Outlook and iCloud alerts require confirmation against your bank transaction. You can undo applied payments below.").font(.caption).foregroundStyle(Palette.muted)
                 }
-                #endif
                 Section("Saved payers") {
                     NavigationLink("Manage saved payers") { PayersSettingsView() }.accessibilityIdentifier("payment.payers")
                     Text("Save companies once in Settings → Payers. Choose ‘Paid by’ when adding/editing an event or from Earnings. Every saved bank name for the selected company is used for exact matching.").font(.caption).foregroundStyle(Palette.muted)
