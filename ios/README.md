@@ -176,3 +176,5 @@ Build 47: Apple Intelligence on the iPhone: smarter job reading, bank alerts in 
 Build 48: Receipts read more total labels; Apple Intelligence suggests the date, claim type and a note.
 
 Penny rework (SmartSpend-style): pixel-art Penny (`PetSprite`/`PetPixels`) in a scene, five stages (egg 0, hatchling 60, coinling 300, golden coin 900, treasure 2000 XP), XP per shift worked, per day worked and per shift paid, level = 1 + √(XP/20), moods from days since the last shift (thriving, happy, peckish, hungry, lonely; worried while pay is overdue; a shift in the next week cheers Penny up), a weekly streak of worked weeks with +25 coins every 4 weeks, +10 coins for a week of 3+ shifts, this week's missions, a shop that opens up by stage, an evolution sheet and "+N" coins on the Overview card. The coin balance can go below zero when coins are taken back, and Penny's page explains why.
+
+Build 49: Fixes from the full app review (sync, locked-phone logging, receipts, travel and Gmail safety), combined, some-shifts and short-paid payment matching, Share my availability, and Penny reworked in SmartSpend's style at the top of Overview; Delete shift is centred.
