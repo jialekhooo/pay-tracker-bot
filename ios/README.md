@@ -168,3 +168,5 @@ Build 43: Bank notification setup is a step-by-step wizard (built like SmartSpen
 Build 44: Calendar sync (live feed for Apple, Google and TimeTree), Gmail code clears once confirmed, bank alerts screened on the iPhone with a linked status, 10-step wizard.
 
 Build 45: Penny gets six new skins, a cuter blinking face and a rename pencil; the earnings card counts only worked pay, split into paid, owed and booked.
+
+Build 46: The earnings card calls unpaid worked pay "Pending payment".
