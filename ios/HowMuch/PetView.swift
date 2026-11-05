@@ -451,7 +451,7 @@ extension TrackerStore {
     }
 }
 
-private func outfit(_ closet: PetCloset, _ pet: PetProgress) -> [PetSlot: PetItem] {
+func petOutfit(_ closet: PetCloset, _ pet: PetProgress) -> [PetSlot: PetItem] {
     Dictionary(uniqueKeysWithValues: PetSlot.allCases.compactMap { slot in closet.wearing(slot, pet).map { (slot, $0) } })
 }
 
@@ -465,7 +465,7 @@ struct PetCard: View {
         let name = store.petPreferences.displayName
         Card {
             HStack(alignment: .center, spacing: 14) {
-                PetStage(pet: pet, outfit: outfit(closet, pet), name: name, size: 72, corner: 16)
+                PetStage(pet: pet, outfit: petOutfit(closet, pet), name: name, size: 72, corner: 16)
                 NavigationLink { PetDetailView() } label: {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack {
@@ -507,7 +507,7 @@ struct PetDetailView: View {
             VStack(alignment: .leading, spacing: 18) {
                 Card {
                     VStack(spacing: 12) {
-                        PetStage(pet: pet, outfit: outfit(closet, pet), name: displayName, size: 150, corner: 22)
+                        PetStage(pet: pet, outfit: petOutfit(closet, pet), name: displayName, size: 150, corner: 22)
                         TextField("Penny", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
                             .submitLabel(.done).focused($naming).accessibilityIdentifier("pet.name")
                             .onSubmit(saveName)
@@ -553,7 +553,7 @@ struct PetDetailView: View {
     private func itemTile(_ item: PetItem, _ pet: PetProgress, _ closet: PetCloset) -> some View {
         let owned = closet.owns(item, pet)
         let wearing = closet.wearing(item.slot, pet)?.id == item.id
-        var preview = outfit(closet, pet); preview[item.slot] = item
+        var preview = petOutfit(closet, pet); preview[item.slot] = item
         return Button { tap(item, pet, closet) } label: {
             VStack(spacing: 6) {
                 PetStage(pet: pet, outfit: preview, name: displayName, size: 52, corner: 12).allowsHitTesting(false)

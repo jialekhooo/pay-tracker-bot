@@ -16,7 +16,7 @@ struct SettingsView: View {
                         ProfileAvatar(size: 44)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(store.data.settings.displayName.isEmpty ? "Your profile" : store.data.settings.displayName).font(.system(.headline, design: .rounded))
-                            Text("Name and photo").font(.caption).foregroundStyle(Palette.muted)
+                            Text(ProfileStats(shifts: store.data.shifts, currency: store.data.rules.currency).summary(store.data.rules.currency)).font(.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.muted)
                     }.foregroundStyle(Palette.ink)
@@ -85,37 +85,86 @@ struct ProfileSettingsView: View {
     @State private var pendingPhoto: Data?
     @State private var loading = false
     @State private var notice: PhotoNotice?
+    @FocusState private var naming: Bool
     private enum PhotoNotice: Identifiable {
         case saved, replace, remove, failure(String)
         var id: String { switch self { case .saved: return "saved"; case .replace: return "replace"; case .remove: return "remove"; case .failure: return "failure" } }
     }
     var body: some View {
-        Form {
-            Section("Profile photo") {
-                HStack(spacing: 20) {
-                    ProfileAvatar(size: 70)
-                    VStack(alignment: .leading, spacing: 12) {
-                        PhotosPicker("Choose photo", selection: $photo, matching: .images).buttonStyle(.borderless).disabled(loading).accessibilityIdentifier("profile.choosePhoto")
-                        if store.data.settings.avatar != nil {
-                            Button("Remove photo", role: .destructive) { notice = .remove }.buttonStyle(.borderless).disabled(loading).accessibilityIdentifier("profile.removePhoto")
+        let stats = ProfileStats(shifts: store.data.shifts, currency: store.data.rules.currency)
+        let pet = PetProgress(shifts: store.data.shifts)
+        let petName = store.petPreferences.displayName
+        ScrollView {
+            VStack(spacing: 18) {
+                // Photo and name
+                VStack(spacing: 14) {
+                    ProfileAvatar(size: 108)
+                        .overlay(Circle().stroke(.white, lineWidth: 4))
+                        .shadow(color: Palette.teal.opacity(0.18), radius: 14, y: 6)
+                        .overlay(alignment: .bottomTrailing) {
+                            PhotosPicker(selection: $photo, matching: .images) {
+                                Image(systemName: "camera.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                                    .frame(width: 36, height: 36).background(Palette.teal, in: Circle()).overlay(Circle().stroke(.white, lineWidth: 3))
+                            }.buttonStyle(.plain).disabled(loading).accessibilityLabel("Choose photo").accessibilityIdentifier("profile.choosePhoto")
                         }
+                    if loading { ProgressView("Preparing photo…").font(.caption) }
+                    HStack(spacing: 6) {
+                        TextField("Your name", text: $name).textContentType(.name).focused($naming).submitLabel(.done)
+                            .font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center).fixedSize()
+                            .onSubmit(save).accessibilityIdentifier("profile.name")
+                        if !naming { Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted).onTapGesture { naming = true } }
+                    }.foregroundStyle(Palette.ink)
+                    Text(stats.since.map { "Tracking pay since \($0)" } ?? "Add your first shift to start your story").font(.subheadline).foregroundStyle(Palette.muted)
+                    if store.data.settings.avatar != nil {
+                        Button("Remove photo", role: .destructive) { notice = .remove }.font(.caption.weight(.semibold)).buttonStyle(.borderless).disabled(loading).accessibilityIdentifier("profile.removePhoto")
                     }
-                }.padding(.vertical, 8)
-                if loading { ProgressView("Preparing photo…") }
-                Text("Your current photo stays until you confirm a replacement or removal.").font(.caption).foregroundStyle(Palette.muted)
-                #if DEBUG
-                if CommandLine.arguments.contains("--ui-test-profile-photo") {
-                    Button("Use sample photo") {
-                        let data = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 400)).jpegData(withCompressionQuality: 0.9) { context in UIColor.systemTeal.setFill(); context.fill(CGRect(x: 0, y: 0, width: 300, height: 400)) }
-                        prepare(data)
-                    }.buttonStyle(.borderless).accessibilityIdentifier("profile.samplePhoto")
-                    Button("Use unreadable photo") { prepare(Data("not a photo".utf8)) }.buttonStyle(.borderless).accessibilityIdentifier("profile.invalidPhoto")
+                    #if DEBUG
+                    if CommandLine.arguments.contains("--ui-test-profile-photo") {
+                        HStack {
+                            Button("Use sample photo") {
+                                let data = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 400)).jpegData(withCompressionQuality: 0.9) { context in UIColor.systemTeal.setFill(); context.fill(CGRect(x: 0, y: 0, width: 300, height: 400)) }
+                                prepare(data)
+                            }.accessibilityIdentifier("profile.samplePhoto")
+                            Button("Use unreadable photo") { prepare(Data("not a photo".utf8)) }.accessibilityIdentifier("profile.invalidPhoto")
+                        }.font(.caption).buttonStyle(.borderless)
+                    }
+                    #endif
+                }.frame(maxWidth: .infinity).padding(.top, 8)
+
+                // At a glance
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    statTile("banknote", money(stats.earned, store.data.rules.currency), "Earned so far")
+                    statTile("clock", hoursLabel(stats.hours), "Hours worked")
+                    statTile("briefcase", "\(stats.shifts)", stats.shifts == 1 ? "Shift worked" : "Shifts worked")
+                    statTile("flame", "\(pet.bestStreakWeeks) wk", "Best streak")
                 }
-                #endif
-            }
-            Section("Display name") { TextField("Your name", text: $name).textContentType(.name) }
-            Button("Save profile") { if store.updatePreferences({ $0.displayName = String(name.prefix(60)) }) { notice = .saved } }.rowAction().disabled(loading).accessibilityIdentifier("profile.save")
-        }.detailStyle("Account settings")
+
+                if stats.topJob != nil || stats.topPlace != nil {
+                    VStack(spacing: 0) {
+                        if let job = stats.topJob { favourite("star", "Most worked job", job) }
+                        if stats.topJob != nil && stats.topPlace != nil { Divider().padding(.leading, 44) }
+                        if let place = stats.topPlace { favourite("mappin.and.ellipse", "Favourite spot", place) }
+                    }.padding(.horizontal, 14).padding(.vertical, 4)
+                        .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+                }
+
+                // Penny
+                NavigationLink { PetDetailView() } label: {
+                    HStack(spacing: 12) {
+                        PetStage(pet: pet, outfit: petOutfit(store.petCloset, pet), name: petName, size: 52, corner: 14).allowsHitTesting(false)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(petName) · Level \(pet.level)").font(.system(.subheadline, design: .rounded, weight: .semibold))
+                            Text("\(pet.achievements.filter(\.earned).count) of \(pet.achievements.count) badges earned").font(.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.muted)
+                    }.foregroundStyle(Palette.ink).padding(14).frame(maxWidth: .infinity)
+                        .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18)).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+
+                Button("Save profile", action: save).primaryButton().disabled(loading).accessibilityIdentifier("profile.save")
+            }.padding(.horizontal, 20).padding(.bottom, 32)
+        }.detailStyle("Profile")
             .onAppear { name = store.data.settings.displayName }
             .task(id: photo) {
                 guard let item = photo else { return }
@@ -140,6 +189,31 @@ struct ProfileSettingsView: View {
                 case .failure(let message): return Alert(title: Text("Photo kept"), message: Text(message), dismissButton: .default(Text("OK")) { photo = nil; pendingPhoto = nil })
                 }
             }
+    }
+    private func save() {
+        naming = false
+        if store.updatePreferences({ $0.displayName = String(name.trimmingCharacters(in: .whitespaces).prefix(60)) }) { notice = .saved }
+    }
+    private func hoursLabel(_ hours: Decimal) -> String {
+        let value = NSDecimalNumber(decimal: hours).doubleValue
+        return value.rounded() == value ? "\(Int(value))h" : String(format: "%.1fh", value)
+    }
+    private func statTile(_ icon: String, _ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.teal)
+            Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+            Text(label).font(.caption).foregroundStyle(Palette.muted)
+        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+            .accessibilityElement(children: .combine)
+    }
+    private func favourite(_ icon: String, _ title: String, _ value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).font(.system(size: 14, weight: .medium)).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
+            Text(title).font(.subheadline).foregroundStyle(Palette.muted)
+            Spacer(minLength: 8)
+            Text(value).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+        }.frame(minHeight: 48)
     }
     private func prepare(_ data: Data) {
         guard data.count <= 30_000_000,
@@ -360,5 +434,31 @@ struct EventPayerRow: View {
             }.buttonStyle(.plain).foregroundStyle(Palette.teal).accessibilityIdentifier("event.payer")
             Text("Shared by every shift in this event. Manage company bank names in Settings → Payers.").font(.caption2).foregroundStyle(Palette.muted)
         }.sheet(isPresented: $selecting) { PayerPickerView(selected: store.data.settings.payer(for: event)?.id) { id in store.updatePreferences { $0.assignPayer(id, to: event) } } }
+    }
+}
+
+/// A few friendly numbers about the work so far, for the profile.
+struct ProfileStats {
+    var shifts = 0
+    var hours: Decimal = 0
+    var earned: Decimal = 0
+    var since: String?
+    var topJob: String?
+    var topPlace: String?
+    init(shifts all: [Shift], currency: String, now: Date = Date()) {
+        let worked = all.filter { $0.startDate <= now }
+        shifts = worked.count
+        hours = worked.reduce(0) { $0 + $1.hours }
+        earned = worked.filter { $0.currency == currency }.reduce(0) { $0 + $1.pay }
+        if let first = worked.map(\.startDate).min() { since = first.formatted(.dateTime.month(.wide).year()) }
+        func mostCommon(_ values: [String]) -> String? {
+            let counts = Dictionary(values.map { ($0.trimmingCharacters(in: .whitespaces), 1) }.filter { !$0.0.isEmpty }, uniquingKeysWith: +)
+            return counts.max { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }?.key
+        }
+        topJob = mostCommon(worked.map(\.event))
+        topPlace = mostCommon(worked.map(\.location))
+    }
+    func summary(_ currency: String) -> String {
+        shifts == 0 ? "Your profile" : "\(shifts) \(shifts == 1 ? "shift" : "shifts") · \(money(earned, currency)) earned"
     }
 }

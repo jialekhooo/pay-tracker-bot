@@ -593,7 +593,7 @@ final class HowMuchUITests: XCTestCase {
             navigation.buttons.firstMatch.tap()
         }
         app.buttons["Profile settings"].tap()
-        XCTAssertTrue(app.navigationBars["Account settings"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
         let profile = app.buttons["profile.save"]
         reveal(profile, in: app); profile.tap()
         XCTAssertTrue(app.alerts["Profile saved"].waitForExistence(timeout: 3))
