@@ -18,7 +18,7 @@ struct ShiftDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         Card {
                             HStack { Text("WORK PAYOUT").font(.caption.weight(.semibold)).tracking(1.3).foregroundStyle(Palette.muted); Spacer(); StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date()) }
-                            Text(money(shift.pay, shift.currency)).font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink).minimumScaleFactor(0.6).lineLimit(1)
+                            Text(money(shift.pay, shift.currency)).font(.heroAmount).foregroundStyle(Palette.ink).minimumScaleFactor(0.6).lineLimit(1)
                             Text("\(PayEngine.rounded(shift.hours)) paid hours · \(shift.fixedPay == nil ? "Hourly" : "Fixed payout")").font(.subheadline).foregroundStyle(Palette.muted)
                             // Payment only makes sense once the work is done.
                             if shift.endDate <= Date() {

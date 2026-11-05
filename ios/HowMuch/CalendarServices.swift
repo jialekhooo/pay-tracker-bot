@@ -53,7 +53,7 @@ struct CalendarSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Label("Your shifts in any calendar", systemImage: "calendar.badge.clock").font(.headline)
+                Label("Your shifts in any calendar", systemImage: "calendar.badge.clock").font(.appHeadline)
                 Text("Create a private live link once, and your shifts show up in Apple Calendar, Google Calendar or TimeTree, updating as you add or change jobs.").font(.subheadline).foregroundStyle(Palette.muted)
             }
             Section("Live calendar") {

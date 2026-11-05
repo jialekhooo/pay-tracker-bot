@@ -75,12 +75,12 @@ struct EarningsView: View {
                                     HStack {
                                         Image(systemName: "calendar").foregroundStyle(Palette.teal)
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(TrackerCalendar.localDate(month + "-01")?.formatted(.dateTime.month(.wide).year()) ?? month).font(.headline)
+                                            Text(TrackerCalendar.localDate(month + "-01")?.formatted(.dateTime.month(.wide).year()) ?? month).font(.appHeadline)
                                             Text("\(counted(records.count, "shift")) · \(PayEngine.rounded(records.reduce(0) { $0 + $1.hours }))h").font(.caption).foregroundStyle(Palette.muted)
                                         }
                                         Spacer()
                                         Text(money(records.reduce(0) { $0 + $1.pay }, currency)).font(.subheadline.bold())
-                                        Image(systemName: "chevron.right").font(.caption2)
+                                        Image(systemName: "chevron.right").font(.chevron)
                                     }.foregroundStyle(Palette.ink)
                                 }
                             }.buttonStyle(.plain).accessibilityIdentifier("earnings.month.\(month)")
@@ -118,11 +118,11 @@ struct EventCard: View {
         Card {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(event).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
+                    Text(event).font(.appHeadline).foregroundStyle(Palette.ink)
                     Text("\(shifts.count) \(shifts.count == 1 ? "shift" : "shifts") · \(displayDay(shifts.map(\.day).max() ?? ""))").font(.caption).foregroundStyle(Palette.muted)
                 }
                 Spacer(minLength: 0)
-                if showsDisclosure { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted).padding(.top, 3) }
+                if showsDisclosure { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted).padding(.top, 3) }
             }
             let locations = Array(Set(shifts.map(\.location).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })).sorted()
             Label(locations.count == 1 ? locations[0] : locations.isEmpty ? "No location added" : "\(locations.count) locations", systemImage: "mappin.and.ellipse")
@@ -130,7 +130,7 @@ struct EventCard: View {
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Work earnings").font(.caption).foregroundStyle(Palette.muted)
-                    Text(money(earnings, currency)).font(.system(.title2, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).minimumScaleFactor(0.65).lineLimit(1)
+                    Text(money(earnings, currency)).font(.appTitle).foregroundStyle(Palette.ink).minimumScaleFactor(0.65).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 StatusPill(title: paid ? "Paid" : completed ? "Awaiting payment" : shifts.allSatisfy { $0.startDate > Date() } ? "Upcoming" : "In progress", paid: paid)
@@ -275,7 +275,7 @@ struct EventMoneySummary: View {
     var body: some View {
         Card {
             Label("EVENT SUMMARY", systemImage: "chart.bar.xaxis").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
-            Text(money(summary.netWorkPay, currency)).font(.system(size: 34, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink).accessibilityIdentifier("event.netWork")
+            Text(money(summary.netWorkPay, currency)).font(.amount).foregroundStyle(Palette.ink).accessibilityIdentifier("event.netWork")
             Text("Work earnings · including scheduled shifts").font(.caption).foregroundStyle(Palette.muted)
             Divider()
             LabeledContent("Work pay", value: money(summary.workPay, currency))

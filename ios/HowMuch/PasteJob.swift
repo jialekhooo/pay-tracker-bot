@@ -22,7 +22,7 @@ struct PasteJobCard: View {
                     let text = strings.joined(separator: "\n")
                     DispatchQueue.main.async { onText(text) }
                 }
-                .buttonBorderShape(.capsule).tint(Palette.teal).labelStyle(.titleAndIcon)
+                .buttonBorderShape(.roundedRectangle(radius: 16)).controlSize(.large).tint(Palette.teal).labelStyle(.titleAndIcon)
                 .accessibilityIdentifier("paste.clipboard")
                 Button("Type or edit", systemImage: "keyboard") { typing = true }
                     .glassAction().accessibilityIdentifier("paste.type")

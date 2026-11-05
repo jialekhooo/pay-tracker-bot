@@ -21,7 +21,7 @@ private struct AccountWidgetPreviews: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Card {
-                    Label("Your work, at a glance", systemImage: "rectangle.on.rectangle").font(.headline)
+                    Label("Your work, at a glance", systemImage: "rectangle.on.rectangle").font(.appHeadline)
                     Text("Touch and hold your Home Screen, tap Edit → Add Widget, then search HowMuch. Next Shift is also available on your Lock Screen.").font(.subheadline)
                     Text("Touch and hold an installed widget → Edit Widget to choose a currency and whether to show pay or location. Pay is hidden by default.").font(.caption).foregroundStyle(Palette.muted)
                 }
@@ -45,7 +45,7 @@ private struct AccountWidgetPreviews: View {
     }
     private func preview(_ title: String, _ kind: HowMuchWidgetKind, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
+            Text(title).font(.appHeadline)
             HowMuchWidgetContents(snapshot: WidgetSnapshot(data: store.data, accountID: store.accountID), date: .now,
                 kind: kind, family: .systemMedium, showPay: showPay, showLocation: showLocation)
                 .padding(16).frame(height: height).frame(maxWidth: .infinity, alignment: .leading)

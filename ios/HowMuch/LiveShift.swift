@@ -211,7 +211,7 @@ struct FinishShiftSheet: View {
                             .frame(minHeight: 44).accessibilityIdentifier("finish.time")
                         if let updated {
                             Divider()
-                            Text(money(updated.pay, updated.currency)).font(.system(size: 34, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+                            Text(money(updated.pay, updated.currency)).font(.amount).foregroundStyle(Palette.ink)
                                 .accessibilityIdentifier("finish.pay")
                             Text(change(from: latest, to: updated)).font(.caption).foregroundStyle(Palette.muted)
                         }

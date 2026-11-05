@@ -223,7 +223,7 @@ struct EarningsHero: View {
                 Image(systemName: "wallet.bifold").font(.system(size: 21, weight: .light)).foregroundStyle(Palette.teal)
             }
             // Only what's been worked counts; booked shifts are shown separately below.
-            Text(money(split.earned, currency)).font(.system(size: 40, weight: .bold, design: .rounded)).tracking(-1.5)
+            Text(money(split.earned, currency)).font(.heroAmount).tracking(-1.5)
                 .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink)
                 // With nothing booked, the headline is the total.
                 .accessibilityIdentifier(split.booked > 0 ? "earnings.earned" : "earnings.total")
@@ -262,7 +262,7 @@ struct GlanceCard: View {
     let symbol: String
     var body: some View {
         Card {
-            HStack { Image(systemName: symbol).font(.caption).foregroundStyle(Palette.teal); Spacer(); Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.muted) }
+            HStack { Image(systemName: symbol).font(.caption).foregroundStyle(Palette.teal); Spacer(); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
             Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(title).font(.caption).foregroundStyle(Palette.muted)
         }
@@ -307,15 +307,15 @@ struct ShiftsView: View {
                 NavigationLink { EventDetailView(event: first.event, currency: first.currency) } label: {
                     Card {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(first.event).font(.headline)
+                            Text(first.event).font(.appHeadline)
                             Spacer()
-                            Text(money(items.reduce(Decimal.zero) { $0 + $1.pay }, first.currency)).font(.headline)
+                            Text(money(items.reduce(Decimal.zero) { $0 + $1.pay }, first.currency)).font(.appHeadline)
                         }.foregroundStyle(Palette.ink)
                         HStack {
                             Text("\(items.count) \(items.count == 1 ? "shift" : "shifts")").font(.caption)
                             Spacer()
                             Text(displayDay(first.day)).font(.caption)
-                            Image(systemName: "chevron.right").font(.caption)
+                            Image(systemName: "chevron.right").font(.chevron)
                         }.foregroundStyle(Palette.muted)
                     }.contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityIdentifier("shifts.event." + key)
@@ -396,11 +396,11 @@ struct UpcomingEventCard: View {
         Card {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(group.event).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
+                    Text(group.event).font(.appHeadline).foregroundStyle(Palette.ink)
                     Text("\(group.shifts.count) upcoming \(group.shifts.count == 1 ? "shift" : "shifts")").font(.caption).foregroundStyle(Palette.muted)
                 }
                 Spacer(minLength: 0)
-                if navigates { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted) }
+                if navigates { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
             }
             Label(next.startDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " · " + Shift.clock(next.startMinute) + "–" + Shift.clock(next.endMinute) + (next.endMinute <= next.startMinute ? " (+1 day)" : ""), systemImage: "calendar").font(.caption).foregroundStyle(Palette.muted)
             if !locations.isEmpty {

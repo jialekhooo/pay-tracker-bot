@@ -132,7 +132,7 @@ struct PaymentDetectionView: View {
                     if status.receipts.isEmpty { Text("No pay received yet. Payments from saved payers appear here.").foregroundStyle(Palette.muted) }
                     ForEach(status.receipts) { receipt in
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("\(receipt.currency) \(receipt.amount ?? "—")").font(.headline)
+                            Text("\(receipt.currency) \(receipt.amount ?? "—")").font(.appHeadline)
                             Text(displayPayer(receipt.payer)).font(.subheadline)
                             Text(receipt.status.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption).foregroundStyle(Palette.teal)
                             Text(receipt.reason).font(.caption).foregroundStyle(Palette.muted)

@@ -556,7 +556,7 @@ struct PetCard: View {
                         }
                         Spacer()
                         CoinLabel(amount: balance)
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                        Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
                     }
                     ProgressView(value: pet.progress).tint(PetPalette.leaf)
                     if let line = nextStageLine(pet) { Text(line).font(.caption2).foregroundStyle(Palette.muted) }
@@ -683,10 +683,10 @@ struct PetDetailView: View {
     private var nameRow: some View {
         HStack(spacing: 6) {
             // The field hugs the name, with a pencil beside it, so renaming is easy to find.
-            Text(name.isEmpty ? "Penny" : name).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(1)
+            Text(name.isEmpty ? "Penny" : name).font(.appTitle).lineLimit(1)
                 .padding(.horizontal, 2).hidden()
                 .overlay {
-                    TextField("Penny", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
+                    TextField("Penny", text: $name).font(.appTitle).multilineTextAlignment(.center)
                         .submitLabel(.done).focused($naming).accessibilityIdentifier("pet.name")
                         .onSubmit(saveName)
                         .onChange(of: naming) { _, focused in if !focused { saveName() } }

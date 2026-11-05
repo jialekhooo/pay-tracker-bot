@@ -193,11 +193,11 @@ struct BankSetupWizard: View {
                 if let symbol { Image(systemName: symbol) }
                 Text(title).lineLimit(1).minimumScaleFactor(0.8)
             }
-            .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 56)
+            .font(.system(.subheadline, design: .rounded, weight: .semibold))
+            .frame(maxWidth: .infinity, minHeight: 48)
             .foregroundStyle(style == .light ? Palette.ink : .white)
-            .background(style == .dark ? Palette.ink : style == .accent ? Palette.teal : .white.opacity(0.9), in: .rect(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Palette.line, lineWidth: style == .light ? 1 : 0))
+            .background(style == .dark ? Palette.ink : style == .accent ? Palette.teal : .white.opacity(0.9), in: .rect(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Palette.line, lineWidth: style == .light ? 1 : 0))
         }.buttonStyle(.plain)
     }
 

@@ -145,7 +145,7 @@ struct AccountSettingsView: View {
             .sheet(isPresented: $deleting) {
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 24) {
-                        Text("Verify account deletion").font(.title.bold()).foregroundStyle(Palette.ink)
+                        Text("Verify account deletion").font(.appTitle).foregroundStyle(Palette.ink)
                         Text("Use the same Apple Account to confirm. This permanently deletes your HowMuch account and cloud records.").foregroundStyle(Palette.muted)
                         AppleAccountButton(deleting: true)
                         Spacer()
@@ -164,7 +164,7 @@ struct AccountConflictView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Review your versions").font(.title2.bold()).foregroundStyle(Palette.ink)
+                    Text("Review your versions").font(.appTitle).foregroundStyle(Palette.ink)
                     Text("The same records changed in two places. Copies of both versions have been saved in this account’s protected cache.").font(.subheadline).foregroundStyle(Palette.muted)
                     version("This iPhone", store.data)
                     version("Your account", conflict.remote.data)
@@ -177,7 +177,7 @@ struct AccountConflictView: View {
     }
     private func version(_ title: String, _ data: TrackerData) -> some View {
         Card {
-            Text(title).font(.headline)
+            Text(title).font(.appHeadline)
             Text("\(counted(data.shifts.count, "shift")) · \(counted(data.claims.count, "claim"))").font(.caption).foregroundStyle(Palette.muted)
             ForEach(Array(Set(data.shifts.map(\.currency))).sorted(), id: \.self) { currency in
                 Text(money(data.shifts.filter { $0.currency == currency }.reduce(0) { $0 + $1.pay }, currency)).font(.subheadline.bold())

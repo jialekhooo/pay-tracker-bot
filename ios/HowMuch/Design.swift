@@ -1,6 +1,24 @@
 import SwiftUI
 import HowMuchCore
 
+/// One type scale for the whole app. Headings are rounded; amounts use fixed sizes so cards line up.
+extension Font {
+    /// Page and sheet titles inside the content.
+    static let appTitle = Font.system(.title2, design: .rounded, weight: .bold)
+    /// Card and row titles.
+    static let appHeadline = Font.system(.headline, design: .rounded)
+    /// The big amount at the top of a screen (earnings, a shift's pay).
+    static let heroAmount = Font.system(size: 40, weight: .bold, design: .rounded)
+    /// Amounts inside a card or sheet.
+    static let amount = Font.system(size: 34, weight: .bold, design: .rounded)
+    /// Amount text fields.
+    static let amountField = Font.system(size: 34, weight: .semibold, design: .rounded)
+    /// Disclosure chevrons on rows and cards.
+    static let chevron = Font.caption2.weight(.semibold)
+    /// Icons in the 32-point tiles beside settings rows.
+    static let rowIcon = Font.system(size: 15, weight: .medium)
+}
+
 enum Palette {
     static let ink = Color(red: 0.094, green: 0.231, blue: 0.216)
     static let muted = Color(red: 0.392, green: 0.471, blue: 0.451)
@@ -104,7 +122,7 @@ struct SectionHeading: View {
     var detail: String = ""
     var body: some View {
         HStack {
-            Text(title).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
+            Text(title).font(.appHeadline).foregroundStyle(Palette.ink)
             Spacer()
             Text(detail).font(.caption).foregroundStyle(Palette.muted)
         }.padding(.top, 4)
@@ -141,7 +159,7 @@ struct EmptyCard: View {
         Card {
             VStack(spacing: 10) {
                 Image(systemName: symbol).font(.system(size: 26, weight: .light)).foregroundStyle(Palette.teal).padding(15).background(Palette.mint, in: Circle())
-                Text(title).font(.headline)
+                Text(title).font(.appHeadline)
                 Text(message).font(.subheadline).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
             }.frame(maxWidth: .infinity).padding(.vertical, 18)
         }
@@ -165,7 +183,7 @@ struct ShiftRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(shift.event).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink).lineLimit(2)
+                Text(shift.event).font(.appHeadline).foregroundStyle(Palette.ink).lineLimit(2)
                 Spacer(minLength: 4)
                 Text(money(shift.pay, shift.currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).fixedSize()
             }
@@ -177,7 +195,7 @@ struct ShiftRow: View {
                 StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date())
                 Spacer()
                 Text(hoursText(shift.hours) + " paid time").font(.caption).foregroundStyle(Palette.muted)
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.muted)
+                Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
             }
             if store.data.shifts.contains(where: { shift.overlaps($0) }) {
                 Label("Overlapping shift", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
@@ -241,7 +259,9 @@ private struct PrimaryActionButtonStyle: ButtonStyle {
 private struct RowActionButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        // Same type as the app's other buttons, so text actions don't look bigger or lighter than boxed ones.
+        configuration.label.font(.system(.subheadline, design: .rounded, weight: .semibold))
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
             .foregroundStyle(configuration.role == .destructive ? Color.red : Palette.teal)
             .opacity(enabled ? (configuration.isPressed ? 0.65 : 1) : 0.45)

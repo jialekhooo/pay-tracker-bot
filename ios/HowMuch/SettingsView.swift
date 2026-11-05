@@ -15,10 +15,10 @@ struct SettingsView: View {
                     HStack(spacing: 12) {
                         ProfileAvatar(size: 44)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(store.data.settings.displayName.isEmpty ? "Your profile" : store.data.settings.displayName).font(.system(.headline, design: .rounded))
+                            Text(store.data.settings.displayName.isEmpty ? "Your profile" : store.data.settings.displayName).font(.appHeadline)
                             Text(ProfileStats(shifts: store.data.shifts, currency: store.data.rules.currency).summary(store.data.rules.currency)).font(.caption).foregroundStyle(Palette.muted)
                         }
-                        Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.muted)
+                        Spacer(); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
                     }.foregroundStyle(Palette.ink)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
@@ -66,13 +66,13 @@ struct SettingsView: View {
     private func settingsRow<Destination: View>(_ title: String, _ icon: String, value: String? = nil, @ViewBuilder destination: () -> Destination) -> some View {
         NavigationLink(destination: destination) {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 15, weight: .medium)).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
+                Image(systemName: icon).font(.rowIcon).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
                 Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold))
                 Spacer(minLength: 8)
                 if let value { Text(value).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1) }
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.muted.opacity(0.7))
+                Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted.opacity(0.7))
             }.foregroundStyle(Palette.ink)
-                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
@@ -110,11 +110,11 @@ struct ProfileSettingsView: View {
                     if loading { ProgressView("Preparing photo…").font(.caption) }
                     HStack(spacing: 6) {
                         // The field hugs the name itself, so the pencil sits right beside it.
-                        Text(name.isEmpty ? "Your name" : name).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(1)
+                        Text(name.isEmpty ? "Your name" : name).font(.appTitle).lineLimit(1)
                             .padding(.horizontal, 2).hidden()
                             .overlay {
                                 TextField("Your name", text: $name).textContentType(.name).focused($naming).submitLabel(.done)
-                                    .font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
+                                    .font(.appTitle).multilineTextAlignment(.center)
                                     .onSubmit(save).accessibilityIdentifier("profile.name")
                             }
                         if !naming { Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted).onTapGesture { naming = true } }
@@ -168,7 +168,7 @@ struct ProfileSettingsView: View {
                             Text("\(pet.achievements.filter(\.earned).count) of \(pet.achievements.count) badges earned").font(.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.muted)
+                        Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
                     }.foregroundStyle(Palette.ink).padding(14).frame(maxWidth: .infinity)
                         .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18)).contentShape(Rectangle())
                 }.buttonStyle(.plain)
@@ -220,7 +220,7 @@ struct ProfileSettingsView: View {
     }
     private func favourite(_ icon: String, _ title: String, _ value: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 14, weight: .medium)).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
+            Image(systemName: icon).font(.rowIcon).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
             Text(title).font(.subheadline).foregroundStyle(Palette.muted)
             Spacer(minLength: 8)
             Text(value).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -370,7 +370,7 @@ struct PayersSettingsView: View {
                 Button("Add payer", systemImage: "plus") { adding = true }.rowAction().accessibilityIdentifier("payers.add")
                 ForEach(payers) { payer in
                     Button { editing = payer } label: {
-                        VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.headline); Text(payer.bankNames.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted) }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.appHeadline); Text(payer.bankNames.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted) }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("payers.item.\(payer.id)")
                         .swipeActions { Button("Remove", role: .destructive) { deleting = payer } }
                 }
@@ -432,7 +432,7 @@ struct PayerPickerView: View {
                 Button("Choose payer later") { onSelect(nil); dismiss() }.rowAction()
                 ForEach(payers) { payer in
                     Button { onSelect(payer.id); dismiss() } label: {
-                        HStack { VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.headline); Text(payer.bankNames.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted) }; Spacer(); if selected == payer.id { Image(systemName: "checkmark").foregroundStyle(Palette.teal) } }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        HStack { VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.appHeadline); Text(payer.bankNames.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted) }; Spacer(); if selected == payer.id { Image(systemName: "checkmark").foregroundStyle(Palette.teal) } }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("payer.select.\(payer.name)")
                 }
                 Button("Add new payer", systemImage: "plus") { adding = true }.rowAction().accessibilityIdentifier("payer.addNew")

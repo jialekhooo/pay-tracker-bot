@@ -105,7 +105,7 @@ struct JobLocationPicker: View {
                     if search.searching { ProgressView("Finding places…").frame(maxWidth: .infinity) }
                     if let error = search.error { Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Palette.muted) }
                     if !search.places.isEmpty {
-                        Text("Matching places").font(.headline)
+                        Text("Matching places").font(.appHeadline)
                         ForEach(Array(search.places.enumerated()), id: \.offset) { index, item in
                             Button { choose(JobPlaceSearch.savedLocation(item.name ?? "", JobPlaceSearch.address(item))) } label: {
                                 Card { placeLabel(item.name ?? "Place", JobPlaceSearch.address(item)) }
@@ -139,7 +139,7 @@ struct JobLocationPicker: View {
                 if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Palette.muted) }
             }
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted)
+            Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
         }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
     }
 }
@@ -156,7 +156,7 @@ struct JobDirectionsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Card {
                         Label("JOB LOCATION", systemImage: "mappin.and.ellipse").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
-                        Text(location).font(.headline)
+                        Text(location).font(.appHeadline)
                         Text("Confirm the destination before starting directions.").font(.caption).foregroundStyle(Palette.muted)
                     }
                     if search.searching { ProgressView("Looking up your workplace…").frame(maxWidth: .infinity) }
@@ -165,7 +165,7 @@ struct JobDirectionsView: View {
                             Marker(item: item)
                         }.frame(height: 220).clipShape(RoundedRectangle(cornerRadius: 20)).accessibilityIdentifier("location.map")
                         Card {
-                            Text(item.name ?? "Destination").font(.headline)
+                            Text(item.name ?? "Destination").font(.appHeadline)
                             Text(JobPlaceSearch.address(item)).font(.subheadline).foregroundStyle(Palette.muted)
                             Text("Apple Maps will show routes from your current location and handle any location permission.").font(.caption).foregroundStyle(Palette.muted)
                         }
@@ -180,7 +180,7 @@ struct JobDirectionsView: View {
                         ForEach(Array(search.places.enumerated()), id: \.offset) { index, item in
                             Button { selected = item } label: {
                                 Card {
-                                    Text(item.name ?? "Place").font(.headline).foregroundStyle(Palette.ink)
+                                    Text(item.name ?? "Place").font(.appHeadline).foregroundStyle(Palette.ink)
                                     Text(JobPlaceSearch.address(item)).font(.caption).foregroundStyle(Palette.muted)
                                     Label("Show this destination", systemImage: "map").font(.subheadline).foregroundStyle(Palette.teal)
                                 }

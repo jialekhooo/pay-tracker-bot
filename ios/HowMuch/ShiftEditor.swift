@@ -289,7 +289,7 @@ struct ShiftEditor: View {
             Picker("Pay mode", selection: $fixed) { Text("Hourly").tag(false); Text("Lump sum").tag(true) }.pickerStyle(.segmented)
             Text(fixed ? "Total payout" : "Hourly rate").font(.caption).foregroundStyle(Palette.muted)
             TextField(fixed ? "Total payout" : "Hourly rate", text: $amount)
-                .keyboardType(.decimalPad).font(.system(size: 36, weight: .semibold, design: .rounded))
+                .keyboardType(.decimalPad).font(.amountField)
                 .accessibilityIdentifier("shift.amount")
             HStack {
                 Text("Currency").font(.subheadline).foregroundStyle(Palette.muted)
@@ -336,7 +336,7 @@ struct ShiftEditor: View {
     private func payoutCard(_ preview: Shift) -> some View {
         Card {
             editorHeading(extraDates.isEmpty ? "ESTIMATED WORK PAYOUT" : "FIRST DATE · ESTIMATED PAYOUT", symbol: "wallet.bifold")
-            Text(money(preview.pay, preview.currency)).font(.system(size: 36, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+            Text(money(preview.pay, preview.currency)).font(.amount).foregroundStyle(Palette.ink)
                 .minimumScaleFactor(0.65).lineLimit(1)
             Text("\(PayEngine.rounded(preview.hours)) paid hours · Claims added separately").font(.caption).foregroundStyle(Palette.muted)
             if !extraDates.isEmpty || repeatDays > 0 { Text("Saving adds \(extraDates.count + (repeatDays > 0 ? repeatCount : 1)) shifts. Each date uses its own scheduled hours.").font(.caption).foregroundStyle(Palette.muted) }
@@ -465,12 +465,12 @@ struct ClaimEditor: View {
                         }
                         Text(shift.currency).font(.caption.bold()).foregroundStyle(Palette.teal)
                         TextField("Amount (\(shift.currency))", text: $amount)
-                            .keyboardType(.decimalPad).font(.system(size: 38, weight: .semibold, design: .rounded)).foregroundStyle(Palette.ink)
+                            .keyboardType(.decimalPad).font(.amountField).foregroundStyle(Palette.ink)
                             .accessibilityIdentifier("claim.amount")
                         Text("Added to your expected bank credit, separately from work earnings").font(.caption).foregroundStyle(Palette.muted)
                     }
                     Card {
-                        Text(shift.event).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
+                        Text(shift.event).font(.appHeadline).foregroundStyle(Palette.ink)
                         Text(displayDay(shift.day)).font(.caption).foregroundStyle(Palette.muted)
                         Divider()
                         DatePicker("Date", selection: $day, displayedComponents: .date).font(.subheadline)
@@ -693,13 +693,13 @@ struct JobTemplatesView: View {
         ScrollView {
             VStack(spacing: 18) {
                 if (store.data.settings.jobTemplates ?? []).isEmpty {
-                    Card { Label("Your usual jobs, ready to reuse", systemImage: "square.stack.3d.up").font(.headline); Text("When adding a job, turn on Save these settings as a template. Locations, times, pay and breaks will be ready next time.").font(.subheadline).foregroundStyle(Palette.muted) }
+                    Card { Label("Your usual jobs, ready to reuse", systemImage: "square.stack.3d.up").font(.appHeadline); Text("When adding a job, turn on Save these settings as a template. Locations, times, pay and breaks will be ready next time.").font(.subheadline).foregroundStyle(Palette.muted) }
                 }
                 ForEach(store.data.settings.jobTemplates ?? []) { template in
                     Card {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(template.name).font(.headline)
+                                Text(template.name).font(.appHeadline)
                                 Text(template.shift.event).font(.subheadline)
                                 Text("\(Shift.clock(template.shift.startMinute))–\(Shift.clock(template.shift.endMinute)) · \(template.shift.location)").font(.caption).foregroundStyle(Palette.muted)
                             }

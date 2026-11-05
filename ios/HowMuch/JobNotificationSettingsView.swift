@@ -81,7 +81,8 @@ struct JobNotificationSettingsView: View {
                     saved = true
                     Task { await auth.synchronize(); await auth.registerPushIfAllowed() }
                 }
-            }.rowAction().disabled(options.starts && options.startReminderMinutes.isEmpty).accessibilityIdentifier("notifications.save")
+            }.glassAction().disabled(options.starts && options.startReminderMinutes.isEmpty).accessibilityIdentifier("notifications.save")
+                .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
         }.detailStyle("Job notifications")
             .task {
                 options = store.data.settings.jobNotifications
@@ -178,12 +179,12 @@ struct TravelReminderSettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Card {
                     Label("A LITTLE LESS RUSH", systemImage: "car.side").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.teal)
-                    Text("Arrive with time to spare.").font(.title2.bold())
+                    Text("Arrive with time to spare.").font(.appTitle)
                     Text("Route estimates help plan your departure. Receive a heads-up, a time-to-leave reminder, and an update if your journey gets longer.").font(.subheadline).foregroundStyle(Palette.muted)
                     Toggle("Time to leave reminders", isOn: $options.enabled).accessibilityIdentifier("travel.enabled")
                 }
                 Card {
-                    Text("Your usual starting point").font(.headline)
+                    Text("Your usual starting point").font(.appHeadline)
                     TextField("Departure address, city and country", text: $options.origin, axis: .vertical).autocorrectionDisabled().focused($originFocused).accessibilityIdentifier("travel.origin")
                     Button("Find a departure address", systemImage: "magnifyingglass") { originFocused = false; choosingOrigin = true }.rowAction()
                     Text("This saved address is used for every job. HowMuch does not track where you are. Include a city and country to avoid a wrong match.").font(.caption).foregroundStyle(Palette.muted)
@@ -223,7 +224,7 @@ struct TravelReminderSettingsView: View {
                 if let shift = next {
                     Card {
                         Label("NEXT JOURNEY", systemImage: "map").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
-                        Text(shift.event).font(.headline)
+                        Text(shift.event).font(.appHeadline)
                         Text(shift.location).font(.subheadline).foregroundStyle(Palette.muted)
                         if let estimate { TravelEstimateSummary(estimate: estimate) }
                         Button("Check saved route", systemImage: "arrow.clockwise") { originFocused = false; Task { await check(shift) } }.rowAction().disabled(busy || (!ready && options.transit != true) || !store.data.settings.travelEnabled).accessibilityIdentifier("travel.check")
@@ -301,8 +302,8 @@ struct TravelDepartureView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Card {
                     Label("YOUR NEXT JOURNEY", systemImage: "map").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
-                    Text(shift.event).font(.title2.bold())
-                    Text(shift.location).font(.headline)
+                    Text(shift.event).font(.appTitle)
+                    Text(shift.location).font(.appHeadline)
                     Text("Shift starts \(shift.startDate.formatted(date: .abbreviated, time: .shortened))").font(.subheadline).foregroundStyle(Palette.muted)
                     if let origin = store.data.settings.travel?.origin { Text("From: " + origin).font(.subheadline) }
                 }
