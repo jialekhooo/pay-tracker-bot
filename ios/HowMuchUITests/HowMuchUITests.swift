@@ -484,16 +484,17 @@ final class HowMuchUITests: XCTestCase {
         let setup = app.buttons["payin.notifications.setup"]
         XCTAssertTrue(setup.waitForExistence(timeout: 10))
         attach("Pay-in tracking", app: app)
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "payin.notifications.lastRun").firstMatch.exists)
         setup.tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 11"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Step 1 of 10"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Open Shortcuts"].exists)
         attach("Bank setup step 1", app: app)
         let next = app.buttons["bank.next"]
-        for step in 2...11 {
+        for step in 2...10 {
             next.tap()
-            XCTAssertTrue(app.staticTexts["Step \(step) of 11"].waitForExistence(timeout: 5), "step \(step)")
+            XCTAssertTrue(app.staticTexts["Step \(step) of 10"].waitForExistence(timeout: 5), "step \(step)")
             if step == 6 { attach("Bank setup step 6", app: app) }
-            if step == 10 { attach("Bank setup step 10", app: app) }
+            if step == 9 { attach("Bank setup step 9", app: app) }
         }
         next.tap()
         XCTAssertTrue(app.staticTexts["And you're done!"].waitForExistence(timeout: 5))

@@ -112,14 +112,26 @@ struct RecordPayReceivedIntent: AppIntent {
 
 extension IntentActions {
     static func recordPayReceived(text: String, amount: Double?, payer: String?) async throws -> String {
+        // Only money coming in leaves the phone; codes, spending and promotions are dropped here.
+        guard amount != nil || PayInText.looksLikeMoneyIn(text) else {
+            PayInLog.record("Not money coming in, so it stayed on your iPhone.")
+            return "Not a payment."
+        }
         let account = AppleAccountStore.shared
         guard await tracker() != nil, account.account != nil, !account.isDemo else {
+            PayInLog.record("Couldn't check it: open HowMuch and sign in.")
             throw TrackerError.invalid("Open HowMuch and sign in first.")
         }
         var body: [String: Any] = ["text": String(text.prefix(2000)), "payer": String((payer ?? "").prefix(200))]
         if let amount, amount > 0 { body["amount"] = String(format: "%.2f", amount) }
-        let data = try await account.api.request("/v1/payment-detection/notification", method: "POST", body: JSONSerialization.data(withJSONObject: body))
-        let result = try JSONDecoder().decode(PayInResult.self, from: data)
+        let result: PayInResult
+        do {
+            let data = try await account.api.request("/v1/payment-detection/notification", method: "POST", body: JSONSerialization.data(withJSONObject: body))
+            result = try JSONDecoder().decode(PayInResult.self, from: data)
+        } catch {
+            PayInLog.record("Couldn't reach HowMuch: \(error.localizedDescription)")
+            throw error
+        }
         PayInLog.record(result.message)
         guard result.status != "ignored" else { return result.message }
         // Bring the paid flags into the phone's records straight away.

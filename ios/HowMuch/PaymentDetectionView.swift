@@ -36,6 +36,7 @@ struct PaymentDetectionView: View {
                 Section("Bank app notifications") {
                     Button { settingUpBank = true } label: { Label("Set up bank notifications", systemImage: "bell.badge") }
                         .accessibilityIdentifier("payin.notifications.setup")
+                    lastRun
                     Toggle("Mark matching pay as paid", isOn: Binding(get: { payIn?.notificationsAuto ?? false },
                                                                        set: { enabled in Task { await setPayIn(enabled) } }))
                         .disabled(payIn == nil || busy).accessibilityIdentifier("payin.notifications.auto")
@@ -213,6 +214,26 @@ struct PaymentDetectionView: View {
     private func decodePayIn(_ data: Data) throws -> PayInStatus {
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(PayInStatus.self, from: data)
+    }
+    /// When the Shortcuts automation last handed HowMuch a notification: the proof it's linked.
+    @ViewBuilder private var lastRun: some View {
+        if let entry = PayInLog.load().first {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Automation linked · last ran \(entry.date.formatted(.relative(presentation: .named)))").font(.subheadline.weight(.semibold))
+                    Text(entry.result).font(.caption).foregroundStyle(Palette.muted)
+                }
+            } icon: { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+                .accessibilityIdentifier("payin.notifications.lastRun")
+        } else {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Not linked yet").font(.subheadline.weight(.semibold))
+                    Text("The automation hasn't sent HowMuch a notification on this iPhone. Set it up, or wait for your next bank alert.").font(.caption).foregroundStyle(Palette.muted)
+                }
+            } icon: { Image(systemName: "exclamationmark.circle").foregroundStyle(.orange) }
+                .accessibilityIdentifier("payin.notifications.lastRun")
+        }
     }
     /// Hides Gmail's code once it's been entered; it also clears by itself when the first email is forwarded.
     private func forwardingConfirmed() async {
