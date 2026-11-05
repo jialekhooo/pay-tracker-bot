@@ -137,3 +137,5 @@ Build 30 adds three shortcuts that work without opening HowMuch first:
 - **Control Center button** (iOS 18+): "Add a job" opens Add shift. If the clipboard holds a job message with dates it's filled in for review, otherwise Add shift opens empty. It can also go on the Lock Screen or Action button. iOS asks once to allow pasting from other apps.
 
 Build 31 tidies the screens: a Today section on Overview, amounts shown as "SGD 1,664.00" in the app and widgets, singular counts ("1 shift"), hours as "13h 32m", Mark as paid only after a shift ends and Time to leave only before it starts, Live shift settings styled like the other pages, Earnings filter pills that scroll to the screen edge, page headers that scroll away, aligned tab labels, and "Apple Calendar" in place of "Calendar & sync".
+
+Build 32 makes Add shift on this day clear Liquid Glass like the other in-page actions, and the remaining primary buttons teal-tinted glass.
