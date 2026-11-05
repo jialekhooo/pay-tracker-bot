@@ -21,6 +21,9 @@ public struct AppPreferences: Codable, Equatable {
     public var liveShift: LiveShiftPreferences?
     /// Settings → Widgets preview toggles.
     public var widgetPreview: WidgetPreviewPreferences?
+    /// Days marked as not available (yyyy-MM-dd), for sharing availability and warning before booking.
+    public var blockedDays: [String]?
+    public var blocked: Set<String> { Set(blockedDays ?? []) }
     public init() {}
     public func validate() throws {
         guard (0..<1440).contains(defaultBreakMinutes), (0..<1440).contains(reminderMinute),
@@ -35,6 +38,7 @@ public struct AppPreferences: Codable, Equatable {
             for template in jobTemplates { try template.validate() }
         }
         if let pet { try pet.validate() }
+        guard (blockedDays ?? []).count <= 400, (blockedDays ?? []).allSatisfy({ Shift.date($0) != nil }) else { throw TrackerError.invalid("Too many blocked days.") }
         if let liveShift { try liveShift.validate() }
     }
     public var travelEnabled: Bool { travel?.enabled == true }

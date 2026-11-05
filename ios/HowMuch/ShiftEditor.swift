@@ -341,6 +341,10 @@ struct ShiftEditor: View {
                 .minimumScaleFactor(0.65).lineLimit(1)
             Text("\(PayEngine.rounded(preview.hours)) paid hours · Claims added separately").font(.caption).foregroundStyle(Palette.muted)
             if !extraDates.isEmpty || repeatDays > 0 { Text("Saving adds \(extraDates.count + (repeatDays > 0 ? repeatCount : 1)) shifts. Each date uses its own scheduled hours.").font(.caption).foregroundStyle(Palette.muted) }
+            if store.data.settings.blocked.contains(preview.day) {
+                Label("You marked this day as not available.", systemImage: "calendar.badge.exclamationmark").font(.subheadline).foregroundStyle(.orange)
+                    .accessibilityIdentifier("shift.blockedDay")
+            }
             if store.data.shifts.contains(where: { preview.overlaps($0) }) {
                 Label("This overlaps another shift.", systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.orange)
             }

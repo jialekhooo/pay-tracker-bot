@@ -159,8 +159,13 @@ class Preferences(BaseModel):
     pet: PetPreferences | None=None
     liveShift: LiveShiftPreferences | None=None
     widgetPreview: WidgetPreviewPreferences | None=None
+    blockedDays: list[str] | None=Field(default=None,max_length=400)
     @model_validator(mode='after')
     def validate_preferences(self):
+        if self.blockedDays:
+            for day in self.blockedDays:
+                try: date.fromisoformat(day)
+                except ValueError as exc: raise ValueError('Invalid blocked day') from exc
         if self.jobTemplates:
             if len({t.id for t in self.jobTemplates})!=len(self.jobTemplates) or any(not t.name.strip() for t in self.jobTemplates):
                 raise ValueError('Invalid job templates')
@@ -385,6 +390,9 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
     for key,model in ACCOUNT_SETTINGS.items():
         if preferences and key not in preferences.model_fields_set and prior_preferences.get(key) is not None:
             setattr(preferences,key,model.model_validate(prior_preferences[key]))
+    # Blocked days (1.1) survive a save from an older app that doesn't know them.
+    if preferences and 'blockedDays' not in preferences.model_fields_set and prior_preferences.get('blockedDays') is not None:
+        preferences.blockedDays=list(prior_preferences['blockedDays'])
     if preferences:
         from .payers import prepare
         try: prepare(preferences,prior_preferences)

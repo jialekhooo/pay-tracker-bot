@@ -881,6 +881,22 @@ final class HowMuchUITests: XCTestCase {
         attach("TimeTree steps", app: app)
     }
     @MainActor
+    func testShareAvailabilityWritesAMessageAndRemembersBlockedDays() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.calendar"].waitForExistence(timeout: 5)); app.buttons["nav.calendar"].tap()
+        let share = app.buttons["calendar.availability"]
+        reveal(share, in: app); share.tap()
+        let message = app.staticTexts["availability.text"]
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertTrue(message.label.hasPrefix("My availability"))
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; formatter.timeZone = TimeZone(identifier: "Asia/Singapore")
+        let inAWeek = formatter.string(from: Date().addingTimeInterval(7 * 86400))
+        let day = app.buttons["availability.day.\(inAWeek)"]
+        XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap()
+        XCTAssertTrue(message.label.contains("Not available"))
+        attach("Share availability", app: app)
+    }
+    @MainActor
     func testEditDuplicateDeleteAndCalendarEditor() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         openShift("Roadshow", in: app)

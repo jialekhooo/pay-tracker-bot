@@ -6,6 +6,7 @@ struct WorkCalendarView: View {
     @State private var month = Date()
     @State private var selected = Date()
     @State private var adding = false
+    @State private var sharingAvailability = false
     init(initialDay: Date = Date()) {
         _month = State(initialValue: initialDay)
         _selected = State(initialValue: initialDay)
@@ -54,6 +55,8 @@ struct WorkCalendarView: View {
             HStack {
                 Text("\(counted(monthShifts.count, "shift")) this month").font(.caption).foregroundStyle(Palette.muted)
                 Spacer()
+                Button { sharingAvailability = true } label: { Label("Share availability", systemImage: "person.badge.clock").font(.caption.bold()) }
+                    .accessibilityIdentifier("calendar.availability")
                 NavigationLink { CalendarSettingsView() } label: { Label("Export", systemImage: "square.and.arrow.up").font(.caption.bold()) }.accessibilityIdentifier("calendar.export")
             }
             SectionHeading(title: selected.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)), detail: counted(selectedShifts.count, "shift"))
@@ -61,10 +64,84 @@ struct WorkCalendarView: View {
             else { ShiftCards(shifts: selectedShifts) }
             Button("Add shift on this day", systemImage: "plus") { adding = true }.glassAction().accessibilityIdentifier("calendar.add")
         }.sheet(isPresented: $adding) { ShiftEditor(initialDay: selected) }
+            .sheet(isPresented: $sharingAvailability) { AvailabilitySheet() }
     }
     private func move(_ amount: Int) {
         month = TrackerCalendar.calendar.date(byAdding: .month, value: amount, to: month)!
         let components = TrackerCalendar.calendar.dateComponents([.year, .month], from: month)
         selected = TrackerCalendar.calendar.date(from: components)!
+    }
+}
+
+
+/// "Send your availability": a message worked out from booked shifts and the days you block.
+struct AvailabilitySheet: View {
+    @EnvironmentObject private var store: TrackerStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var from = Date()
+    @State private var to = TrackerCalendar.calendar.date(byAdding: .day, value: 30, to: Date())!
+    @State private var blocked: Set<String> = []
+    @State private var copied = false
+    private var days: [Date] {
+        var result: [Date] = []
+        var cursor = TrackerCalendar.calendar.startOfDay(for: from)
+        while cursor <= max(from, to), result.count < 93 { result.append(cursor); cursor = TrackerCalendar.calendar.date(byAdding: .day, value: 1, to: cursor)! }
+        return result
+    }
+    private var text: String { Availability.message(from: from, to: to, shifts: store.data.shifts, blocked: blocked) }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Dates") {
+                    DatePicker("From", selection: $from, displayedComponents: .date)
+                    DatePicker("To", selection: $to, in: from..., displayedComponents: .date)
+                }
+                Section {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
+                        ForEach(["M", "T", "W", "T", "F", "S", "S"].indices, id: \.self) { index in
+                            Text(["M", "T", "W", "T", "F", "S", "S"][index]).font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted)
+                        }
+                        // Line day 1 up under its weekday (weeks start on Monday).
+                        ForEach(0..<((TrackerCalendar.calendar.component(.weekday, from: from) + 5) % 7), id: \.self) { _ in Color.clear.frame(height: 36) }
+                        ForEach(days, id: \.self) { date in dayButton(date) }
+                    }.padding(.vertical, 4)
+                } header: { Text("Tap a day you can't work") } footer: {
+                    Text("Teal days have a shift booked. Blocked days are saved, and HowMuch warns you if you book a shift on one.")
+                }
+                Section("Your message") {
+                    Text(text).font(.callout).textSelection(.enabled).accessibilityIdentifier("availability.text")
+                    ShareLink(item: text) { Label("Share to WhatsApp or Telegram", systemImage: "square.and.arrow.up") }
+                    Button(copied ? "Copied" : "Copy message", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = text; copied = true }
+                        .accessibilityIdentifier("availability.copy")
+                }
+            }.detailStyle("Share availability")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { save(); dismiss() } } }
+                .onAppear { blocked = store.data.settings.blocked }
+                .onDisappear { save() }
+                .onChange(of: blocked) { _, _ in copied = false }
+        }
+    }
+    private func dayButton(_ date: Date) -> some View {
+        let key = Shift.dayString(date)
+        let state = Availability.day(key, shifts: store.data.shifts, blocked: [])
+        let isBlocked = blocked.contains(key)
+        return Button {
+            if isBlocked { blocked.remove(key) } else { blocked.insert(key) }
+        } label: {
+            Text("\(TrackerCalendar.calendar.component(.day, from: date))").font(.caption.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .foregroundStyle(isBlocked ? .white : Palette.ink)
+                .background(isBlocked ? Color.red.opacity(0.75) : state == .free ? Palette.mint.opacity(0.6) : Palette.teal.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(alignment: .topTrailing) { if isBlocked { Image(systemName: "xmark").font(.system(size: 7, weight: .bold)).foregroundStyle(.white).padding(3) } }
+        }.buttonStyle(.plain)
+            .accessibilityLabel(date.formatted(.dateTime.weekday(.wide).day().month(.wide)) + (isBlocked ? ", blocked" : state == .free ? ", free" : ", has a shift"))
+            .accessibilityIdentifier("availability.day.\(key)")
+    }
+    private func save() {
+        // Keep today and future blocks; past ones no longer matter.
+        let today = Shift.dayString(Date())
+        let next = blocked.filter { $0 >= today }.sorted()
+        guard next != (store.data.settings.blockedDays ?? []).filter({ $0 >= today }).sorted() else { return }
+        store.updatePreferences { $0.blockedDays = Array(next.prefix(400)) }
     }
 }
