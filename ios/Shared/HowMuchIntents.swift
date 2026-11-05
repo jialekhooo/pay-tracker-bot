@@ -10,6 +10,8 @@ struct FinishShiftOnTimeIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Finished on time"
     static var description = IntentDescription("Confirms you finished a shift at its booked time.")
     static var isDiscoverable = false
+    /// The account's files are encrypted while the iPhone is locked, so ask for Face ID first.
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     @Parameter(title: "Shift") var shiftID: String
     @Parameter(title: "Account") var accountID: String
     init() {}

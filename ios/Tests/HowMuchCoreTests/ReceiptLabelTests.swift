@@ -61,3 +61,32 @@ final class ReviewFixTests: XCTestCase {
         XCTAssertFalse(PetProgress(shifts: booked, now: today).hasAchievement("on-a-roll"))
     }
 }
+
+final class FieldMergeTests: XCTestCase {
+    func testPaidOnTheServerAndANoteEditHereBothSurvive() throws {
+        let shift = try Shift(event: "Roadshow", location: "ION", day: "2026-11-02", startMinute: 540, endMinute: 1080, rate: 20)
+        var base = TrackerData(); base.shifts = [shift]
+        var local = base; local.shifts[0].location = "ION Orchard B2"
+        var remote = base; remote.shifts[0].paid = true
+        let merged = try AccountMerge.merge(base: base, local: local, remote: remote)
+        XCTAssertEqual(merged.shifts[0].location, "ION Orchard B2")
+        XCTAssertTrue(merged.shifts[0].paid)
+    }
+
+    func testDifferentSettingsChangedOnEachSideBothSurvive() throws {
+        var base = TrackerData(); base.preferences = AppPreferences()
+        var local = base; local.preferences?.displayName = "Jia Le"
+        var remote = base; remote.preferences?.remindersEnabled = true
+        let merged = try AccountMerge.merge(base: base, local: local, remote: remote)
+        XCTAssertEqual(merged.preferences?.displayName, "Jia Le")
+        XCTAssertEqual(merged.preferences?.remindersEnabled, true)
+    }
+
+    func testTheSameFieldChangedOnBothSidesStillAsks() throws {
+        let shift = try Shift(event: "Roadshow", day: "2026-11-02", startMinute: 540, endMinute: 1080, rate: 20)
+        var base = TrackerData(); base.shifts = [shift]
+        var local = base; local.shifts[0].location = "A"
+        var remote = base; remote.shifts[0].location = "B"
+        XCTAssertThrowsError(try AccountMerge.merge(base: base, local: local, remote: remote))
+    }
+}

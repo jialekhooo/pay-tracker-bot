@@ -34,6 +34,7 @@ public enum PayEngine {
 }
 
 public struct Shift: Identifiable, Codable, Equatable {
+    public static let maxEvent = 120, maxLocation = 1000
     public var id: UUID
     public var sourceID: String?
     public var event: String
@@ -61,6 +62,10 @@ public struct Shift: Identifiable, Codable, Equatable {
         }
         guard Self.date(day) != nil, (0..<1440).contains(startMinute), (0..<1440).contains(endMinute) else {
             throw TrackerError.invalid("Enter a valid date and times.")
+        }
+        // The same limits as the server, so a record saved here can always sync.
+        guard event.count <= Self.maxEvent, location.count <= Self.maxLocation, (sourceID ?? "").count <= 100 else {
+            throw TrackerError.invalid("Event names can be up to \(Self.maxEvent) characters and locations up to \(Self.maxLocation).")
         }
         let duration = endMinute > startMinute ? endMinute - startMinute : endMinute + 1440 - startMinute
         guard breakMinutes >= 0, breakMinutes < duration, rate >= 0, fixedPay == nil || fixedPay! >= 0,
@@ -126,6 +131,7 @@ public enum ClaimCategory: String, Codable, CaseIterable, Identifiable {
 
 // The original type name stays source-compatible; claims now support multiple categories.
 public struct CabClaim: Identifiable, Codable, Equatable {
+    public static let maxNote = 250
     public var id = UUID()
     public var shiftID: UUID
     public var day: String
@@ -206,6 +212,19 @@ public struct TrackerData: Codable, Equatable {
             if !duplicate { shifts.append(shift); added += 1 }
         }
         return added
+    }
+
+    /// Server limits: anything longer is trimmed before upload so one record can never block syncing.
+    public var withinServerLimits: TrackerData {
+        var copy = self
+        for index in copy.shifts.indices {
+            if copy.shifts[index].event.count > Shift.maxEvent { copy.shifts[index].event = String(copy.shifts[index].event.prefix(Shift.maxEvent)) }
+            if copy.shifts[index].location.count > Shift.maxLocation { copy.shifts[index].location = String(copy.shifts[index].location.prefix(Shift.maxLocation)) }
+        }
+        for index in copy.claims.indices where copy.claims[index].note.count > CabClaim.maxNote {
+            copy.claims[index].note = String(copy.claims[index].note.prefix(CabClaim.maxNote))
+        }
+        return copy
     }
 
     public func validate() throws {

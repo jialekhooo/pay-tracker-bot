@@ -432,6 +432,7 @@ struct ClaimEditor: View {
                         DatePicker("Date", selection: $day, displayedComponents: .date).font(.subheadline)
                         Divider()
                         TextField("Note (optional)", text: $note).frame(minHeight: 44).font(.subheadline).accessibilityIdentifier("claim.note")
+                            .onChange(of: note) { _, value in if value.count > CabClaim.maxNote { note = String(value.prefix(CabClaim.maxNote)) } }
                     }
                     ReceiptAttachmentEditor(receiptID: $receiptID, photoData: $receiptData, processing: $receiptProcessing,
                                             amount: $amount, category: $category, note: $note, useDay: { day = $0 })

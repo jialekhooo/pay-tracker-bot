@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import CryptoKit
 import HowMuchCore
 
 @MainActor
@@ -31,6 +32,8 @@ final class TrackerStore: ObservableObject {
     private var undoBaseline: TrackerData?
     private var reminderTask: Task<Void, Never>?
     private var writable = true
+    /// False when the saved file couldn't be read (for example while the iPhone is locked); never sync over it.
+    var isWritable: Bool { writable }
     private let url: URL
 
     func setPioneer(_ value: Bool?) {
@@ -232,9 +235,17 @@ final class TrackerStore: ObservableObject {
         guard !isPreview else { return }
         let folder = url.deletingLastPathComponent().appending(path: "conflicts", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let suffix = UUID().uuidString
-        try JSONEncoder().encode(data).write(to: folder.appending(path: "phone-\(suffix).json"), options: [.atomic, .completeFileProtectionUnlessOpen])
-        try JSONEncoder().encode(remote).write(to: folder.appending(path: "cloud-\(suffix).json"), options: [.atomic, .completeFileProtectionUnlessOpen])
+        // Named by content, so re-detecting the same conflict doesn't write the same copies again.
+        let phone = try JSONEncoder().encode(data), cloud = try JSONEncoder().encode(remote)
+        let suffix = SHA256.hash(data: phone + cloud).prefix(8).map { String(format: "%02x", $0) }.joined()
+        let phoneURL = folder.appending(path: "phone-\(suffix).json")
+        guard !FileManager.default.fileExists(atPath: phoneURL.path) else { return }
+        try phone.write(to: phoneURL, options: [.atomic, .completeFileProtectionUnlessOpen])
+        try cloud.write(to: folder.appending(path: "cloud-\(suffix).json"), options: [.atomic, .completeFileProtectionUnlessOpen])
+        // Keep only the latest three pairs.
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let dated = files.map { ($0, (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+        for (file, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(6) { try? FileManager.default.removeItem(at: file) }
     }
 
     func removeAccountCache() throws {

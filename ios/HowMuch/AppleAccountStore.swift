@@ -32,6 +32,7 @@ final class AppleAccountStore: ObservableObject {
     private var activeChallenge: AppleChallenge?
     private var syncTask: Task<Void, Never>?
     private var syncing = false
+    private var pendingResync = false
     private var restoreStarted = false
 
     func restore() async {
@@ -68,6 +69,11 @@ final class AppleAccountStore: ObservableObject {
             return
         }
         #endif
+        // Launched in the background while the iPhone is locked (a Lock Screen button or a Shortcut):
+        // the account's files are encrypted until unlock, so wait instead of opening an empty account.
+        if !UIApplication.shared.isProtectedDataAvailable {
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.protectedDataDidBecomeAvailableNotification) { break }
+        }
         await revokePendingSession()
         guard let cached = AccountVault.read("session", as: AccountSession.self) else {
             await clearNotifications(); restoring = false; return
@@ -82,9 +88,11 @@ final class AppleAccountStore: ObservableObject {
             adoptDeviceSettings()
             await registerPushIfAllowed()
         } catch {
-            // Never display an unverified account or shared data when credential state cannot be checked.
-            self.error = "Apple could not confirm your account. Sign in again to continue."
+            // Offline (a basement venue, the MRT): Apple can't be reached, but nothing says the account was
+            // revoked. Open the cached account, as becomeActive does, and check again when the app is next active.
+            openAccount(cached.account)
             restoring = false
+            await synchronize()
         }
     }
 
@@ -182,19 +190,25 @@ final class AppleAccountStore: ObservableObject {
         guard let tracker, tracker.lastSyncedData != nil, conflict == nil else { return }
         tracker.adoptDeviceSettings()
     }
+    /// Debounces edits. Only the wait is cancelled: a sync already uploading always finishes, otherwise the
+    /// phone loses track of what it sent and later reports a false "changed in two places" conflict.
     func scheduleSync() {
         guard !isDemo else { return }
+        if syncing { pendingResync = true; return }
         syncTask?.cancel()
         syncTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            await self?.synchronize()
+            Task { await self?.synchronize() }  // not a child: cancelling the debounce can't cancel the upload
         }
     }
     func synchronize() async {
-        guard !isDemo, !syncing, conflict == nil, let account, let store = tracker else { return }
-        syncing = true; store.syncMessage = "Syncing your account…"
-        defer { syncing = false }
+        guard !isDemo, !syncing, conflict == nil, let account, let store = tracker, store.isWritable else { return }
+        syncing = true; pendingResync = false; store.syncMessage = "Syncing your account…"
+        defer {
+            syncing = false
+            if pendingResync { pendingResync = false; scheduleSync() }
+        }
         do {
             for attempt in 0..<2 {
                 let remote = try JSONDecoder().decode(CloudEnvelope.self, from: await api.request("/v1/data"))
@@ -222,6 +236,7 @@ final class AppleAccountStore: ObservableObject {
                     return
                 }
                 do {
+                    target = target.withinServerLimits
                     let body = try JSONEncoder().encode(CloudWrite(baseRevision: remote.revision, timezone: TimeZone.current.identifier, data: target))
                     let uploaded = try JSONDecoder().decode(CloudEnvelope.self, from: await api.request("/v1/data", method: "PUT", body: body))
                     guard self.account?.id == account.id, self.tracker === store else { return }
@@ -244,8 +259,9 @@ final class AppleAccountStore: ObservableObject {
             store.syncMessage = "Changes are saved on this phone. Try syncing again shortly."
         } catch let error as AccountHTTPError where error.status == 401 {
             guard self.account?.id == account.id, self.tracker === store else { return }
-            await clearSession(revoke: true)
-            self.error = "Please sign in with Apple again. Your account’s cached records are kept on this phone."
+            // Keep the scheduled reminders: the shifts are still on this phone while you sign back in.
+            await clearSession(revoke: true, keepReminders: true)
+            self.error = "Please sign in with Apple again. Your account’s cached records and reminders are kept on this phone."
         } catch let error as AccountHTTPError where error.status == 422 || error.status == 413 {
             guard self.account?.id == account.id, self.tracker === store else { return }
             store.syncMessage = "Some records need attention before syncing"
@@ -266,11 +282,17 @@ final class AppleAccountStore: ObservableObject {
             } else { try store.applySynced(conflict.remote, current: conflict.remote.data) }
             self.conflict = nil
             if store.hasPendingChanges { scheduleSync() }
+        } catch let error as AccountHTTPError where error.status == 409 {
+            // The account changed again (another device, or a detected payment): show the newest version and ask again.
+            if let fresh = try? JSONDecoder().decode(CloudEnvelope.self, from: await api.request("/v1/data")) {
+                self.conflict = AccountConflict(remote: fresh)
+            }
+            self.error = "Your account changed again since you looked. Review the latest version, then choose again."
         } catch { self.error = "Your versions remain safe. \(error.localizedDescription)" }
     }
     func signOut() async { await clearSession(revoke: true) }
     func credentialsRevoked() async { await clearSession(revoke: true) }
-    private func clearSession(revoke: Bool) async {
+    private func clearSession(revoke: Bool, keepReminders: Bool = false) async {
         let token = api.session?.revocationToken
         if revoke, let token { try? AccountVault.save(token, key: "pending-revocation") }
         syncTask?.cancel(); tracker?.onChange = nil
@@ -281,9 +303,11 @@ final class AppleAccountStore: ObservableObject {
         api.setSession(nil); AccountVault.remove("session")
         PushCenter.shared.currentAccountID = nil
         UIApplication.shared.unregisterForRemoteNotifications()
-        await previousStore?.stopReminders()
+        if !keepReminders {
+            await previousStore?.stopReminders()
+            await clearNotifications()
+        }
         NativeTransitPlanner.shared.clear()
-        await clearNotifications()
         if revoke { await revokePendingSession() }
     }
     private func revokePendingSession() async {

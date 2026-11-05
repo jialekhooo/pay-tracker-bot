@@ -3,6 +3,7 @@ import ActivityKit
 import Foundation
 import HowMuchCore
 import UserNotifications
+import UIKit
 
 /// The app's side of the live-card buttons, Siri and Control Center. iOS may launch HowMuch in the
 /// background just to run one of these, so each opens the signed-in account itself when needed.
@@ -124,9 +125,20 @@ extension IntentActions {
             if (payer ?? "").isEmpty, !read.payer.isEmpty { payer = read.payer }
         }
         let account = AppleAccountStore.shared
-        guard await tracker() != nil, account.account != nil, !account.isDemo else {
-            PayInLog.record("Couldn't check it: open HowMuch and sign in.")
-            throw TrackerError.invalid("Open HowMuch and sign in first.")
+        let unlocked = UIApplication.shared.isProtectedDataAvailable
+        if unlocked {
+            guard await tracker() != nil, account.account != nil, !account.isDemo else {
+                PayInLog.record("Couldn't check it: open HowMuch and sign in.")
+                throw TrackerError.invalid("Open HowMuch and sign in first.")
+            }
+        } else {
+            // Bank alerts usually arrive while the iPhone is locked. The shift files are encrypted until unlock,
+            // but the sign-in (kept "after first unlock") is enough to send the payment; the phone syncs after unlock.
+            guard let session = AccountVault.read("session", as: AccountSession.self) else {
+                PayInLog.record("Couldn't check it: open HowMuch and sign in.")
+                throw TrackerError.invalid("Open HowMuch and sign in first.")
+            }
+            account.api.setSession(session)
         }
         var body: [String: Any] = ["text": String(text.prefix(2000)), "payer": String((payer ?? "").prefix(200))]
         if let amount, amount > 0 { body["amount"] = String(format: "%.2f", amount) }
@@ -141,7 +153,7 @@ extension IntentActions {
         PayInLog.record(result.message)
         guard result.status != "ignored" else { return result.message }
         // Bring the paid flags into the phone's records straight away.
-        if result.status == "auto_paid" { await account.synchronize() }
+        if result.status == "auto_paid", unlocked { await account.synchronize() }
         let content = UNMutableNotificationContent()
         content.title = result.status == "auto_paid" ? "Pay received" : "Pay received · check it"
         content.body = result.message
