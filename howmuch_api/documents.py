@@ -338,7 +338,8 @@ async def get_data(request: Request, authorization: str | None=Header(default=No
     account=authenticated_account(request,authorization)
     result=read_document(request.app.state.storage,account)
     from .push import configured
-    return json_response({**result,'pushReady':configured()})
+    from .auth import pioneer
+    return json_response({**result,'pushReady':configured(),'pioneer':pioneer(account)})
 
 
 @router.put('/data')
@@ -406,7 +407,8 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
                    (account['account_id'],revision,json.dumps(envelope,use_decimal=True),int(time.time())))
     from .push import rebuild_jobs, configured
     rebuild_jobs(storage,account,data,payload.timezone)
-    return json_response({'revision':revision,**envelope,'pushReady':configured()})
+    from .auth import pioneer
+    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account)})
 
 
 def normalize(value):

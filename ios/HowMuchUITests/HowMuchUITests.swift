@@ -463,7 +463,15 @@ final class HowMuchUITests: XCTestCase {
         sunglasses.tap()
         XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5) || app.buttons["Buy Sunglasses"].exists)
         attach("Not enough coins or buy sunglasses", app: app)
-        if app.alerts.firstMatch.exists { app.alerts.buttons["OK"].tap() } else { app.buttons["Cancel"].firstMatch.tap() }
+        if app.alerts.firstMatch.exists { app.alerts.buttons["OK"].tap() } else { app.buttons["Buy Sunglasses"].tap() }
+        // Pioneers (everyone before launch) get their own skin.
+        app.buttons["Skins"].tap()
+        let pioneer = app.buttons["pet.item.pioneer"]
+        XCTAssertTrue(pioneer.waitForExistence(timeout: 5))
+        pioneer.tap()
+        XCTAssertTrue(pioneer.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        let top = app.textFields["pet.name"]; reveal(top, in: app)
+        attach("Penny in her Pioneer skin", app: app)
         let badges = app.staticTexts["Badges"].firstMatch
         reveal(badges, in: app)
         attach("Pet badges", app: app)
@@ -594,6 +602,8 @@ final class HowMuchUITests: XCTestCase {
         }
         app.buttons["Profile settings"].tap()
         XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.pioneer"].exists)
+        attach("Profile top", app: app)
         let profile = app.buttons["profile.save"]
         reveal(profile, in: app); profile.tap()
         XCTAssertTrue(app.alerts["Profile saved"].waitForExistence(timeout: 3))

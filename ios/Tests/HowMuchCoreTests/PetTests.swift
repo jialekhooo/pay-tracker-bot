@@ -129,4 +129,22 @@ final class PetTests: XCTestCase {
         var tooLong = AppPreferences(); tooLong.pet = PetPreferences(name: String(repeating: "x", count: 41))
         XCTAssertThrowsError(try tooLong.validate())
     }
+
+    func testPioneersGetABadgeAndTheirOwnSkin() throws {
+        let shifts = [try shift("2026-11-02")]
+        let pioneer = PetProgress(shifts: shifts, now: now, calendar: calendar, pioneer: true)
+        let later = PetProgress(shifts: shifts, now: now, calendar: calendar)
+        XCTAssertTrue(pioneer.hasAchievement("pioneer"))
+        XCTAssertFalse(later.achievements.contains { $0.id == "pioneer" }) // never shown as a locked badge
+        XCTAssertEqual(pioneer.coinsEarned, later.coinsEarned + PetProgress.coinsPerAchievement)
+        let skin = PetItem.named("pioneer")!
+        XCTAssertTrue(skin.pioneerOnly)
+        var closet = PetCloset()
+        try closet.toggle(skin, pioneer)
+        XCTAssertEqual(closet.wearing(.skin, pioneer), skin)
+        XCTAssertNil(closet.wearing(.skin, later))
+        XCTAssertThrowsError(try closet.toggle(skin, later))
+        var preferences = AppPreferences(); preferences.pet = PetPreferences(closet: closet)
+        XCTAssertNoThrow(try preferences.validate())
+    }
 }

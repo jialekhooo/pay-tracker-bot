@@ -74,6 +74,21 @@ def authenticated_account(request: Request, authorization: str | None):
     return row
 
 
+def pioneer(account) -> bool:
+    """Accounts made before the official launch. Until HOWMUCH_PIONEER_UNTIL is set (a date
+    like 2026-12-01, or Unix seconds), every account is a pioneer."""
+    cutoff=os.environ.get('HOWMUCH_PIONEER_UNTIL','').strip()
+    if not cutoff: return True
+    try: until=int(cutoff) if cutoff.isdigit() else int(time.mktime(time.strptime(cutoff,'%Y-%m-%d')))
+    except ValueError: return False
+    return int(account['created'])<until
+
+
+def account_json(account):
+    return {'id':account['account_id'],'email':account['email'],'displayName':account['display_name'],
+            'appleUserID':account['apple_sub'],'pioneer':pioneer(account)}
+
+
 def session_response(db, account, device_id):
     access,refresh,revoke=secrets.token_urlsafe(32),secrets.token_urlsafe(48),secrets.token_urlsafe(32)
     now=int(time.time())
@@ -83,7 +98,7 @@ def session_response(db, account, device_id):
         db.execute('INSERT INTO auth_sessions VALUES(?,?,?,?,?,?,?,?,?)',
                    (session,account['account_id'],digest(access),digest(refresh),digest(revoke),now+ACCESS_SECONDS,now+REFRESH_SECONDS,device_id,now))
     return {'accessToken':access,'refreshToken':refresh,'revocationToken':revoke,'expiresAt':now+ACCESS_SECONDS,
-            'account':{'id':account['account_id'],'email':account['email'],'displayName':account['display_name'],'appleUserID':account['apple_sub']}}
+            'account':account_json(account)}
 
 
 class AppleSignIn(BaseModel):
@@ -155,7 +170,7 @@ async def refresh(payload: RefreshSession, request: Request):
         if cursor.rowcount!=1: raise HTTPException(401,'This refresh token has already been used.')
         account=db.execute('SELECT * FROM accounts WHERE account_id=?',(row['account_id'],)).fetchone()
     return json_response({'accessToken':access,'refreshToken':new_refresh,'expiresAt':now+ACCESS_SECONDS,
-            'account':{'id':account['account_id'],'email':account['email'],'displayName':account['display_name'],'appleUserID':account['apple_sub']}})
+            'account':account_json(account)})
 
 
 @router.post('/logout',status_code=204)

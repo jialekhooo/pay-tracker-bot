@@ -21,6 +21,8 @@ final class TrackerStore: ObservableObject {
     private let suppressNotifications: Bool
     @Published var syncMessage = "Saved on this phone"
     @Published var usesRemotePush = false
+    /// The account was made before HowMuch's official launch. The server decides; remembered here for offline use.
+    @Published private(set) var pioneer = false
     private(set) var lastSyncedData: TrackerData?
     private(set) var syncRevision = 0
     var hasPendingChanges: Bool { lastSyncedData.map { $0 != data } ?? (data != TrackerData()) }
@@ -31,13 +33,24 @@ final class TrackerStore: ObservableObject {
     private var writable = true
     private let url: URL
 
+    func setPioneer(_ value: Bool?) {
+        guard let value, value != pioneer else { return }
+        pioneer = value
+        UserDefaults.standard.set(value, forKey: "pioneer.\(accountID)")
+    }
+    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer) }
+
     init(accountID: String, suppressNotifications: Bool = false) {
         self.accountID = UUID(uuidString: accountID)?.uuidString.lowercased() ?? "invalid"
         self.suppressNotifications = suppressNotifications
         let folder = URL.applicationSupportDirectory.appending(path: "HowMuch/accounts/\(self.accountID)", directoryHint: .isDirectory)
         url = folder.appending(path: "tracker.json")
         guard self.accountID != "invalid" else { writable = false; error = "The account identity is invalid."; return }
+        pioneer = UserDefaults.standard.bool(forKey: "pioneer.\(self.accountID)")
         if isPreview {
+            #if DEBUG
+            pioneer = !CommandLine.arguments.contains("--ui-test-not-pioneer")
+            #endif
             do { data = try Self.previewData() } catch { self.error = error.localizedDescription }
             return
         }

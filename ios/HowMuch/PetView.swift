@@ -7,6 +7,20 @@ private let goldLight = Color(red: 1.0, green: 0.9, blue: 0.55)
 private let jade = Color(red: 0.2, green: 0.6, blue: 0.47)
 private let shell = Color(red: 0.86, green: 0.95, blue: 0.9)
 
+/// Penny's coin colours. The classic gold, or a special skin.
+struct PetSkin {
+    var base = gold, deep = goldDeep, light = goldLight, rim = goldDeep, star = false
+    init(_ item: PetItem?) {
+        if item?.id == "pioneer" {
+            base = Color(red: 0.16, green: 0.62, blue: 0.5)
+            deep = Color(red: 0.05, green: 0.36, blue: 0.3)
+            light = Color(red: 0.55, green: 0.88, blue: 0.74)
+            rim = gold
+            star = true
+        }
+    }
+}
+
 /// The HowMuch pet: an egg that hatches into a little coin, grows a sprout, then turns golden.
 struct PetFigure: View {
     let stage: PetProgress.Stage
@@ -15,6 +29,7 @@ struct PetFigure: View {
     /// What Penny is wearing, by slot (backgrounds are drawn by `PetStage`).
     var outfit: [PetSlot: PetItem] = [:]
     @State private var bob = false
+    private var skin: PetSkin { PetSkin(outfit[.skin]) }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -51,7 +66,7 @@ struct PetFigure: View {
                 .overlay(Ellipse().stroke(jade.opacity(0.5), lineWidth: size * 0.025))
                 .frame(width: size * 0.68, height: size * 0.86)
             ForEach(Array([(-0.14, -0.2), (0.15, 0.02), (-0.08, 0.24)].enumerated()), id: \.offset) { _, spot in
-                Circle().fill(gold).overlay(Circle().stroke(goldDeep, lineWidth: size * 0.012))
+                Circle().fill(skin.base).overlay(Circle().stroke(skin.deep, lineWidth: size * 0.012))
                     .frame(width: size * 0.12).offset(x: size * spot.0, y: size * spot.1)
             }
             face(scale: 0.8).offset(y: size * 0.04)
@@ -70,8 +85,8 @@ struct PetFigure: View {
     private var coinling: some View {
         ZStack {
             HStack(spacing: size * 0.16) {
-                Capsule().fill(goldDeep).frame(width: size * 0.12, height: size * 0.08)
-                Capsule().fill(goldDeep).frame(width: size * 0.12, height: size * 0.08)
+                Capsule().fill(skin.deep).frame(width: size * 0.12, height: size * 0.08)
+                Capsule().fill(skin.deep).frame(width: size * 0.12, height: size * 0.08)
             }.offset(y: size * 0.4)
             if outfit[.hat] == nil { sprout.offset(y: -size * 0.43) }
             coin(scale: 0.78)
@@ -80,26 +95,31 @@ struct PetFigure: View {
 
     private var goldenCoin: some View {
         ZStack {
-            Circle().fill(goldLight.opacity(0.35)).frame(width: size).blur(radius: size * 0.06)
+            Circle().fill(skin.light.opacity(0.35)).frame(width: size).blur(radius: size * 0.06)
             coin(scale: 0.8, shine: true)
             if outfit[.hat] == nil {
-                Crown().fill(LinearGradient(colors: [goldLight, gold], startPoint: .top, endPoint: .bottom))
-                    .overlay(Crown().stroke(goldDeep, lineWidth: size * 0.015))
+                Crown().fill(LinearGradient(colors: [skin.light, skin.base], startPoint: .top, endPoint: .bottom))
+                    .overlay(Crown().stroke(skin.deep, lineWidth: size * 0.015))
                     .frame(width: size * 0.34, height: size * 0.18).offset(y: -size * 0.46)
             }
-            Image(systemName: "sparkle").font(.system(size: size * 0.14)).foregroundStyle(goldLight).offset(x: size * 0.42, y: -size * 0.3)
-            Image(systemName: "sparkle").font(.system(size: size * 0.09)).foregroundStyle(gold).offset(x: -size * 0.44, y: size * 0.18)
+            Image(systemName: "sparkle").font(.system(size: size * 0.14)).foregroundStyle(skin.light).offset(x: size * 0.42, y: -size * 0.3)
+            Image(systemName: "sparkle").font(.system(size: size * 0.09)).foregroundStyle(skin.base).offset(x: -size * 0.44, y: size * 0.18)
         }
     }
 
     private func coin(scale: CGFloat, shine: Bool = false) -> some View {
         ZStack {
-            Circle().fill(LinearGradient(colors: shine ? [goldLight, gold] : [gold, goldDeep.opacity(0.9)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            Circle().stroke(goldDeep, lineWidth: size * 0.03)
-            Circle().inset(by: size * scale * 0.1).stroke(goldLight.opacity(0.8), lineWidth: size * 0.015)
+            Circle().fill(LinearGradient(colors: shine ? [skin.light, skin.base] : [skin.base, skin.deep.opacity(0.9)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            Circle().stroke(skin.rim, lineWidth: size * 0.03)
+            Circle().inset(by: size * scale * 0.1).stroke(skin.light.opacity(0.8), lineWidth: size * 0.015)
             Capsule().fill(.white.opacity(0.45)).frame(width: size * scale * 0.08, height: size * scale * 0.24)
                 .rotationEffect(.degrees(35)).offset(x: -size * scale * 0.28, y: -size * scale * 0.2)
             face(scale: scale)
+            if skin.star {
+                Image(systemName: "star.fill").font(.system(size: size * scale * 0.16)).foregroundStyle(goldLight)
+                    .shadow(color: goldDeep.opacity(0.6), radius: 1)
+                    .offset(y: -size * scale * 0.3)
+            }
         }.frame(width: size * scale, height: size * scale)
     }
 
@@ -216,7 +236,7 @@ struct PetAccessory: View {
         case .hat: hat.frame(width: w, height: w * 0.6, alignment: .bottom)
         case .face: glasses.frame(width: w, height: w * 0.3)
         case .neck: neckwear.frame(width: w, height: w * 0.3)
-        case .background: EmptyView()
+        case .background, .skin: EmptyView()
         }
     }
 
@@ -460,7 +480,7 @@ struct PetCard: View {
     @EnvironmentObject private var store: TrackerStore
     let now: Date
     var body: some View {
-        let pet = PetProgress(shifts: store.data.shifts, now: now)
+        let pet = store.petProgress(now: now)
         let closet = store.petCloset
         let name = store.petPreferences.displayName
         Card {
@@ -500,8 +520,12 @@ struct PetDetailView: View {
 
     private var displayName: String { store.petPreferences.displayName }
 
+    /// Skins only appear once there's more than the classic one to pick.
+    private func slots(_ pet: PetProgress) -> [PetSlot] {
+        PetSlot.allCases.filter { $0 != .skin || pet.hasAchievement("pioneer") }
+    }
     var body: some View {
-        let pet = PetProgress(shifts: store.data.shifts)
+        let pet = store.petProgress()
         let closet = store.petCloset
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -523,9 +547,9 @@ struct PetDetailView: View {
                     stat("\(pet.achievements.filter(\.earned).count)/\(pet.achievements.count)", "Badges", "rosette", Palette.teal)
                 }
                 SectionHeading(title: "Wardrobe", detail: "\(closet.balance(pet)) coins to spend")
-                PillPicker(values: PetSlot.allCases.map(\.title), selection: Binding(get: { slot.title }, set: { title in slot = PetSlot.allCases.first { $0.title == title } ?? .hat }))
+                PillPicker(values: slots(pet).map(\.title), selection: Binding(get: { slot.title }, set: { title in slot = PetSlot.allCases.first { $0.title == title } ?? .hat }))
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    ForEach(PetItem.catalog.filter { $0.slot == slot }) { item in itemTile(item, pet, closet) }
+                    ForEach(PetItem.catalog.filter { $0.slot == slot && (!$0.pioneerOnly || closet.owns($0, pet)) }) { item in itemTile(item, pet, closet) }
                 }
                 SectionHeading(title: "Badges", detail: "+\(PetProgress.coinsPerAchievement) coins each")
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {

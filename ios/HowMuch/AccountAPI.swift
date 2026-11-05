@@ -27,6 +27,8 @@ struct CloudEnvelope: Codable {
     let data: TrackerData
     let timezone: String
     let pushReady: Bool?
+    /// Made before the official launch.
+    let pioneer: Bool?
 }
 
 struct AccountHTTPError: LocalizedError {

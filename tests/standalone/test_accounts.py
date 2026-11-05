@@ -532,3 +532,20 @@ def test_pet_live_shift_and_widget_settings_sync_and_survive_older_apps(setup):
     # Nonsense values are rejected.
     bad=document(); bad['preferences']['pet']={'name':'x'*41}
     assert write(setup,session,bad,revision=kept and setup.client.get('/v1/data',headers=headers(session)).json()['revision']).status_code==422
+
+
+def test_accounts_made_before_launch_are_pioneers(setup,monkeypatch):
+    monkeypatch.delenv('HOWMUCH_PIONEER_UNTIL',raising=False)
+    early,_=login(setup)
+    assert early['account']['pioneer'] is True
+    assert setup.client.get('/v1/data',headers=headers(early)).json()['pioneer'] is True
+    # After launch, only accounts made before the cut-off keep the badge.
+    setup.storage._conn.execute("UPDATE accounts SET created=? WHERE apple_sub='apple-user-A'",(int(time.time())-86400,))
+    setup.storage._conn.commit()
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL',str(int(time.time())-60))
+    late,_=login(setup,'apple-user-B')
+    assert late['account']['pioneer'] is False
+    again,_=login(setup)
+    assert again['account']['pioneer'] is True
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL','2020-01-01')
+    assert setup.client.get('/v1/data',headers=headers(again)).json()['pioneer'] is False

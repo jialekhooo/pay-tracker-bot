@@ -92,7 +92,7 @@ struct ProfileSettingsView: View {
     }
     var body: some View {
         let stats = ProfileStats(shifts: store.data.shifts, currency: store.data.rules.currency)
-        let pet = PetProgress(shifts: store.data.shifts)
+        let pet = store.petProgress()
         let petName = store.petPreferences.displayName
         ScrollView {
             VStack(spacing: 18) {
@@ -109,11 +109,22 @@ struct ProfileSettingsView: View {
                         }
                     if loading { ProgressView("Preparing photo…").font(.caption) }
                     HStack(spacing: 6) {
-                        TextField("Your name", text: $name).textContentType(.name).focused($naming).submitLabel(.done)
-                            .font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center).fixedSize()
-                            .onSubmit(save).accessibilityIdentifier("profile.name")
+                        // The field hugs the name itself, so the pencil sits right beside it.
+                        Text(name.isEmpty ? "Your name" : name).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(1)
+                            .padding(.horizontal, 2).hidden()
+                            .overlay {
+                                TextField("Your name", text: $name).textContentType(.name).focused($naming).submitLabel(.done)
+                                    .font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
+                                    .onSubmit(save).accessibilityIdentifier("profile.name")
+                            }
                         if !naming { Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted).onTapGesture { naming = true } }
-                    }.foregroundStyle(Palette.ink)
+                    }.foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
+                    if store.pioneer {
+                        Label("Pioneer", systemImage: "star.circle.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(LinearGradient(colors: [Color(red: 0.16, green: 0.62, blue: 0.5), Palette.teal], startPoint: .leading, endPoint: .trailing), in: Capsule())
+                            .accessibilityLabel("Pioneer: joined HowMuch before launch").accessibilityIdentifier("profile.pioneer")
+                    }
                     Text(stats.since.map { "Tracking pay since \($0)" } ?? "Add your first shift to start your story").font(.subheadline).foregroundStyle(Palette.muted)
                     if store.data.settings.avatar != nil {
                         Button("Remove photo", role: .destructive) { notice = .remove }.font(.caption.weight(.semibold)).buttonStyle(.borderless).disabled(loading).accessibilityIdentifier("profile.removePhoto")

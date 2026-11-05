@@ -46,7 +46,8 @@ public struct PetProgress: Equatable, Sendable {
     public let bestStreakWeeks: Int
     public func hasAchievement(_ id: String) -> Bool { achievements.contains { $0.id == id && $0.earned } }
 
-    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar) {
+    /// `pioneer`: the account was made before HowMuch's official launch.
+    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false) {
         let worked = shifts.filter { $0.endDate <= now }
         let paid = worked.filter(\.paid)
         let points = worked.count * Self.xpPerWorkedShift + paid.count * Self.xpPerPaidShift
@@ -76,7 +77,9 @@ public struct PetProgress: Equatable, Sendable {
         }
         bestStreakWeeks = best
         let paidTotal = paid.reduce(Decimal(0)) { $0 + $1.pay }
-        let list: [PetAchievement] = [
+        var list: [PetAchievement] = pioneer
+            ? [.init(id: "pioneer", title: "Pioneer", detail: "Joined HowMuch before launch", symbol: "star.circle.fill", current: 1, target: 1)] : []
+        list += [
             .init(id: "first-shift", title: "First shift", detail: "Work your first shift", symbol: "briefcase.fill", current: worked.count, target: 1),
             .init(id: "regular", title: "Regular", detail: "Work 10 shifts", symbol: "calendar", current: worked.count, target: 10),
             .init(id: "veteran", title: "Veteran", detail: "Work 50 shifts", symbol: "medal.fill", current: worked.count, target: 50),
@@ -119,8 +122,8 @@ public struct PetAchievement: Identifiable, Equatable, Sendable {
 
 /// Things Penny can wear. Some are bought with coins, some unlock at a level or with an achievement.
 public enum PetSlot: String, CaseIterable, Codable, Sendable {
-    case hat, face, neck, background
-    public var title: String { ["Hats", "Glasses", "Neckwear", "Backgrounds"][Self.allCases.firstIndex(of: self)!] }
+    case hat, face, neck, background, skin
+    public var title: String { ["Hats", "Glasses", "Neckwear", "Backgrounds", "Skins"][Self.allCases.firstIndex(of: self)!] }
 }
 
 public struct PetItem: Identifiable, Equatable, Sendable {
@@ -149,7 +152,11 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "night-sky", name: "Night sky", slot: .background, unlock: .coins(100)),
         .init(id: "beach", name: "Beach", slot: .background, unlock: .coins(150)),
         .init(id: "confetti", name: "Confetti", slot: .background, unlock: .achievement("four-figures")),
+        .init(id: "classic", name: "Classic gold", slot: .skin, unlock: .free),
+        .init(id: "pioneer", name: "Pioneer", slot: .skin, unlock: .achievement("pioneer")),
     ]
+    /// Only for people who joined before launch: hidden from everyone else.
+    public var pioneerOnly: Bool { unlock == .achievement("pioneer") }
     public static func named(_ id: String?) -> PetItem? { catalog.first { $0.id == id } }
 
     /// How to get it, e.g. "40 coins", "Level 15", "Achievement: On a roll".
