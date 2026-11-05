@@ -147,4 +147,17 @@ final class PetTests: XCTestCase {
         var preferences = AppPreferences(); preferences.pet = PetPreferences(closet: closet)
         XCTAssertNoThrow(try preferences.validate())
     }
+
+    func testNewSkinsUnlockWithCoinsLevelsAndBadges() throws {
+        let skins = PetItem.catalog.filter { $0.slot == .skin }.map(\.id)
+        XCTAssertEqual(skins, ["classic", "pioneer", "rose-gold", "silver", "matcha", "sakura", "midnight", "rainbow"])
+        let shifts = try (1...10).map { try shift(Shift.dayString(calendar.date(byAdding: .day, value: -$0, to: now)!)) }
+        let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
+        var closet = PetCloset()
+        XCTAssertTrue(closet.owns(PetItem.named("rainbow")!, pet)) // the Regular badge: 10 shifts
+        XCTAssertFalse(closet.owns(PetItem.named("midnight")!, pet)) // level 8 needed
+        try closet.buy(PetItem.named("rose-gold")!, pet)
+        XCTAssertEqual(closet.wearing(.skin, pet)?.id, "rose-gold")
+        XCTAssertFalse(PetItem.named("rose-gold")!.pioneerOnly)
+    }
 }

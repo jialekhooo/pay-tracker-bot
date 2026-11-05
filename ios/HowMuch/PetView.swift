@@ -9,15 +9,42 @@ private let shell = Color(red: 0.86, green: 0.95, blue: 0.9)
 
 /// Penny's coin colours. The classic gold, or a special skin.
 struct PetSkin {
-    var base = gold, deep = goldDeep, light = goldLight, rim = goldDeep, star = false
+    var base = gold, deep = goldDeep, light = goldLight, rim = goldDeep
+    /// Eyes and mouth, and the shine in her eyes.
+    var ink = Palette.ink, shine = Color.white
+    /// A little mark on her forehead.
+    var badge: String?
+    var badgeColor = goldLight
+    var rainbow = false, sparkles = false
+
     init(_ item: PetItem?) {
-        if item?.id == "pioneer" {
-            base = Color(red: 0.16, green: 0.62, blue: 0.5)
-            deep = Color(red: 0.05, green: 0.36, blue: 0.3)
-            light = Color(red: 0.55, green: 0.88, blue: 0.74)
-            rim = gold
-            star = true
+        func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
+        switch item?.id {
+        case "pioneer":
+            base = rgb(0.16, 0.62, 0.5); deep = rgb(0.05, 0.36, 0.3); light = rgb(0.55, 0.88, 0.74); rim = gold
+            badge = "star.fill"
+        case "rose-gold":
+            base = rgb(0.96, 0.72, 0.66); deep = rgb(0.8, 0.47, 0.42); light = rgb(1, 0.89, 0.85); rim = rgb(0.84, 0.55, 0.5)
+        case "silver":
+            base = rgb(0.82, 0.84, 0.88); deep = rgb(0.56, 0.6, 0.66); light = rgb(0.97, 0.98, 0.99); rim = rgb(0.62, 0.66, 0.72)
+        case "matcha":
+            base = rgb(0.64, 0.8, 0.47); deep = rgb(0.38, 0.56, 0.27); light = rgb(0.87, 0.94, 0.74); rim = rgb(0.44, 0.62, 0.32)
+        case "sakura":
+            base = rgb(1, 0.77, 0.84); deep = rgb(0.9, 0.5, 0.63); light = rgb(1, 0.92, 0.95); rim = rgb(0.93, 0.58, 0.7)
+            badge = "camera.macro"; badgeColor = .white
+        case "midnight":
+            base = rgb(0.22, 0.26, 0.46); deep = rgb(0.1, 0.12, 0.26); light = rgb(0.48, 0.53, 0.8); rim = gold
+            ink = .white; shine = rgb(0.22, 0.26, 0.46); badge = "moon.stars.fill"; sparkles = true
+        case "rainbow":
+            base = rgb(1, 0.8, 0.86); deep = rgb(0.62, 0.48, 0.9); light = .white; rim = .white
+            rainbow = true
+        default: break
         }
+    }
+
+    var rainbowFill: AngularGradient {
+        AngularGradient(colors: [Color(red: 1, green: 0.62, blue: 0.62), Color(red: 1, green: 0.84, blue: 0.5), Color(red: 0.62, green: 0.9, blue: 0.62),
+                                 Color(red: 0.55, green: 0.8, blue: 1), Color(red: 0.78, green: 0.64, blue: 1), Color(red: 1, green: 0.62, blue: 0.62)], center: .center)
     }
 }
 
@@ -29,6 +56,7 @@ struct PetFigure: View {
     /// What Penny is wearing, by slot (backgrounds are drawn by `PetStage`).
     var outfit: [PetSlot: PetItem] = [:]
     @State private var bob = false
+    @State private var blink = false
     private var skin: PetSkin { PetSkin(outfit[.skin]) }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -47,6 +75,15 @@ struct PetFigure: View {
         .onAppear {
             guard !reduceMotion, !Self.automatedTest else { return }
             withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { bob = true }
+        }
+        .task {
+            guard !reduceMotion, !Self.automatedTest else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Double.random(in: 2.5...5)))
+                withAnimation(.easeIn(duration: 0.07)) { blink = true }
+                try? await Task.sleep(for: .seconds(0.12))
+                withAnimation(.easeOut(duration: 0.09)) { blink = false }
+            }
         }
         .accessibilityElement().accessibilityLabel("\(stage.title), \(mood.rawValue)")
     }
@@ -109,15 +146,25 @@ struct PetFigure: View {
 
     private func coin(scale: CGFloat, shine: Bool = false) -> some View {
         ZStack {
-            Circle().fill(LinearGradient(colors: shine ? [skin.light, skin.base] : [skin.base, skin.deep.opacity(0.9)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            if skin.rainbow {
+                Circle().fill(skin.rainbowFill).overlay(Circle().fill(.white.opacity(0.25)))
+            } else {
+                Circle().fill(LinearGradient(colors: shine ? [skin.light, skin.base] : [skin.base, skin.deep.opacity(0.9)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+            if skin.sparkles {
+                ForEach(Array([(-0.3, 0.22, 0.07), (0.32, 0.18, 0.05), (0.24, -0.3, 0.05), (-0.18, 0.34, 0.04)].enumerated()), id: \.offset) { _, s in
+                    Image(systemName: "sparkle").font(.system(size: size * scale * s.2)).foregroundStyle(.white.opacity(0.85))
+                        .offset(x: size * scale * s.0, y: size * scale * s.1)
+                }
+            }
             Circle().stroke(skin.rim, lineWidth: size * 0.03)
             Circle().inset(by: size * scale * 0.1).stroke(skin.light.opacity(0.8), lineWidth: size * 0.015)
             Capsule().fill(.white.opacity(0.45)).frame(width: size * scale * 0.08, height: size * scale * 0.24)
                 .rotationEffect(.degrees(35)).offset(x: -size * scale * 0.28, y: -size * scale * 0.2)
             face(scale: scale)
-            if skin.star {
-                Image(systemName: "star.fill").font(.system(size: size * scale * 0.16)).foregroundStyle(goldLight)
-                    .shadow(color: goldDeep.opacity(0.6), radius: 1)
+            if let badge = skin.badge {
+                Image(systemName: badge).font(.system(size: size * scale * 0.16)).foregroundStyle(skin.badgeColor)
+                    .shadow(color: skin.deep.opacity(0.6), radius: 1)
                     .offset(y: -size * scale * 0.3)
             }
         }.frame(width: size * scale, height: size * scale)
@@ -126,14 +173,21 @@ struct PetFigure: View {
     private func face(scale: CGFloat) -> some View {
         let unit = size * scale
         return ZStack {
-            HStack(spacing: unit * 0.2) { eye(unit); eye(unit) }.offset(y: -unit * 0.02)
-            HStack(spacing: unit * 0.42) {
-                Circle().fill(Color.pink.opacity(0.35)).frame(width: unit * 0.1)
-                Circle().fill(Color.pink.opacity(0.35)).frame(width: unit * 0.1)
-            }.offset(y: unit * 0.1)
-            Mouth(smile: mood == .happy ? 1 : mood == .worried ? -0.6 : 0.2)
-                .stroke(Palette.ink, style: StrokeStyle(lineWidth: unit * 0.035, lineCap: .round))
-                .frame(width: unit * 0.16, height: unit * 0.07).offset(y: unit * 0.14)
+            HStack(spacing: unit * 0.17) { eye(unit, left: true); eye(unit, left: false) }.offset(y: -unit * 0.03)
+            HStack(spacing: unit * 0.38) {
+                Ellipse().fill(Color.pink.opacity(0.42)).frame(width: unit * 0.13, height: unit * 0.075)
+                Ellipse().fill(Color.pink.opacity(0.42)).frame(width: unit * 0.13, height: unit * 0.075)
+            }.blur(radius: unit * 0.008).offset(y: unit * 0.1)
+            Group {
+                if mood == .happy {
+                    CatMouth().stroke(skin.ink, style: StrokeStyle(lineWidth: unit * 0.03, lineCap: .round, lineJoin: .round))
+                        .frame(width: unit * 0.13, height: unit * 0.05)
+                } else {
+                    Mouth(smile: mood == .worried ? -0.6 : 0.2)
+                        .stroke(skin.ink, style: StrokeStyle(lineWidth: unit * 0.032, lineCap: .round))
+                        .frame(width: unit * 0.12, height: unit * 0.06)
+                }
+            }.offset(y: unit * 0.13)
             if mood == .worried {
                 Image(systemName: "drop.fill").font(.system(size: unit * 0.12)).foregroundStyle(Color(red: 0.45, green: 0.7, blue: 0.95))
                     .offset(x: unit * 0.3, y: -unit * 0.16)
@@ -141,11 +195,18 @@ struct PetFigure: View {
         }
     }
 
-    @ViewBuilder private func eye(_ unit: CGFloat) -> some View {
+    /// Big shiny eyes that blink now and then; sleepy and worried looks for the other moods.
+    @ViewBuilder private func eye(_ unit: CGFloat, left: Bool) -> some View {
         switch mood {
-        case .happy: Mouth(smile: -1).stroke(Palette.ink, style: StrokeStyle(lineWidth: unit * 0.04, lineCap: .round)).frame(width: unit * 0.13, height: unit * 0.07)
-        case .sleepy: Capsule().fill(Palette.ink).frame(width: unit * 0.13, height: unit * 0.035)
-        case .worried: Circle().fill(Palette.ink).frame(width: unit * 0.09)
+        case .happy, .worried:
+            ZStack {
+                Ellipse().fill(skin.ink).frame(width: unit * 0.1, height: unit * (mood == .happy ? 0.135 : 0.11))
+                Circle().fill(skin.shine).frame(width: unit * 0.042).offset(x: unit * 0.018, y: -unit * 0.03)
+                Circle().fill(skin.shine.opacity(0.8)).frame(width: unit * 0.018).offset(x: -unit * 0.016, y: unit * 0.028)
+            }
+            .scaleEffect(x: 1, y: blink ? 0.08 : 1)
+        case .sleepy:
+            Mouth(smile: 0.6).stroke(skin.ink, style: StrokeStyle(lineWidth: unit * 0.032, lineCap: .round)).frame(width: unit * 0.11, height: unit * 0.04)
         }
     }
 
@@ -182,6 +243,17 @@ struct PetFigure: View {
 }
 
 /// A curve: `smile` 1 is a smile, -1 a frown (also used upside down for happy closed eyes).
+/// A little "ω" smile.
+private struct CatMouth: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.15), control: CGPoint(x: rect.width * 0.25, y: rect.maxY * 1.6))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY), control: CGPoint(x: rect.width * 0.75, y: rect.maxY * 1.6))
+        return path
+    }
+}
+
 private struct Mouth: Shape {
     var smile: CGFloat
     func path(in rect: CGRect) -> Path {
@@ -520,9 +592,9 @@ struct PetDetailView: View {
 
     private var displayName: String { store.petPreferences.displayName }
 
-    /// Skins only appear once there's more than the classic one to pick.
+    /// Every wardrobe slot; Pioneer-only items are filtered out of the grid for everyone else.
     private func slots(_ pet: PetProgress) -> [PetSlot] {
-        PetSlot.allCases.filter { $0 != .skin || pet.hasAchievement("pioneer") }
+        PetSlot.allCases
     }
     var body: some View {
         let pet = store.petProgress()
@@ -532,10 +604,21 @@ struct PetDetailView: View {
                 Card {
                     VStack(spacing: 12) {
                         PetStage(pet: pet, outfit: petOutfit(closet, pet), name: displayName, size: 150, corner: 22)
-                        TextField("Penny", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
-                            .submitLabel(.done).focused($naming).accessibilityIdentifier("pet.name")
-                            .onSubmit(saveName)
-                            .onChange(of: naming) { _, focused in if !focused { saveName() } }
+                        HStack(spacing: 6) {
+                            // The field hugs the name, with a pencil beside it, so renaming is easy to find.
+                            Text(name.isEmpty ? "Penny" : name).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(1)
+                                .padding(.horizontal, 2).hidden()
+                                .overlay {
+                                    TextField("Penny", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
+                                        .submitLabel(.done).focused($naming).accessibilityIdentifier("pet.name")
+                                        .onSubmit(saveName)
+                                        .onChange(of: naming) { _, focused in if !focused { saveName() } }
+                                }
+                            if !naming {
+                                Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted)
+                                    .onTapGesture { naming = true }.accessibilityLabel("Rename")
+                            }
+                        }.foregroundStyle(Palette.ink)
                         Text("Level \(pet.level) · \(pet.stage.title)").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.teal)
                         ProgressView(value: pet.levelProgress).tint(Palette.teal)
                         Text("\(pet.xpToNextLevel) XP to level \(pet.level + 1) · tap \(displayName) to play").font(.caption).foregroundStyle(Palette.muted)

@@ -470,6 +470,8 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(pioneer.waitForExistence(timeout: 5))
         pioneer.tap()
         XCTAssertTrue(pioneer.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        let rainbow = app.buttons["pet.item.rainbow"]; reveal(rainbow, in: app)
+        attach("Skins wardrobe", app: app)
         let top = app.textFields["pet.name"]; reveal(top, in: app)
         attach("Penny in her Pioneer skin", app: app)
         let badges = app.staticTexts["Badges"].firstMatch

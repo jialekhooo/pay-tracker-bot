@@ -154,6 +154,12 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "confetti", name: "Confetti", slot: .background, unlock: .achievement("four-figures")),
         .init(id: "classic", name: "Classic gold", slot: .skin, unlock: .free),
         .init(id: "pioneer", name: "Pioneer", slot: .skin, unlock: .achievement("pioneer")),
+        .init(id: "rose-gold", name: "Rose gold", slot: .skin, unlock: .coins(80)),
+        .init(id: "silver", name: "Silver", slot: .skin, unlock: .coins(120)),
+        .init(id: "matcha", name: "Matcha", slot: .skin, unlock: .coins(150)),
+        .init(id: "sakura", name: "Sakura", slot: .skin, unlock: .coins(200)),
+        .init(id: "midnight", name: "Midnight", slot: .skin, unlock: .level(8)),
+        .init(id: "rainbow", name: "Rainbow", slot: .skin, unlock: .achievement("regular")),
     ]
     /// Only for people who joined before launch: hidden from everyone else.
     public var pioneerOnly: Bool { unlock == .achievement("pioneer") }
