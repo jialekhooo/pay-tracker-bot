@@ -170,3 +170,5 @@ Build 44: Calendar sync (live feed for Apple, Google and TimeTree), Gmail code c
 Build 45: Penny gets six new skins, a cuter blinking face and a rename pencil; the earnings card counts only worked pay, split into paid, owed and booked.
 
 Build 46: The earnings card calls unpaid worked pay "Pending payment".
+
+Build 47: Apple Intelligence on the iPhone: smarter job reading, bank alerts in any wording, and a monthly recap.
