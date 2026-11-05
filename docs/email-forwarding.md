@@ -1,5 +1,7 @@
 # Email forwarding for Pay-in tracking (HowMuch 1.1)
 
+Live setup (5 Nov 2026): domain `howmuch.jialekhoo.com`, Worker `howmuch-inbound-email` on the jialexkhoo@gmail.com Cloudflare account, rule `pay@howmuch.jialekhoo.com`. The jialekhoo.com zone also routes `smartspend.jialekhoo.com` (catch-all → `smartspend-inbound`) for a separate app.
+
 Each HowMuch account gets a private address, `pay+<16 hex>@<inbound domain>`, shown in
 Settings → Pay-in tracking once forwarding is switched on. People forward DBS
 "You've received a transfer" alerts there by hand or with a Gmail filter. The server reads the
@@ -24,7 +26,7 @@ can't be authenticated, so it always waits for the person to confirm against the
    ```
 
    Add `HOWMUCH_INBOUND_SECRET` to the Worker as a secret (a long random string).
-4. Email Routing → Routing rules → Catch-all (or `pay+*`) → Send to Worker → the Worker above.
+4. Email Routing → Settings: add the subdomain (e.g. `howmuch`) and enable subaddressing. Routing rules → Create: `pay@howmuch.<domain>` → Send to a Worker → the Worker above. With subaddressing, every `pay+<token>@` address matches this rule, ahead of any catch-all.
 5. Set the same values on the API and deploy:
    - `HOWMUCH_INBOUND_DOMAIN`: the domain, e.g. `howmuch.app`
    - `HOWMUCH_INBOUND_SECRET`: the same secret as the Worker
