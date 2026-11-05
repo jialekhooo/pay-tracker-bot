@@ -109,9 +109,8 @@ struct ShiftEditor: View {
                         .accessibilityIdentifier("shift.error")
                 }
             }
-            .onChange(of: error) { _, message in if let message { AccessibilityNotification.Announcement(message).post() } }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                EmptyView()
+            .onChange(of: error) { _, message in
+                if let message, UIAccessibility.isVoiceOverRunning { AccessibilityNotification.Announcement(message).post() }
             }
             .interactiveDismissDisabled(isDirty)
             .onDisappear { aiTask?.cancel() }
@@ -493,7 +492,10 @@ struct ClaimEditor: View {
                         .accessibilityIdentifier("claim.error")
                 }
             }
-            .onChange(of: error) { _, message in if let message { AccessibilityNotification.Announcement(message).post() } }
+            .onChange(of: error) { _, message in
+                // Read the error out for VoiceOver users (only then: it moves focus).
+                if let message, UIAccessibility.isVoiceOverRunning { AccessibilityNotification.Announcement(message).post() }
+            }
             .interactiveDismissDisabled(claimDirty)
             .confirmationDialog("Discard this claim?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
                 Button("Discard", role: .destructive) { dismiss() }

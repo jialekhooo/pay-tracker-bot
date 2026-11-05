@@ -404,6 +404,9 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertEqual(app.textFields["Event name"].value as? String, "The Singapore EDITION Hotel")
         attach("Shared job opened", app: app)
         app.buttons["Cancel"].tap()
+        // A filled-in form asks before throwing the job away.
+        let discard = app.buttons["Discard"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5)); discard.tap()
         XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5))
         // Offered once only.
         XCUIDevice.shared.press(.home); app.activate()
@@ -814,7 +817,9 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments", "--ui-test-email-providers"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
         tapTrailingArea(app.staticTexts["Pay-in tracking"], in: app)
-        XCTAssertTrue(app.buttons["payment.connect.icloud"].waitForExistence(timeout: 5))
+        let icloudButton = app.buttons["payment.connect.icloud"]
+        for _ in 0..<6 where !icloudButton.exists { app.swipeUp() }
+        XCTAssertTrue(icloudButton.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["payment.connect.microsoft"].isEnabled)
         tapTrailingArea(app.buttons["payment.connect.icloud"], in: app)
         let save = app.buttons["payment.icloud.save"]
