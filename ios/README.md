@@ -152,3 +152,5 @@ Version 1.1 (build 35) adds:
 Penny update: endless levels (one every 40 XP), coins (5 per shift worked, 10 per paid shift, 25 per badge), 11 badges, and a wardrobe of 18 items (hats, glasses, neckwear, backgrounds) bought with coins or unlocked by level or badge. Tap Penny for a hop, hearts and a line. The wardrobe is saved on the phone per account (`pet.closet.<account>`).
 
 Build 37: Penny, live shift choices and widget previews sync with the account (AppPreferences.pet / liveShift / widgetPreview); on-phone values from earlier builds move into the account after its first sync.
+
+Build 38: Connect Gmail, Outlook or iCloud Mail is back in Pay-in tracking for every build.
