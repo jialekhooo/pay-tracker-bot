@@ -141,3 +141,5 @@ Build 31 tidies the screens: a Today section on Overview, amounts shown as "SGD 
 Build 32 makes Add shift on this day clear Liquid Glass like the other in-page actions, and the remaining primary buttons teal-tinted glass.
 
 Build 33 adds Next up to Overview: when nothing is booked tomorrow, it shows the next booked day and how many days away it is.
+
+Build 34 is the App Store 1.0 candidate: no "iOS beta" footer, Payment detection left out until Google verifies Gmail access, updated privacy manifest. See AppStore.md.
