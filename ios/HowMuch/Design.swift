@@ -64,7 +64,7 @@ struct ScreenShell<Content: View>: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("HOWMUCH").font(.system(size: 10, weight: .bold)).tracking(2.2).opacity(0.65)
+                        Text("HOWMUCH").font(.caption2.weight(.bold)).tracking(2.2).opacity(0.65)
                         Text(title).font(.system(.title, design: .rounded, weight: .bold))
                         Text(subtitle).font(.caption).opacity(0.78)
                     }
@@ -153,7 +153,7 @@ struct StatusPill: View {
     var paid = false
     var body: some View {
         Label(title, systemImage: paid ? "checkmark.circle.fill" : title == "Working now" ? "clock.fill" : "circle.fill")
-            .font(.system(size: 11, weight: .semibold)).foregroundStyle(paid ? Color(red: 0.15, green: 0.42, blue: 0.27) : Palette.teal)
+            .font(.caption2.weight(.semibold)).foregroundStyle(paid ? Color(red: 0.15, green: 0.42, blue: 0.27) : Palette.teal)
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background((paid ? Color.green : Palette.teal).opacity(0.08), in: Capsule())
     }

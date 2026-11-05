@@ -4,7 +4,8 @@ import HowMuchCore
 /// Top card of Add shift: paste a job offer message and the editor is filled in for review.
 struct PasteJobCard: View {
     let result: PastedJob?
-    let onRead: (PastedJob) -> Void
+    /// The pasted text; the editor reads it (rules first, then Apple Intelligence).
+    let onText: (String) -> Void
     @State private var typing = false
 
     var body: some View {
@@ -19,7 +20,7 @@ struct PasteJobCard: View {
             HStack(spacing: 10) {
                 PasteButton(payloadType: String.self) { strings in
                     let text = strings.joined(separator: "\n")
-                    Task { @MainActor in onRead(await AppleIntelligence.readJob(text)) }
+                    DispatchQueue.main.async { onText(text) }
                 }
                 .buttonBorderShape(.capsule).tint(Palette.teal).labelStyle(.titleAndIcon)
                 .accessibilityIdentifier("paste.clipboard")
@@ -28,7 +29,7 @@ struct PasteJobCard: View {
             }
             if let result, !result.dates.isEmpty { summary(result) }
         }
-        .sheet(isPresented: $typing) { JobMessageEntry { onRead($0) } }
+        .sheet(isPresented: $typing) { JobMessageEntry { onText($0) } }
     }
 
     private func summary(_ job: PastedJob) -> some View {
@@ -50,7 +51,7 @@ struct PasteJobCard: View {
 
 /// For messages that can't be pasted in one go, or need a quick fix before reading.
 struct JobMessageEntry: View {
-    let onRead: (PastedJob) -> Void
+    let onText: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @FocusState private var focused: Bool
@@ -71,7 +72,7 @@ struct JobMessageEntry: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Fill in") { let text = text; Task { @MainActor in onRead(await AppleIntelligence.readJob(text)) }; dismiss() }
+                    Button("Fill in") { onText(text); dismiss() }
                         .fontWeight(.semibold)
                         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("paste.fill")

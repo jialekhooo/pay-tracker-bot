@@ -9,6 +9,7 @@ struct JobNotificationSettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var options = JobNotificationOptions()
+    @State private var loadedOptions = false
     @State private var dayBefore = Date()
     @State private var paymentTime = Date()
     @State private var authorization: UNAuthorizationStatus = .notDetermined
@@ -85,10 +86,18 @@ struct JobNotificationSettingsView: View {
             .task {
                 options = store.data.settings.jobNotifications
                 dayBefore = time(options.dayBeforeMinute); paymentTime = time(options.dueMinute)
+                loadedOptions = true
                 await readPermission()
             }
             .onChange(of: scenePhase) { _, value in if value == .active { Task { await readPermission() } } }
             .alert("Preferences saved", isPresented: $saved) { Button("OK", role: .cancel) {} }
+            // Leaving with changes saves them, so pressing Back never loses your choices.
+            .onDisappear {
+                var next = options
+                next.dayBeforeMinute = minute(dayBefore); next.dueMinute = minute(paymentTime)
+                guard loadedOptions, next != store.data.settings.jobNotifications, !(next.starts && next.startReminderMinutes.isEmpty) else { return }
+                if store.updatePreferences({ $0.notifications = next }) { Task { await auth.synchronize(); await auth.registerPushIfAllowed() } }
+            }
     }
     private var startChoices: [Int] { Array(Set([120, 60, 30, 15, 5, 0] + options.startReminderMinutes)).sorted(by: >) }
     private func startLabel(_ minutes: Int) -> String {

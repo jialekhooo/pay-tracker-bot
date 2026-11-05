@@ -27,7 +27,7 @@ struct WorkCalendarView: View {
                     Button { move(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Next month")
                 }
                 LazyVGrid(columns: columns, spacing: 7) {
-                    ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, label in Text(label).font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.bottom, 4) }
+                    ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, label in Text(label).font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.bottom, 4) }
                     ForEach(Array(TrackerCalendar.monthDays(month).enumerated()), id: \.offset) { _, date in
                         if let date {
                             let key = Shift.dayString(date)
@@ -49,7 +49,7 @@ struct WorkCalendarView: View {
                     }
                 }
                 Divider()
-                HStack(spacing: 6) { Circle().fill(Palette.teal).frame(width: 5, height: 5); Text("Booked shift"); Spacer(); Circle().fill(.orange).frame(width: 5, height: 5); Text("Overlapping") }.font(.system(size: 10)).foregroundStyle(Palette.muted)
+                HStack(spacing: 6) { Circle().fill(Palette.teal).frame(width: 5, height: 5); Text("Booked shift"); Spacer(); Circle().fill(.orange).frame(width: 5, height: 5); Text("Overlapping") }.font(.caption2).foregroundStyle(Palette.muted)
             }
             HStack {
                 Text("\(counted(monthShifts.count, "shift")) this month").font(.caption).foregroundStyle(Palette.muted)

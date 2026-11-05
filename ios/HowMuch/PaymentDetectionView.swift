@@ -27,6 +27,7 @@ struct PaymentDetectionView: View {
         return auth.isDemo
         #endif
     }
+    @State private var pendingDismiss: String?
     @State private var settingUpBank = false
     var body: some View {
         Form {
@@ -34,13 +35,18 @@ struct PaymentDetectionView: View {
                 Section { Text("Sign in to your own Apple account to track pay coming in. The preview doesn't read any notifications or email.").foregroundStyle(Palette.muted) }
             } else if let status {
                 Section("Bank app notifications") {
+                  if #unavailable(iOS 27) {
+                    // The Shortcuts "When I receive a notification" trigger arrived in iOS 27.
+                    Text("Reading bank app notifications needs iOS 27. Until then, forward your bank's payment emails below.").font(.subheadline).foregroundStyle(Palette.muted)
+                  } else {
                     Button { settingUpBank = true } label: { Label("Set up bank notifications", systemImage: "bell.badge") }
                         .accessibilityIdentifier("payin.notifications.setup")
                     lastRun
                     Toggle("Mark matching pay as paid", isOn: Binding(get: { payIn?.notificationsAuto ?? false },
                                                                        set: { enabled in Task { await setPayIn(enabled) } }))
                         .disabled(payIn == nil || busy).accessibilityIdentifier("payin.notifications.auto")
-                    Text("When your bank app says money came in, a Shortcuts automation passes it to HowMuch. Pay from a saved payer that exactly matches an event's unpaid total is marked paid; anything else waits below for you to check. Needs iOS 27.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("When your bank app says money came in, a Shortcuts automation passes it to HowMuch. Pay from a saved payer that exactly matches an event's unpaid total is marked paid; anything else waits below for you to check.").font(.caption).foregroundStyle(Palette.muted)
+                  }
                 }
                 Section("Email forwarding") {
                     if let address = payIn?.forwarding.address {
@@ -124,12 +130,13 @@ struct PaymentDetectionView: View {
                             if receipt.status == "review" {
                                 ForEach(receipt.candidates, id: \.event) { candidate in
                                     Button("Mark \(candidate.event) paid\(candidate.includesCab ? " · includes claims" : "")") { if receipt.trusted == false { pendingReceipt = receipt; pendingEvent = candidate.event; confirmBank = true }
-                                        else { Task { await action("/receipts/\(receipt.id)/confirm", body: ["event": candidate.event]) } } }.font(.caption).rowAction().accessibilityIdentifier("payment.receipt.\(receipt.id).confirm")
+                                        else { Task { await action("/receipts/\(receipt.id)/confirm", body: ["event": candidate.event]) } } }.font(.caption).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).confirm")
                                 }
-                                Button("Dismiss alert") { Task { await action("/receipts/\(receipt.id)/dismiss") } }.font(.caption).rowAction().accessibilityIdentifier("payment.receipt.\(receipt.id).dismiss")
+                                // Destructive and confirmed: a dismissed payment isn't matched to any job.
+                                Button("Dismiss alert", role: .destructive) { pendingDismiss = "/receipts/\(receipt.id)/dismiss" }.font(.caption).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).dismiss")
                             }
                             if ["confirmed_paid", "auto_paid"].contains(receipt.status) {
-                                Button("Undo marking paid", systemImage: "arrow.uturn.backward") { Task { await action("/receipts/\(receipt.id)/undo") } }.font(.caption).rowAction().accessibilityIdentifier("payment.receipt.\(receipt.id).undo")
+                                Button("Undo marking paid", systemImage: "arrow.uturn.backward") { Task { await action("/receipts/\(receipt.id)/undo") } }.font(.caption).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).undo")
                             }
                         }.padding(.vertical, 7)
                     }
@@ -138,7 +145,12 @@ struct PaymentDetectionView: View {
             else { Section { Label("Pay-in tracking couldn’t be loaded. Refresh to try again.", systemImage: "wifi.exclamationmark") } }
             if !message.isEmpty { Section { Text(message).font(.caption).foregroundStyle(Palette.muted) } }
             if !previewOnly { Button("Refresh") { Task { await load() } }.rowAction().disabled(busy) }
+            if busy, status != nil { Section { ProgressView("Updating…") } }
         }.detailStyle("Pay-in tracking")
+            .confirmationDialog("Dismiss this payment alert? It won't be matched to any job.", isPresented: Binding(get: { pendingDismiss != nil }, set: { if !$0 { pendingDismiss = nil } }), titleVisibility: .visible) {
+                Button("Dismiss alert", role: .destructive) { if let path = pendingDismiss { pendingDismiss = nil; Task { await action(path) } } }
+                Button("Keep it", role: .cancel) { pendingDismiss = nil }
+            }
             .sheet(isPresented: $settingUpBank) { BankSetupWizard() }
             .task { if !previewOnly { await load() } }
             .onChange(of: scenePhase) { _, value in if value == .active && !previewOnly { Task { await load() } } }

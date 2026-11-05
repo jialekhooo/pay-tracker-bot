@@ -57,6 +57,7 @@ struct PetFigure: View {
     var outfit: [PetSlot: PetItem] = [:]
     @State private var bob = false
     @State private var blink = false
+    @Environment(\.scenePhase) private var scenePhase
     private var skin: PetSkin { PetSkin(outfit[.skin]) }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -74,12 +75,15 @@ struct PetFigure: View {
         .offset(y: bob ? -size * 0.03 : size * 0.02)
         .onAppear {
             guard !reduceMotion, !Self.automatedTest else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { bob = true }
+            // A few bobs, not forever: an endless animation keeps the screen redrawing and costs battery.
+            guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+            withAnimation(.easeInOut(duration: 1.6).repeatCount(5, autoreverses: true)) { bob = true }
         }
         .task {
             guard !reduceMotion, !Self.automatedTest else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Double.random(in: 2.5...5)))
+                try? await Task.sleep(for: .seconds(Double.random(in: 3...6)))
+                guard scenePhase == .active, !ProcessInfo.processInfo.isLowPowerModeEnabled else { continue }
                 withAnimation(.easeIn(duration: 0.07)) { blink = true }
                 try? await Task.sleep(for: .seconds(0.12))
                 withAnimation(.easeOut(duration: 0.09)) { blink = false }

@@ -52,16 +52,23 @@ enum AppleIntelligence {
 
     /// For bank wording the rules don't know: asks whether money came in, and how much from whom.
     /// Returns nil when it isn't a payment or the model isn't available.
-    static func readPayment(_ text: String) async -> (amount: Double, payer: String)? {
-        guard isAvailable else { return nil }
+    enum PaymentCheck { case payment(amount: Double, payer: String), notPayment, couldNotCheck }
+
+    /// Tells "not money in" apart from "couldn't check" (model unavailable or failed), so the log is honest.
+    static func readPayment(_ text: String) async -> PaymentCheck {
+        // Cheap screen first: no written amount, or one-time-code wording, is never a payment.
+        guard PayInText.mayBePayment(text) else { return .notPayment }
+        guard isAvailable else { return .couldNotCheck }
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *), let read = try? await PaymentReader.read(text), read.isMoneyIn,
-           let amount = PayInText.confirmedAmount(in: text, suggested: read.amount.map { Decimal(string: String(format: "%.2f", $0)) ?? 0 }) {
+        if #available(iOS 26.0, *) {
+            guard let read = try? await PaymentReader.read(text) else { return .couldNotCheck }
+            guard read.isMoneyIn else { return .notPayment }
             // The model only says *whether* money came in; the amount must be one written in the alert.
-            return (NSDecimalNumber(decimal: amount).doubleValue, read.from?.trimmed ?? "")
+            guard let amount = PayInText.confirmedAmount(in: text, suggested: read.amount.map { Decimal(string: String(format: "%.2f", $0)) ?? 0 }) else { return .couldNotCheck }
+            return .payment(amount: NSDecimalNumber(decimal: amount).doubleValue, payer: read.from?.trimmed ?? "")
         }
         #endif
-        return nil
+        return .couldNotCheck
     }
 
     // MARK: Receipts

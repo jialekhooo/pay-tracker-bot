@@ -26,6 +26,8 @@ enum LiveShiftCenter {
     }
     static var systemAllows: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
 
+    /// Shifts whose Lock Screen card the person swiped away (kept until the app restarts).
+    static var dismissedShifts: Set<UUID> = []
     static func sync(_ data: TrackerData, accountID: String, now: Date = Date()) {
         preferences = data.settings.liveShift ?? LiveShiftPreferences()
         let details = data.settings.jobNotifications.showDetails
@@ -59,7 +61,10 @@ enum LiveShiftCenter {
             }
         }
         guard lockScreenEnabled, systemAllows, let current = LiveShiftPlanner.current(in: data.shifts, at: now),
-              !activities.contains(where: { $0.attributes.shiftID == current.id && $0.attributes.accountID == accountID && $0.activityState == .active })
+              !activities.contains(where: { $0.attributes.shiftID == current.id && $0.attributes.accountID == accountID && $0.activityState == .active }),
+              // Swiped away by the person: don't bring this shift's card back every minute.
+              !dismissedShifts.contains(current.id),
+              !activities.contains(where: { $0.attributes.shiftID == current.id && $0.activityState == .dismissed })
         else { return }
         let content = ActivityContent(state: state(for: current, accountID: accountID, details: details), staleDate: current.endDate)
         if let activity = try? Activity.request(attributes: LiveShiftAttributes(shiftID: current.id, accountID: accountID), content: content, pushType: .token) {
@@ -99,6 +104,11 @@ enum LiveShiftCenter {
     private static func watch(_ activity: Activity<LiveShiftAttributes>) {
         guard watching.insert(activity.id).inserted else { return }
         firstSeen[activity.id] = Date()
+        Task { @MainActor in
+            for await state in activity.activityStateUpdates where state == .dismissed {
+                dismissedShifts.insert(activity.attributes.shiftID)
+            }
+        }
         Task { @MainActor in
             for await data in activity.pushTokenUpdates {
                 let token = hex(data)
@@ -153,10 +163,15 @@ enum LiveShiftCenter {
         }
     }
     /// The next ended hourly shift whose actual finishing time hasn't been confirmed.
+    /// Shifts whose finish-time question was put off with "Later" (or swiped away), and until when.
+    static var postponed: [UUID: Date] = [:]
+    static func postpone(_ id: UUID, hours: Double = 3) { postponed[id] = Date().addingTimeInterval(hours * 3600) }
+
     static func nextToConfirm(_ data: TrackerData, accountID: String, now: Date = Date()) -> Shift? {
         preferences = data.settings.liveShift ?? LiveShiftPreferences()
         guard askFinishEnabled else { return nil }
-        return LiveShiftPlanner.awaitingFinish(in: data.shifts, confirmed: preferences.confirmed, at: now).first
+        return LiveShiftPlanner.awaitingFinish(in: data.shifts, confirmed: preferences.confirmed, at: now)
+            .first { (postponed[$0.id] ?? .distantPast) <= now }
     }
 }
 

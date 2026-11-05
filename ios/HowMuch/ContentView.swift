@@ -8,6 +8,7 @@ struct ContentView: View {
     @ObservedObject private var push = PushCenter.shared
     @State private var calendarDay = Date()
     @State private var adding = false
+    @State private var lastAsked: UUID?
     @State private var finishing: Shift?
     @State private var shared: SharedMessage?
     @Environment(\.scenePhase) private var scenePhase
@@ -67,7 +68,7 @@ struct ContentView: View {
             else { adding = true }
         }
         .sheet(isPresented: $adding) { ShiftEditor() }
-        .sheet(item: $finishing, onDismiss: askNextFinish) { FinishShiftSheet(shift: $0) }
+        .sheet(item: $finishing, onDismiss: finishSheetClosed) { FinishShiftSheet(shift: $0) }
         .sheet(item: $shared) { ShiftEditor(initialMessage: $0.text) }
         .onChange(of: scenePhase) { _, value in if value == .active { store.refreshReminders(); store.refreshWidgets(); refreshLiveShift() } }
         .task {
@@ -86,10 +87,16 @@ struct ContentView: View {
         }
         askNextFinish()
     }
+    /// "Later" or a swipe puts the question off for a few hours instead of asking again straight away.
+    private func finishSheetClosed() {
+        if let last = lastAsked, LiveShiftCenter.nextToConfirm(store.data, accountID: store.accountID)?.id == last { LiveShiftCenter.postpone(last) }
+        askNextFinish()
+    }
     private func askNextFinish() {
         // Ask the app directly: the minute timer holds a launch-time copy of scenePhase.
         guard finishing == nil, shared == nil, !adding, UIApplication.shared.applicationState == .active, push.widgetURL == nil else { return }
         finishing = LiveShiftCenter.nextToConfirm(store.data, accountID: store.accountID)
+        if let finishing { lastAsked = finishing.id }
     }
     private var navigationDock: some View {
         HStack(spacing: 10) {
@@ -111,11 +118,11 @@ struct ContentView: View {
             VStack(spacing: 4) {
                 // A fixed icon box keeps every label on the same line, whatever the symbol's height.
                 Image(systemName: icon).font(.system(size: 19, weight: tab == name ? .semibold : .regular)).frame(height: 22)
-                Text(name).font(.system(size: 9, weight: tab == name ? .bold : .medium)).lineLimit(1)
+                Text(name).font(.caption2.weight(tab == name ? .bold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
             }.foregroundStyle(tab == name ? Palette.teal : Palette.muted)
                 .frame(maxWidth: .infinity, minHeight: 48).contentShape(Capsule())
                 .background(tab == name ? Palette.mint.opacity(0.95) : Color.clear, in: Capsule())
-        }.buttonStyle(.plain).accessibilityLabel(name).accessibilityIdentifier("nav.\(name.lowercased())")
+        }.buttonStyle(.plain).dynamicTypeSize(...DynamicTypeSize.xxLarge).accessibilityShowsLargeContentViewer().accessibilityLabel(name).accessibilityIdentifier("nav.\(name.lowercased())")
             .accessibilityAddTraits(tab == name ? .isSelected : [])
     }
 }
@@ -211,13 +218,15 @@ struct EarningsHero: View {
         let split = EarningsBreakdown(shifts: shifts, now: now)
         Card {
             HStack {
-                Text(label).font(.system(size: 10, weight: .bold)).tracking(1.2).foregroundStyle(Palette.muted)
+                Text(label).font(.caption2.weight(.bold)).tracking(1.2).foregroundStyle(Palette.muted)
                 Spacer()
                 Image(systemName: "wallet.bifold").font(.system(size: 21, weight: .light)).foregroundStyle(Palette.teal)
             }
             // Only what's been worked counts; booked shifts are shown separately below.
             Text(money(split.earned, currency)).font(.system(size: 40, weight: .bold, design: .rounded)).tracking(-1.5)
-                .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink).accessibilityIdentifier("earnings.earned")
+                .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink)
+                // With nothing booked, the headline is the total.
+                .accessibilityIdentifier(split.booked > 0 ? "earnings.earned" : "earnings.total")
             Text(workedLine(split)).font(.caption).foregroundStyle(Palette.muted)
             Divider().overlay(Palette.line)
             HStack(alignment: .top) {
@@ -230,8 +239,6 @@ struct EarningsHero: View {
             if split.booked > 0 {
                 Text("\(money(split.total, currency)) including booked shifts").font(.caption2).foregroundStyle(Palette.muted)
                     .accessibilityIdentifier("earnings.total")
-            } else {
-                Text(money(split.total, currency)).font(.caption2).foregroundStyle(.clear).frame(height: 0).accessibilityIdentifier("earnings.total")
             }
         }
     }
@@ -257,7 +264,7 @@ struct GlanceCard: View {
         Card {
             HStack { Image(systemName: symbol).font(.caption).foregroundStyle(Palette.teal); Spacer(); Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.muted) }
             Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-            Text(title).font(.system(size: 11)).foregroundStyle(Palette.muted)
+            Text(title).font(.caption).foregroundStyle(Palette.muted)
         }
     }
 }

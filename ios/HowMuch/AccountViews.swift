@@ -57,7 +57,7 @@ struct AppleWelcomeView: View {
                 Spacer(minLength: 20)
                 Image("BrandLogo").resizable().scaledToFit().frame(width: 100, height: 100).clipShape(RoundedRectangle(cornerRadius: 24))
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("HOWMUCH").font(.system(size: 11, weight: .bold)).tracking(3).foregroundStyle(Palette.teal)
+                    Text("HOWMUCH").font(.caption2.weight(.bold)).tracking(3).foregroundStyle(Palette.teal)
                     Text("Your work.\nYour account.").font(.system(size: 42, weight: .bold, design: .rounded)).tracking(-1.4).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                     Text("Your jobs, earnings and reminders, together in one place.").font(.title3).foregroundStyle(Palette.muted)
                 }

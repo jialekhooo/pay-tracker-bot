@@ -789,6 +789,8 @@ final class HowMuchUITests: XCTestCase {
         tapTrailingArea(undo, in: app)
         XCTAssertTrue(app.staticTexts["Undone"].waitForExistence(timeout: 5))
         tapTrailingArea(app.buttons["payment.receipt.2.dismiss"], in: app)
+        let confirmDismiss = app.buttons.matching(NSPredicate(format: "label == %@", "Dismiss alert")).allElementsBoundByIndex.last
+        XCTAssertNotNil(confirmDismiss); confirmDismiss?.tap()
         XCTAssertTrue(app.staticTexts["Ignored"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Synthetic scan completed"].exists)
         for _ in 0..<5 { app.swipeDown() }

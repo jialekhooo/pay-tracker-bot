@@ -117,12 +117,17 @@ extension IntentActions {
         var amount = amount, payer = payer
         if amount == nil, !PayInText.looksLikeMoneyIn(text) {
             // Wording the rules don't know: Apple Intelligence decides on the iPhone whether it's money in.
-            guard let read = await AppleIntelligence.readPayment(text) else {
+            switch await AppleIntelligence.readPayment(text) {
+            case .notPayment:
                 PayInLog.record("Not money coming in, so it stayed on your iPhone.")
                 return "Not a payment."
+            case .couldNotCheck:
+                PayInLog.record("Couldn't check this alert's wording. It stayed on your iPhone; open HowMuch to review payments.")
+                return "Couldn't check."
+            case .payment(let value, let from):
+                amount = value
+                if (payer ?? "").isEmpty, !from.isEmpty { payer = from }
             }
-            amount = read.amount
-            if (payer ?? "").isEmpty, !read.payer.isEmpty { payer = read.payer }
         }
         let account = AppleAccountStore.shared
         let unlocked = UIApplication.shared.isProtectedDataAvailable

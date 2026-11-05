@@ -56,7 +56,7 @@ struct SettingsView: View {
     /// A small titled group of rows.
     private func group<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.8).foregroundStyle(Palette.muted).padding(.leading, 4)
+            Text(title.uppercased()).font(.caption2.weight(.semibold)).tracking(0.8).foregroundStyle(Palette.muted).padding(.leading, 4)
             VStack(spacing: 0) { rows() }
                 .padding(.horizontal, 14).padding(.vertical, 4)
                 .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
@@ -280,15 +280,25 @@ struct PaySettingsView: View {
             multiplier = "\(store.data.rules.overtimeMultiplier)"; overtime = store.data.rules.overtimeAfter != nil
             breaks = "\(store.data.settings.defaultBreakMinutes)"; paidBreak = store.data.settings.defaultBreakPaid
         }.alert("Defaults saved", isPresented: $saved) { Button("OK", role: .cancel) {} }
+            // Leaving with changes saves them (quietly), so pressing Back never loses your edits.
+            .onDisappear { if changed { save(quietly: true) } }
     }
-    private func save() {
+    private var changed: Bool {
+        guard let value = ShiftCSV.decimal(rate) else { return false }
+        return value != store.data.rules.rate || currency.uppercased() != store.data.rules.currency
+            || overtime != (store.data.rules.overtimeAfter != nil) || (overtime && ShiftCSV.decimal(threshold) != store.data.rules.overtimeAfter)
+            || ShiftCSV.decimal(multiplier) != store.data.rules.overtimeMultiplier
+            || Int(breaks) != store.data.settings.defaultBreakMinutes || paidBreak != store.data.settings.defaultBreakPaid
+    }
+    private func save(quietly: Bool = false) {
         guard let rate = ShiftCSV.decimal(rate), let limit = ShiftCSV.decimal(threshold), limit > 0,
               let multiple = ShiftCSV.decimal(multiplier), multiple >= 1, let minutes = Int(breaks), (0..<1440).contains(minutes) else { store.error = "Check your rate, overtime and break values."; return }
-        saved = store.update { data in
+        let ok = store.update { data in
             data.rules.rate = rate; data.rules.currency = currency.uppercased()
             data.rules.overtimeAfter = overtime ? limit : nil; data.rules.overtimeMultiplier = multiple
             var settings = data.settings; settings.defaultBreakMinutes = minutes; settings.defaultBreakPaid = paidBreak; data.preferences = settings
         }
+        if !quietly { saved = ok }
     }
 }
 

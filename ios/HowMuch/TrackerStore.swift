@@ -95,6 +95,7 @@ final class TrackerStore: ObservableObject {
             refreshReminders()
             if !suppressNotifications { LiveShiftCenter.sync(next, accountID: accountID) }
             onChange?()
+            error = nil  // a successful save clears an older failure, so it can't pop up later
             return true
         } catch { self.error = error.localizedDescription; return false }
     }

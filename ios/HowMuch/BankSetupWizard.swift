@@ -47,6 +47,10 @@ enum BankMockScreen {
 enum PayInLog {
     struct Entry: Codable { var date: Date; var result: String }
     private static let key = "payin.notificationLog"
+    /// Signing out or deleting the account leaves nothing about payments on the phone.
+    static func clear() {
+        for key in [key, "payin.setupStarted", "payin.setupPage", "recap.text", "recap.key"] { UserDefaults.standard.removeObject(forKey: key) }
+    }
     static func record(_ result: String) {
         var entries = load()
         entries.insert(Entry(date: .now, result: result), at: 0)

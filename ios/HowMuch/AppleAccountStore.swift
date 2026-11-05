@@ -308,6 +308,7 @@ final class AppleAccountStore: ObservableObject {
             await clearNotifications()
         }
         NativeTransitPlanner.shared.clear()
+        PayInLog.clear()
         if revoke { await revokePendingSession() }
     }
     private func revokePendingSession() async {

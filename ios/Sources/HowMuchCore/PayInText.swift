@@ -14,6 +14,11 @@ public enum PayInText {
             && secret.firstMatch(in: text, range: range) == nil
     }
 
+    /// Worth asking a model about: it has a written amount and no one-time-code wording.
+    public static func mayBePayment(_ text: String) -> Bool {
+        secret.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) == nil && !amounts(in: text).isEmpty
+    }
+
     /// Amounts actually written in a notification, e.g. "SGD 1,200.00" or "88.50".
     public static func amounts(in text: String) -> Set<Decimal> {
         let pattern = #"(?:SGD|S\$|\$)\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)|((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})"#

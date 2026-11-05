@@ -42,6 +42,37 @@ struct ShiftEditor: View {
     @State private var keepTemplate = false
     @State private var templateName = ""
     @State private var pasted: PastedJob?
+    @State private var baseline = ""
+    @State private var confirmingDiscard = false
+    @State private var aiReading = false
+    @State private var aiTask: Task<Void, Never>?
+    /// Everything the form would save, to tell whether anything changed.
+    private var fingerprint: String {
+        [event, location, "\(day)", "\(start)", "\(end)", breakMinutes, "\(paidBreak)", "\(fixed)", amount, currency, "\(overtime)",
+         threshold, multiplier, "\(hasDue)", "\(due)", "\(extraDates.count)", "\(repeatDays)", "\(payerID?.uuidString ?? "")"].joined(separator: "|")
+    }
+    private var isDirty: Bool { loaded && fingerprint != baseline }
+    /// Rules first, straight away; then Apple Intelligence (up to 10 s), applied only if you haven't edited since.
+    private func readMessage(_ text: String) {
+        let rules = JobMessageParser.parse(text)
+        applyPasted(rules)
+        aiTask?.cancel()
+        guard AppleIntelligence.isAvailable else { return }
+        let snapshot = fingerprint
+        aiReading = true
+        aiTask = Task { @MainActor in
+            defer { aiReading = false }
+            let read = await withTaskGroup(of: PastedJob?.self) { group -> PastedJob? in
+                group.addTask { await AppleIntelligence.readJob(text) }
+                group.addTask { try? await Task.sleep(for: .seconds(10)); return nil }
+                let first = await group.next() ?? nil
+                group.cancelAll()
+                return first
+            }
+            guard !Task.isCancelled, let read, read != rules, fingerprint == snapshot else { return }
+            applyPasted(read)
+        }
+    }
     private func minute(_ date: Date) -> Int { Calendar.current.component(.hour, from: date) * 60 + Calendar.current.component(.minute, from: date) }
     private var preview: Shift? { try? makeShift() }
     var body: some View {
@@ -49,7 +80,11 @@ struct ShiftEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if existing == nil && template == nil && !templateOnly {
-                        PasteJobCard(result: pasted) { applyPasted($0) }
+                        PasteJobCard(result: pasted) { readMessage($0) }
+                        if aiReading {
+                            Label { Text("Reading with Apple Intelligence…") } icon: { ProgressView().controlSize(.small) }
+                                .font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("paste.aiReading")
+                        }
                     }
                     workCard
                     planningCard
@@ -74,8 +109,18 @@ struct ShiftEditor: View {
                         .accessibilityIdentifier("shift.error")
                 }
             }
+            .onChange(of: error) { _, message in if let message { AccessibilityNotification.Announcement(message).post() } }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                EmptyView()
+            }
+            .interactiveDismissDisabled(isDirty)
+            .onDisappear { aiTask?.cancel() }
+            .confirmationDialog("Discard this shift?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
+            }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { confirmingDiscard = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         do {
@@ -97,7 +142,7 @@ struct ShiftEditor: View {
                                     try template.validate(); templates.append(template)
                                     settings.jobTemplates = templates; data.preferences = settings
                                 }
-                            }) { dismiss() } else { error = store.error }
+                            }) { dismiss() } else { error = store.error; store.error = nil }  // shown here only, not again as a global alert
                         }
                         catch { self.error = error.localizedDescription }
                     }.fontWeight(.semibold)
@@ -109,16 +154,8 @@ struct ShiftEditor: View {
             .onAppear {
                 guard !loaded else { return }
                 load(); loaded = true
-                if let initialMessage {
-                    applyPasted(JobMessageParser.parse(initialMessage))
-                    // Apple Intelligence may fill in what the rules missed; it only adds, never overrides.
-                    if AppleIntelligence.isAvailable {
-                        Task { @MainActor in
-                            let read = await AppleIntelligence.readJob(initialMessage)
-                            if read != JobMessageParser.parse(initialMessage) { applyPasted(read) }
-                        }
-                    }
-                }
+                baseline = fingerprint
+                if let initialMessage { readMessage(initialMessage) }
             }
             .onChange(of: [event, location, amount, breakMinutes, currency, threshold, multiplier]) { _, _ in error = nil }
         }
@@ -401,6 +438,10 @@ struct ClaimEditor: View {
     @State private var note = ""
     @State private var day = Date()
     @State private var error: String?
+    @State private var claimBaseline = ""
+    @State private var confirmingDiscard = false
+    private var claimFingerprint: String { [category.rawValue, amount, note, "\(day)", "\(receiptID?.uuidString ?? "")", "\(receiptData?.count ?? 0)"].joined(separator: "|") }
+    private var claimDirty: Bool { loaded && claimFingerprint != claimBaseline }
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -436,12 +477,26 @@ struct ClaimEditor: View {
                     }
                     ReceiptAttachmentEditor(receiptID: $receiptID, photoData: $receiptData, processing: $receiptProcessing,
                                             amount: $amount, category: $category, note: $note, useDay: { day = $0 })
-                    if let error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red) }
                     Label("Your claim stays attached to this shift and syncs with your HowMuch account.", systemImage: "checkmark.shield").font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
                 }.padding(20)
             }.scrollDismissesKeyboard(.interactively).detailStyle(existing == nil ? "Claim" : "Edit claim")
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // At the top, so a save error is never hidden below a long form.
+                if let error {
+                    Label(error, systemImage: "exclamationmark.circle.fill")
+                        .font(.subheadline).foregroundStyle(.red).padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading).background(Palette.canvas)
+                        .accessibilityIdentifier("claim.error")
+                }
+            }
+            .onChange(of: error) { _, message in if let message { AccessibilityNotification.Announcement(message).post() } }
+            .interactiveDismissDisabled(claimDirty)
+            .confirmationDialog("Discard this claim?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
+            }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if claimDirty { confirmingDiscard = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Save") { Task { await save() } }.disabled(saving || receiptProcessing).accessibilityIdentifier("claim.save") }
             }
             .onAppear {
@@ -450,6 +505,7 @@ struct ClaimEditor: View {
                     else { day = TrackerCalendar.localDate(shift.day) ?? Date() }
                     receiptID = existing?.receiptID
                     loaded = true
+                    claimBaseline = claimFingerprint
                 }
             }
         }
@@ -477,7 +533,7 @@ struct ClaimEditor: View {
                 claim.receiptID = receiptID; records.append(claim)
             }
             data.claims = records
-        }) { dismiss() } else { error = store.error }
+        }) { dismiss() } else { error = store.error; store.error = nil }  // shown here only, not again as a global alert
     }
 }
 
@@ -542,16 +598,19 @@ struct ReceiptAttachmentEditor: View {
     private func prepare(_ input: Data) async {
         processing = true; defer { processing = false }
         do {
-            guard input.count <= 30_000_000,
-                  let source = CGImageSourceCreateWithData(input as CFData, nil),
-                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1600, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { throw TrackerError.invalid("Choose a photo smaller than 30 MB.") }
-            let image = UIImage(cgImage: thumbnail)
-            guard let data = image.jpegData(compressionQuality: 0.55), data.count <= 750_000 else { throw TrackerError.invalid("This photo is too large. Crop it to the receipt and try again.") }
+            // Decode, resize and encode off the main thread so the form never freezes.
+            let (data, scan) = try await Task.detached(priority: .userInitiated) { () throws -> (Data, Data) in
+                guard input.count <= 30_000_000,
+                      let source = CGImageSourceCreateWithData(input as CFData, nil),
+                      let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1600, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { throw TrackerError.invalid("Choose a photo smaller than 30 MB.") }
+                guard let data = UIImage(cgImage: thumbnail).jpegData(compressionQuality: 0.55), data.count <= 750_000 else { throw TrackerError.invalid("This photo is too large. Crop it to the receipt and try again.") }
+                // Recognise a sharper copy than the stored one (a high-quality JPEG, not a huge PNG).
+                let scanImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 3200, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) ?? thumbnail
+                return (data, UIImage(cgImage: scanImage).jpegData(compressionQuality: 0.92) ?? data)
+            }.value
             photoData = data; preview = nil; receiptID = nil
             suggestion = ReceiptSuggestions(); message = "Photo ready. Reading text on this iPhone…"
-            // Recognise a sharper copy before JPEG compression/downscaling for storage.
-            let scanImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 3200, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) ?? thumbnail
-            await readAmount(UIImage(cgImage: scanImage).pngData() ?? data)
+            await readAmount(scan)
         } catch { message = error.localizedDescription }
     }
     private func readAmount(_ data: Data) async {
