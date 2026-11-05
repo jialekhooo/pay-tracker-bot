@@ -76,7 +76,11 @@ def test_missing_live_configuration_is_explicit_and_never_reads_mail(setup,monke
 def test_standalone_oauth_is_single_use_browser_bound_and_encrypted(setup,monkeypatch):
     configure(monkeypatch);session,_=login(setup)
     start=setup.client.post('/v1/payment-detection/connect',headers=headers(session)).json()['url']
-    redirect=setup.client.get(start,follow_redirects=False)
+    # The link first shows whose HowMuch account it is; nothing happens until Continue.
+    page=setup.client.get(start,follow_redirects=False)
+    assert page.status_code==200 and 'Only continue if you started this' in page.text and 'Private user' in page.text
+    ticket=parse_qs(urlparse(start).query)['ticket'][0]
+    redirect=setup.client.post(urlparse(start).path,data={'ticket':ticket},follow_redirects=False)
     query=parse_qs(urlparse(redirect.headers['location']).query)
     assert query['scope']==[gmail.SCOPE] and query['client_id']==['synthetic-client']
     state=query['state'][0]

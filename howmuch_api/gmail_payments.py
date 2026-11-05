@@ -19,6 +19,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
+from .database import limit
 from .payment_detection import DBS_SENDER, PaymentStore, gmail_authenticated, parse_dbs_alert
 
 router = APIRouter(prefix="/payment-detection")
@@ -104,8 +105,55 @@ async def connect(request: Request, authorization: str | None = Header(default=N
     return {"url": redirect.rsplit("/", 1)[0] + "/start?" + urlencode({"ticket": ticket})}
 
 
+def ticket_label(store: PaymentStore, ticket: str, stage: str) -> str | None:
+    """Who the connection link belongs to, as shown on the confirmation page (None if expired)."""
+    row = store.db.execute("SELECT user_id FROM payment_oauth WHERE token_hash=? AND stage=? AND expires>=?",
+                           (digest(ticket), stage, int(time.time()))).fetchone()
+    if not row:
+        return None
+    account = store.db.execute("SELECT display_name,email FROM accounts WHERE id=?", (row["user_id"],)).fetchone()
+    if account and account["display_name"]:
+        return account["display_name"]
+    email = (account["email"] if account else "") or ""
+    if "@" in email:
+        name, domain = email.split("@", 1)
+        return name[:2] + "•••@" + domain
+    return "a HowMuch account"
+
+
+def confirm_page(provider: str, label: str, ticket: str, action: str) -> HTMLResponse:
+    """A link someone sends you must not link your mailbox to their account: show whose account
+    this is and require a deliberate Continue before going to the sign-in page."""
+    return HTMLResponse(
+        '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="referrer" content="no-referrer"><title>HowMuch · Connect ' + html.escape(provider) + '</title>'
+        '<body style="font:17px/1.6 system-ui;margin:48px 24px;color:#183b37">'
+        '<h1 style="font-size:26px">Connect ' + html.escape(provider) + ' to HowMuch</h1>'
+        '<p>This will let the HowMuch account of <b>' + html.escape(label) + '</b> read bank payment alerts in the mailbox you sign in to next.</p>'
+        '<p>Only continue if you started this from <b>your own</b> HowMuch app just now. If someone sent you this link, close this page.</p>'
+        '<form method="post" action="' + html.escape(action) + '"><input type="hidden" name="ticket" value="' + html.escape(ticket) + '">'
+        '<button style="font:inherit;padding:12px 22px;border-radius:14px;border:0;background:#126b5e;color:#fff">Continue to ' + html.escape(provider) + '</button></form></body></html>',
+        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+                 "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"},
+    )
+
+
+async def posted_ticket(request: Request) -> str:
+    from urllib.parse import parse_qs
+    return (parse_qs((await request.body())[:2000].decode(errors="ignore")).get("ticket") or [""])[0]
+
+
 @router.get("/gmail/start")
-async def oauth_start(ticket: str, request: Request):
+async def oauth_confirm(ticket: str, request: Request):
+    label = ticket_label(PaymentStore(request.app.state.storage), ticket, "ticket")
+    if not label or not configured():
+        return result_page("This connection link has expired. Start again from HowMuch.")
+    return confirm_page("Gmail", label, ticket, "/v1/payment-detection/gmail/start")
+
+
+@router.post("/gmail/start")
+async def oauth_start(request: Request):
+    ticket = await posted_ticket(request)
     store = PaymentStore(request.app.state.storage)
     with store.db:
         row = store.db.execute("DELETE FROM payment_oauth WHERE token_hash=? AND stage='ticket' AND expires>=? RETURNING user_id", (digest(ticket), int(time.time()))).fetchone()
@@ -249,6 +297,17 @@ async def receipt_action(receipt_id: int, action: str, request: Request, payload
     return detection_status(store, user_id)
 
 
+async def revoke_google(connection) -> None:
+    """Withdraws HowMuch's Gmail access at Google (best effort)."""
+    if connection and connection["provider"] == "gmail" and connection["refresh_token"] and configured():
+        try:
+            token = cipher().decrypt(connection["refresh_token"].encode()).decode()
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post("https://oauth2.googleapis.com/revoke", data={"token": token})
+        except (httpx.HTTPError, InvalidToken, ValueError):
+            pass
+
+
 @router.delete("/connection")
 async def disconnect(request: Request, authorization: str | None = Header(default=None)):
     store, user_id = store_for(request, authorization)
@@ -257,13 +316,7 @@ async def disconnect(request: Request, authorization: str | None = Header(defaul
     with store.db:
         store.db.execute("DELETE FROM payment_connections WHERE user_id=?", (user_id,))
         store.db.execute("DELETE FROM payment_oauth WHERE user_id=?", (user_id,))
-    if connection and connection["provider"] == "gmail" and connection["refresh_token"] and configured():
-        try:
-            token = cipher().decrypt(connection["refresh_token"].encode()).decode()
-            async with httpx.AsyncClient(timeout=10) as client:
-                await client.post("https://oauth2.googleapis.com/revoke", data={"token": token})
-        except (httpx.HTTPError, InvalidToken):
-            pass
+    await revoke_google(connection)
     return detection_status(store, user_id)
 
 
@@ -395,6 +448,7 @@ async def _scan_query(client, headers, query, store, user_id, connection, payers
 @router.post("/scan")
 async def scan(request: Request, authorization: str | None = Header(default=None)):
     store, user_id = store_for(request, authorization)
+    limit(request, "scan", maximum=10, key=str(user_id))  # mailbox scans are slow and costly
     try:
         await scan_mailbox(store.storage, user_id)
     except ValueError as exc:

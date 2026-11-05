@@ -94,3 +94,16 @@ def test_legacy_reimbursement_get_migrates_once_with_receipt_and_collision(setup
     assert converted['receiptID']==claim['receiptID'] and converted['amount']==12 and converted['id']!=claim['id']
     assert setup.client.get('/v1/data',headers=headers(session)).json()==saved
     assert setup.storage._conn.execute('SELECT count(*) FROM cab_claims').fetchone()[0]==2
+
+
+def test_unused_receipt_photos_are_deleted_after_a_grace_period(setup):
+    from howmuch_api.receipts import collect_unused
+    db=setup.storage._conn
+    with db:
+        db.execute("INSERT INTO accounts(account_id,apple_sub,email,display_name,created) VALUES('acct-gc','sub-gc',NULL,'',0)")
+        db.execute("INSERT INTO receipt_photos VALUES('acct-gc','kept',x'00',1,0)")
+        db.execute("INSERT INTO receipt_photos VALUES('acct-gc','old',x'00',1,0)")
+        db.execute("INSERT INTO receipt_photos VALUES('acct-gc','fresh',x'00',1,strftime('%s','now'))")
+    assert collect_unused(db,'acct-gc',{'claims':[{'receiptID':'kept'}]})==1
+    left={r[0] for r in db.execute("SELECT receipt_id FROM receipt_photos WHERE account_id='acct-gc'")}
+    assert left=={'kept','fresh'}

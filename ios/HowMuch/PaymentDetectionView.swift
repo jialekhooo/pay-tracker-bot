@@ -27,6 +27,7 @@ struct PaymentDetectionView: View {
         return auth.isDemo
         #endif
     }
+    @State private var replacingAddress = false
     @State private var pendingDismiss: String?
     @State private var settingUpBank = false
     var body: some View {
@@ -76,6 +77,8 @@ struct PaymentDetectionView: View {
                             }.padding(.vertical, 4)
                         }
                         NavigationLink { EmailForwardingGuide(address: address) } label: { Label("How to forward bank emails", systemImage: "envelope.arrow.triangle.branch") }
+                        Button("Get a new address", systemImage: "arrow.triangle.2.circlepath") { replacingAddress = true }
+                            .disabled(busy).accessibilityIdentifier("payin.forwarding.rotate")
                         Text("Forward DBS \u{201C}You\u{2019}ve received a transfer\u{201D} alerts to this private address, by hand or with a mail rule. Forwarded emails always wait for you to check them below.").font(.caption).foregroundStyle(Palette.muted)
                     } else {
                         Text("Coming soon: a private address you can forward bank alert emails to.").font(.subheadline).foregroundStyle(Palette.muted)
@@ -89,7 +92,12 @@ struct PaymentDetectionView: View {
                         Button("Check payments now") { Task { await action("/scan") } }.rowAction().accessibilityIdentifier("payment.scan").disabled(!status.available || busy)
                         Button("Disconnect email", role: .destructive) { disconnect = true }.rowAction().accessibilityIdentifier("payment.disconnect")
                     } else {
-                        Button("Connect Gmail") { Task { await connect() } }.rowAction().accessibilityIdentifier("payment.connect").disabled(!(status.providers?["gmail"] ?? status.available) || busy)
+                        // Hidden until Google has verified HowMuch; Gmail users can forward alerts instead.
+                        if status.providers?["gmail"] ?? false {
+                            Button("Connect Gmail") { Task { await connect() } }.rowAction().accessibilityIdentifier("payment.connect").disabled(busy)
+                        } else {
+                            Text("Using Gmail? Forward your bank's emails to your HowMuch address above.").font(.caption).foregroundStyle(Palette.muted)
+                        }
                         Button("Connect Outlook / Hotmail") { Task { await connect(provider: "microsoft") } }.rowAction().accessibilityIdentifier("payment.connect.microsoft").disabled(!(status.providers?["microsoft"] ?? false) || busy)
                         if !(status.providers?["microsoft"] ?? false) { Text("Outlook sign-in is awaiting Microsoft setup.").font(.caption).foregroundStyle(Palette.muted) }
                         Button("Connect iCloud / me.com") { showICloud = true }.rowAction().accessibilityIdentifier("payment.connect.icloud").disabled(!(status.providers?["icloud"] ?? false) || busy)
@@ -147,6 +155,10 @@ struct PaymentDetectionView: View {
             if !previewOnly { Button("Refresh") { Task { await load() } }.rowAction().disabled(busy) }
             if busy, status != nil { Section { ProgressView("Updating…") } }
         }.detailStyle("Pay-in tracking")
+            .confirmationDialog("Get a new forwarding address? The old one stops working, so update your Gmail forwarding to the new one.", isPresented: $replacingAddress, titleVisibility: .visible) {
+                Button("Get a new address", role: .destructive) { Task { await rotateAddress() } }
+                Button("Cancel", role: .cancel) {}
+            }
             .confirmationDialog("Dismiss this payment alert? It won't be matched to any job.", isPresented: Binding(get: { pendingDismiss != nil }, set: { if !$0 { pendingDismiss = nil } }), titleVisibility: .visible) {
                 Button("Dismiss alert", role: .destructive) { if let path = pendingDismiss { pendingDismiss = nil; Task { await action(path) } } }
                 Button("Keep it", role: .cancel) { pendingDismiss = nil }
@@ -246,6 +258,12 @@ struct PaymentDetectionView: View {
             } icon: { Image(systemName: "exclamationmark.circle").foregroundStyle(.orange) }
                 .accessibilityIdentifier("payin.notifications.lastRun")
         }
+    }
+    private func rotateAddress() async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        do { payIn = try decodePayIn(await auth.api.request(path + "/pay-in/forwarding/rotate", method: "POST", body: Data("{}".utf8))); message = "Your new forwarding address is ready." }
+        catch { message = error.localizedDescription }
     }
     /// Hides Gmail's code once it's been entered; it also clears by itself when the first email is forwarded.
     private func forwardingConfirmed() async {

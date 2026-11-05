@@ -184,10 +184,18 @@ async def check(payload:CheckRoute,request:Request,authorization:str|None=Header
     if result is None:raise HTTPException(503,'Could not estimate this route. Check the addresses and try again shortly.')
     return json_response(result)
 
+PER_MINUTE=30
+
 async def refresh_due(storage,client,now=None):
     now=int(time.time()) if now is None else now
     db=storage._conn;count=0
-    for account in db.execute('SELECT DISTINCT a.* FROM accounts a JOIN push_devices d ON d.account_id=a.account_id JOIN auth_sessions s ON s.session_id=d.session_id WHERE s.refresh_expires>?',(now,)).fetchall():
+    # Only accounts that turned "Time to leave" on (read from the saved document by SQLite, not parsed in Python).
+    accounts=db.execute(
+        "SELECT DISTINCT a.* FROM accounts a JOIN push_devices d ON d.account_id=a.account_id "
+        "JOIN auth_sessions s ON s.session_id=d.session_id JOIN documents doc ON doc.account_id=a.account_id "
+        "WHERE s.refresh_expires>? AND json_extract(doc.body,'$.data.preferences.travel.enabled') IN (1,'true')",(now,)).fetchall()
+    due=[]
+    for account in accounts:
         envelope=read_document(storage,account);reconcile(storage,account,envelope['data'],envelope['timezone'],now)
         options,items=candidates(envelope['data'],envelope['timezone'],now)
         for item in items[:2]:
@@ -198,8 +206,11 @@ async def refresh_due(storage,client,now=None):
             if row and row['estimate'] and not options.trafficUpdates:
                 estimate=json.loads(row['estimate'])
                 if now<estimate['leaveAt']-options.prepareMinutes*60-300:continue
-            await refresh_one(storage,account,options,*item,client,now);count+=1
-            if count>=10:return count
+            due.append((item[0],account,options,item))
+    # Most urgent journeys first, across every account, so nobody's alert is dropped behind another's.
+    for _,account,options,item in sorted(due,key=lambda d:d[0])[:PER_MINUTE]:
+        await refresh_one(storage,account,options,*item,client,now);count+=1
+    if len(due)>PER_MINUTE: logger.warning('Travel checks deferred to the next minute: %d',len(due)-PER_MINUTE)
     return count
 
 async def worker(storage):

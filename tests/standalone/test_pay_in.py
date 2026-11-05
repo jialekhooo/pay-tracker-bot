@@ -130,3 +130,18 @@ def test_gmail_forwarding_confirmation_shows_in_pay_in_tracking(setup, monkeypat
     assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(message)).json()['status'] == 'confirmation'
     cleared = setup.client.post('/v1/payment-detection/pay-in/forwarding-confirmed', headers=headers(session)).json()
     assert cleared['forwarding']['confirmation'] is None
+
+
+def test_forwarding_address_can_be_replaced_and_fake_google_confirmations_are_ignored(setup, monkeypatch):
+    monkeypatch.setenv('HOWMUCH_INBOUND_DOMAIN', 'in.howmuch.test')
+    monkeypatch.setenv('HOWMUCH_INBOUND_SECRET', 'hook-secret')
+    session = finished_roadshow(setup)
+    old = setup.client.get('/v1/payment-detection/pay-in', headers=headers(session)).json()['forwarding']['address']
+    new = setup.client.post('/v1/payment-detection/pay-in/forwarding/rotate', headers=headers(session)).json()['forwarding']['address']
+    assert new != old and len(new.split('+')[1].split('@')[0]) == 32
+    fake = EmailMessage(); fake['From'], fake['To'] = 'Gmail Team <forwarding-noreply@google.com>', new
+    fake['Subject'] = 'Gmail Forwarding Confirmation'
+    fake['Authentication-Results'] = 'mx.cloudflare.net; dkim=fail header.d=evil.example'
+    fake.set_content('Confirmation code: 999999999')
+    assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(fake)).json()['status'] != 'confirmation'
+    assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(forwarded(old, 'You have received SGD 120.00 from REFIX PTE. LTD.'))).json()['status'] == 'ignored'

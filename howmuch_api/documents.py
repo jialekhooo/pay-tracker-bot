@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import simplejson as json
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from .database import limit
 from .auth import authenticated_account
 from .database import json_response
 from .pay import RateConfig
@@ -345,6 +346,7 @@ async def get_data(request: Request, authorization: str | None=Header(default=No
 @router.put('/data')
 async def put_data(request: Request, authorization: str | None=Header(default=None)):
     account=authenticated_account(request,authorization)
+    limit(request,'save',maximum=240,key=account['account_id'])  # full saves validate and mirror the whole document
     chunks=[];size=0
     async for chunk in request.stream():
         size+=len(chunk)
@@ -407,6 +409,8 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
                    (account['account_id'],revision,json.dumps(envelope,use_decimal=True),int(time.time())))
     from .push import rebuild_jobs, configured
     rebuild_jobs(storage,account,data,payload.timezone)
+    from .receipts import collect_unused
+    collect_unused(db,account['account_id'],data)
     from .auth import pioneer
     return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account)})
 

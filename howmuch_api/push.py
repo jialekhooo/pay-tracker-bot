@@ -38,12 +38,20 @@ def configured(environment='production'):
     return True
 
 
+_provider_tokens={}
+
 def provider_token(environment='production'):
+    """Apple asks providers to reuse a signed token for 20-60 minutes, not sign one per push."""
     prefix=key_prefix(environment)
     if not prefix:raise ValueError('APNs environment is not configured')
-    return jwt.encode({'iss':os.environ['HOWMUCH_APNS_TEAM_ID'],'iat':int(time.time())},
-                      os.environ[prefix+'_PRIVATE_KEY'].replace('\\n','\n'),algorithm='ES256',
-                      headers={'kid':os.environ[prefix+'_KEY_ID']})
+    cached=_provider_tokens.get(environment)
+    if cached and time.time()-cached[1]<40*60: return cached[0]
+    issued=int(time.time())
+    token=jwt.encode({'iss':os.environ['HOWMUCH_APNS_TEAM_ID'],'iat':issued},
+                     os.environ[prefix+'_PRIVATE_KEY'].replace('\\n','\n'),algorithm='ES256',
+                     headers={'kid':os.environ[prefix+'_KEY_ID']})
+    _provider_tokens[environment]=(token,issued)
+    return token
 
 
 class DeviceRegistration(BaseModel):
@@ -122,8 +130,13 @@ def rebuild_jobs(storage,account,data,timezone_name,now=None):
     db=storage._conn
     wanted={row[0] for row in desired}
     with db:
-        for row in db.execute("SELECT job_id FROM notification_jobs WHERE account_id=? AND status='pending' AND kind NOT LIKE 'travel_%'",(account['account_id'],)).fetchall():
-            if row['job_id'] not in wanted: db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id=?",(row['job_id'],))
+        # Only cancel reminders that haven't come due yet; one that is due but not yet delivered still goes out
+        # (its expiry ends it). A payment reminder is the exception: once the shift is paid it must not arrive.
+        for row in db.execute("SELECT job_id,kind,fire_at,expires FROM notification_jobs WHERE account_id=? AND status='pending' AND kind NOT LIKE 'travel_%'",(account['account_id'],)).fetchall():
+            if row['job_id'] in wanted: continue
+            if row['expires']<=now: db.execute("UPDATE notification_jobs SET status='expired' WHERE job_id=?",(row['job_id'],))
+            elif row['fire_at']>now or row['kind']=='payment_due':
+                db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id=?",(row['job_id'],))
         for row in desired:
             db.execute("INSERT INTO notification_jobs(job_id,account_id,kind,shift_id,fire_at,expires,title,body) VALUES(?,?,?,?,?,?,?,?) "
                        "ON CONFLICT(job_id) DO UPDATE SET title=excluded.title,body=excluded.body,expires=excluded.expires,"
@@ -194,14 +207,16 @@ async def deliver_due(storage,client=None,now=None):
 
 
 async def worker(storage):
+    # One long-lived HTTP/2 connection to APNs instead of a new one every 15 seconds.
+    client=httpx.AsyncClient(http2=True,timeout=15)
     while True:
-        try: await deliver_due(storage)
+        try: await deliver_due(storage,client=client)
         except asyncio.CancelledError: raise
         except Exception:
             logger.error('Notification delivery check could not complete; it will retry.')
         try:
             from .live_activity import deliver
-            await deliver(storage)
+            await deliver(storage,client=client)
         except asyncio.CancelledError: raise
         except Exception:
             # Never log APNs tokens, authorization headers, keys or job content.

@@ -25,6 +25,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, SecretStr
 
+from .database import limit
 from . import gmail_payments as gmail
 from .payment_detection import DBS_SENDER, PaymentStore, parse_dbs_alert
 
@@ -41,7 +42,8 @@ def result_page(message, success=False):
 
 def provider_ready(provider: str) -> bool:
     if provider == "gmail":
-        return gmail.configured()
+        # Gmail stays hidden from everyone until Google has verified the app (set HOWMUCH_GMAIL_PUBLIC=1 then).
+        return gmail.configured() and os.environ.get("HOWMUCH_GMAIL_PUBLIC", "") == "1"
     try:
         Fernet(os.environ.get("HOWMUCH_GMAIL_TOKEN_KEY", "").encode())
     except (ValueError, TypeError):
@@ -100,6 +102,7 @@ class ICloudConnection(BaseModel):
 @router.post("/icloud/connect")
 async def connect_icloud(payload: ICloudConnection, request: Request, authorization: str | None = Header(default=None)):
     store, user_id = gmail.store_for(request, authorization)
+    limit(request, "icloud-connect", maximum=5, key=str(user_id))  # each try is a real iCloud login
     if not provider_ready("icloud"):
         raise HTTPException(503, "iCloud connection is not configured.")
     email = payload.email.strip().casefold()
@@ -154,7 +157,16 @@ def verifier_for(state, browser):
 
 
 @router.get("/microsoft/start")
-async def microsoft_start(ticket: str, request: Request):
+async def microsoft_confirm(ticket: str, request: Request):
+    label = gmail.ticket_label(PaymentStore(request.app.state.storage), ticket, "microsoft_ticket")
+    if not label or not provider_ready("microsoft"):
+        return result_page("This connection link has expired. Start again from HowMuch.")
+    return gmail.confirm_page("Outlook", label, ticket, "/v1/payment-detection/microsoft/start")
+
+
+@router.post("/microsoft/start")
+async def microsoft_start(request: Request):
+    ticket = await gmail.posted_ticket(request)
     store = PaymentStore(request.app.state.storage)
     with store.db:
         row = store.db.execute("DELETE FROM payment_oauth WHERE token_hash=? AND stage='microsoft_ticket' AND expires>=? RETURNING user_id", (gmail.digest(ticket), int(time.time()))).fetchone()

@@ -108,7 +108,9 @@ def test_icloud_uses_fixed_tls_readonly_and_peek(setup, monkeypatch):
 def test_microsoft_oauth_pkce_single_use_browser_binding_and_private_tokens(setup, monkeypatch):
     session=prepare(setup,monkeypatch); microsoft(monkeypatch)
     url=setup.client.post('/v1/payment-detection/microsoft/connect',headers=headers(session)).json()['url']
-    result=setup.client.get(url,follow_redirects=False); query=parse_qs(urlparse(result.headers['location']).query)
+    assert 'Only continue if you started this' in setup.client.get(url,follow_redirects=False).text
+    result=setup.client.post(urlparse(url).path,data={'ticket':parse_qs(urlparse(url).query)['ticket'][0]},follow_redirects=False)
+    query=parse_qs(urlparse(result.headers['location']).query)
     assert query['code_challenge_method']==['S256'] and 'Mail.Read' in query['scope'][0]
     state=query['state'][0]
     with TestClient(setup.client.app,base_url='https://howmuch-ios.test') as other:
@@ -125,6 +127,10 @@ def test_microsoft_oauth_pkce_single_use_browser_binding_and_private_tokens(setu
     conn=PaymentStore(setup.storage).connection(owner(setup,session))
     assert conn['provider']=='microsoft' and gmail.cipher().decrypt(conn['refresh_token'].encode())==b'refresh'
     assert 'could not be verified' in setup.client.get('/v1/payment-detection/microsoft/callback',params={'state':state,'code':'replay'}).text
+    public=setup.client.get('/v1/payment-detection',headers=headers(session)).json()
+    # Gmail stays hidden until Google has verified the app.
+    assert public['providers']=={'gmail':False,'icloud':True,'microsoft':True}
+    monkeypatch.setenv('HOWMUCH_GMAIL_PUBLIC','1')
     public=setup.client.get('/v1/payment-detection',headers=headers(session)).json()
     assert public['providers']=={'gmail':True,'icloud':True,'microsoft':True}
 

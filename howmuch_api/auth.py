@@ -18,6 +18,7 @@ router=APIRouter(prefix='/auth')
 ISSUER='https://appleid.apple.com'
 APPLE_KEYS=jwt.PyJWKClient(ISSUER+'/auth/keys',cache_keys=True,lifespan=3600,timeout=10)
 ACCESS_SECONDS=3600
+REFRESH_GRACE_SECONDS=120
 REFRESH_SECONDS=30*86400
 
 
@@ -95,7 +96,7 @@ def session_response(db, account, device_id):
     session=str(uuid.uuid4())
     with db:
         db.execute('DELETE FROM auth_sessions WHERE refresh_expires<=?',(now,))
-        db.execute('INSERT INTO auth_sessions VALUES(?,?,?,?,?,?,?,?,?)',
+        db.execute('INSERT INTO auth_sessions(session_id,account_id,access_hash,refresh_hash,revoke_hash,access_expires,refresh_expires,device_id,created) VALUES(?,?,?,?,?,?,?,?,?)',
                    (session,account['account_id'],digest(access),digest(refresh),digest(revoke),now+ACCESS_SECONDS,now+REFRESH_SECONDS,device_id,now))
     return {'accessToken':access,'refreshToken':refresh,'revocationToken':revoke,'expiresAt':now+ACCESS_SECONDS,
             'account':account_json(account)}
@@ -155,18 +156,29 @@ async def sign_in(payload: AppleSignIn, request: Request):
 
 @router.post('/refresh')
 async def refresh(payload: RefreshSession, request: Request):
-    limit(request,'refresh',maximum=100)
+    presented=digest(payload.refreshToken)
+    limit(request,'refresh',maximum=100,key=presented)
     db=request.app.state.storage._conn
+    now=int(time.time())
+    row=db.execute('SELECT * FROM auth_sessions WHERE refresh_hash=? AND refresh_expires>?',(presented,now)).fetchone()
+    if not row:
+        old=db.execute('SELECT * FROM auth_sessions WHERE prev_refresh_hash=? AND refresh_expires>?',(presented,now)).fetchone()
+        if old and now-old['rotated']<=REFRESH_GRACE_SECONDS:
+            # The reply to the last refresh was lost on a bad connection: issue a fresh pair once more.
+            row=old
+        else:
+            if old:
+                # An already-rotated token used again later: it may have been stolen, so end that session
+                # (committed before the error is raised).
+                with db: db.execute('DELETE FROM auth_sessions WHERE session_id=?',(old['session_id'],))
+            raise HTTPException(401,'Please sign in with Apple again.')
     with db:
-        row=db.execute('SELECT * FROM auth_sessions WHERE refresh_hash=? AND refresh_expires>?',
-                       (digest(payload.refreshToken),int(time.time()))).fetchone()
-        if not row: raise HTTPException(401,'Please sign in with Apple again.')
         # Rotation keeps the session ID, so a registered device stays attached to its session.
         access,new_refresh=secrets.token_urlsafe(32),secrets.token_urlsafe(48)
-        now=int(time.time())
-        cursor=db.execute('UPDATE auth_sessions SET access_hash=?,refresh_hash=?,access_expires=?,refresh_expires=? '
+        previous=row['prev_refresh_hash'] if row['refresh_hash']!=presented else presented
+        cursor=db.execute('UPDATE auth_sessions SET access_hash=?,refresh_hash=?,access_expires=?,refresh_expires=?,prev_refresh_hash=?,rotated=? '
                           'WHERE session_id=? AND refresh_hash=?',(digest(access),digest(new_refresh),now+ACCESS_SECONDS,
-                          now+REFRESH_SECONDS,row['session_id'],digest(payload.refreshToken)))
+                          now+REFRESH_SECONDS,previous,now,row['session_id'],row['refresh_hash']))
         if cursor.rowcount!=1: raise HTTPException(401,'This refresh token has already been used.')
         account=db.execute('SELECT * FROM accounts WHERE account_id=?',(row['account_id'],)).fetchone()
     return json_response({'accessToken':access,'refreshToken':new_refresh,'expiresAt':now+ACCESS_SECONDS,
@@ -178,6 +190,15 @@ async def logout(request: Request, authorization: str | None=Header(default=None
     account=authenticated_account(request,authorization)
     db=request.app.state.storage._conn
     with db: db.execute('DELETE FROM auth_sessions WHERE session_id=?',(account['session_id'],))
+    return Response(status_code=204)
+
+
+@router.post('/logout-all',status_code=204)
+async def logout_all(request: Request, authorization: str | None=Header(default=None)):
+    """Signs the account out everywhere, e.g. after a lost or stolen phone."""
+    account=authenticated_account(request,authorization)
+    with request.app.state.storage._conn as db:
+        db.execute('DELETE FROM auth_sessions WHERE account_id=?',(account['account_id'],))
     return Response(status_code=204)
 
 

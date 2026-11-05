@@ -122,7 +122,18 @@ def test_sessions_rotate_expire_revoke_and_store_only_hashes(setup):
     assert response.status_code==200
     updated=response.json()
     assert setup.client.get('/v1/data',headers=headers(session)).status_code==401
+    # The reply was lost on a bad connection: the same token again within the grace gets a fresh pair.
+    retry=setup.client.post('/v1/auth/refresh',json={'refreshToken':session['refreshToken']})
+    assert retry.status_code==200
+    assert setup.client.get('/v1/data',headers=headers(updated)).status_code==401
+    updated=retry.json()
+    assert setup.client.get('/v1/data',headers=headers(updated)).status_code==200
+    # Much later the old token turns up again: treat it as stolen and end that session.
+    setup.storage._conn.execute('UPDATE auth_sessions SET rotated=rotated-600'); setup.storage._conn.commit()
     assert setup.client.post('/v1/auth/refresh',json={'refreshToken':session['refreshToken']}).status_code==401
+    assert setup.client.get('/v1/data',headers=headers(updated)).status_code==401
+    session,_=login(setup)
+    updated=setup.client.post('/v1/auth/refresh',json={'refreshToken':session['refreshToken']}).json()
     assert setup.client.get('/v1/data',headers=headers(updated)).status_code==200
     assert setup.client.get('/v1/data',headers={'Authorization':'Bearer '+session['revocationToken']}).status_code==401
     assert setup.client.post('/v1/auth/revoke',json={'revocationToken':session['revocationToken']}).status_code==204
@@ -557,3 +568,27 @@ def test_accounts_made_before_launch_are_pioneers(setup,monkeypatch):
     assert again['account']['pioneer'] is True
     monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL','2020-01-01')
     assert setup.client.get('/v1/data',headers=headers(again)).json()['pioneer'] is False
+
+
+def test_sign_out_everywhere_and_rate_limits_are_per_client(setup):
+    first,_=login(setup); second,_=login(setup)
+    assert setup.client.post('/v1/auth/logout-all',headers=headers(first)).status_code==204
+    assert setup.client.get('/v1/data',headers=headers(first)).status_code==401
+    assert setup.client.get('/v1/data',headers=headers(second)).status_code==401
+    # One caller using up the limit doesn't block another (Fly passes each caller's address).
+    for _ in range(41): setup.client.post('/v1/auth/challenge',headers={'Fly-Client-IP':'203.0.113.1'})
+    assert setup.client.post('/v1/auth/challenge',headers={'Fly-Client-IP':'203.0.113.1'}).status_code==429
+    assert setup.client.post('/v1/auth/challenge',headers={'Fly-Client-IP':'198.51.100.7'}).status_code==200
+
+
+def test_a_due_reminder_still_goes_out_when_jobs_are_rebuilt(setup):
+    session,_=login(setup);data=document()
+    data['preferences']['notifications']['startLeadMinutes']=[30,0]
+    assert write(setup,session,data).status_code==200
+    db=setup.storage._conn
+    start=db.execute("SELECT max(fire_at) FROM notification_jobs WHERE kind='start'").fetchone()[0]
+    account=db.execute('SELECT * FROM accounts').fetchone()
+    # 25 minutes before the start: the 30-minute reminder is due but the worker hasn't sent it yet.
+    push.rebuild_jobs(setup.storage,account,data,'Asia/Singapore',now=start-25*60)
+    pending=[r['fire_at'] for r in db.execute("SELECT fire_at FROM notification_jobs WHERE kind='start' AND status='pending' ORDER BY fire_at")]
+    assert pending==[start-30*60,start]

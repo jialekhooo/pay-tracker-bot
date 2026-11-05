@@ -54,3 +54,23 @@ async def download(receipt_id:uuid.UUID,request:Request,authorization:str|None=H
     try:data=encryption().decrypt(row['encrypted'])
     except InvalidToken:raise HTTPException(503,'This receipt photo is temporarily unavailable.') from None
     return Response(data,media_type='image/jpeg',headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':f'attachment; filename="HowMuch-receipt-{receipt_id}.jpg"'})
+
+
+@router.delete('/{receipt_id}',status_code=204)
+async def delete(receipt_id:uuid.UUID,request:Request,authorization:str|None=Header(default=None)):
+    account=authenticated_account(request,authorization)
+    with request.app.state.storage._conn as db:
+        db.execute('DELETE FROM receipt_photos WHERE account_id=? AND receipt_id=?',(account['account_id'],str(receipt_id)))
+    return Response(status_code=204)
+
+
+GRACE_SECONDS=86400
+
+def collect_unused(db,account_id,data):
+    """Deletes photos no claim refers to any more. A day's grace keeps a photo uploaded just before its claim is saved."""
+    used={str(claim.get('receiptID')) for claim in (data.get('claims') or [])+(data.get('expenses') or []) if claim.get('receiptID')}
+    stale=[row['receipt_id'] for row in db.execute('SELECT receipt_id FROM receipt_photos WHERE account_id=? AND created<?',
+                                                  (account_id,int(time.time())-GRACE_SECONDS)) if row['receipt_id'] not in used]
+    with db:
+        for receipt_id in stale: db.execute('DELETE FROM receipt_photos WHERE account_id=? AND receipt_id=?',(account_id,receipt_id))
+    return len(stale)

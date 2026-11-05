@@ -217,3 +217,16 @@ def test_departure_push_payload_and_delivery_are_account_scoped_and_once(setup,c
             assert await push.deliver_due(setup.storage,client,now)==1
             assert await push.deliver_due(setup.storage,client,now+1)==0
     asyncio.run(run());assert len(delivered)==1
+
+def test_worker_checks_routes_for_accounts_with_travel_on(setup,configured):
+    session,data,account,options,item,now=prepared(setup);add_device(setup,account,session)
+    calls=[]
+    def respond(request):
+        calls.append(request.url.path)
+        if request.url.path=='/v1/token':return httpx.Response(200,json={'accessToken':'synthetic','expiresInSeconds':1800})
+        return httpx.Response(200,json={'routes':[{'durationSeconds':1800,'distanceMeters':10000}],'origin':{'name':'A'},'destination':{'name':'B'}})
+    async def run():
+        async with fake_client(handler=respond) as client:
+            return await travel.refresh_due(setup.storage,client,now=max(now,item[0]-5*3600))
+    assert asyncio.run(run())==1
+    assert any(path!='/v1/token' for path in calls)

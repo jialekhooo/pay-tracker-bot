@@ -74,6 +74,11 @@ class AppStorage(Storage):
         super().__init__(path)
         self._conn.execute('PRAGMA journal_mode=WAL')
         self._conn.executescript(SCHEMA)
+        # Refresh-token rotation history: a lost reply gets a short grace; an older token reused ends the session.
+        session_columns={r['name'] for r in self._conn.execute('PRAGMA table_info(auth_sessions)')}
+        if 'prev_refresh_hash' not in session_columns:
+            self._conn.execute('ALTER TABLE auth_sessions ADD COLUMN prev_refresh_hash TEXT')
+            self._conn.execute('ALTER TABLE auth_sessions ADD COLUMN rotated INTEGER NOT NULL DEFAULT 0')
         # The calendar link, encrypted, so every iPhone on the account shows the same one.
         if 'encrypted_token' not in {r['name'] for r in self._conn.execute('PRAGMA table_info(calendar_links)')}:
             self._conn.execute('ALTER TABLE calendar_links ADD COLUMN encrypted_token TEXT')
@@ -100,10 +105,18 @@ def json_response(value, status_code=200):
                     media_type='application/json',headers={'Cache-Control':'no-store'})
 
 
-def limit(request: Request, name: str, maximum=40):
+def client_ip(request: Request) -> str:
+    """The caller's real address. Behind Fly's proxy every connection comes from the proxy, so use the
+    Fly-Client-IP header that Fly's edge sets (and overwrites) on each request."""
+    forwarded=request.headers.get('fly-client-ip','').strip()
+    if forwarded: return forwarded[:64]
+    return request.client.host if request.client else 'unknown'
+
+
+def limit(request: Request, name: str, maximum=40, key: str | None=None):
+    """At most `maximum` requests per 10 minutes per caller (or per `key`, e.g. an account or token)."""
     db=request.app.state.storage._conn
-    peer=request.client.host if request.client else 'unknown'
-    bucket=digest(name+':'+peer)
+    bucket=digest(name+':'+(key or client_ip(request)))
     window=int(time.time())//600
     with db:
         db.execute('DELETE FROM auth_limits WHERE window<?',(window,))

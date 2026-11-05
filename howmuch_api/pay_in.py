@@ -28,6 +28,7 @@ from email import policy
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .database import limit
 from .payment_detection import DBS_SENDER, DBS_SUBJECT, SGT, PaymentStore, normalized, parse_dbs_alert
 
 router = APIRouter(prefix="/payment-detection")
@@ -64,7 +65,7 @@ def forwarding_address(store: PaymentStore, user_id: int) -> str | None:
         return None
     token = settings(store, user_id)["forward_token"]
     if not token:
-        token = secrets.token_hex(8)
+        token = secrets.token_hex(16)  # new addresses get 32 hex characters; older 16-character ones still work
         with store.db:
             store.db.execute("INSERT INTO pay_in_settings(user_id,forward_token) VALUES(?,?) "
                              "ON CONFLICT(user_id) DO UPDATE SET forward_token=excluded.forward_token", (user_id, token))
@@ -92,6 +93,11 @@ def gmail_forwarding_confirmation(raw: bytes) -> dict | None:
     message = email.message_from_bytes(raw, policy=policy.default)
     if GMAIL_CONFIRM_SENDER not in str(message.get("From", "")).casefold():
         return None
+    # Anyone can type Google's address in From. When the mail server reports authentication results,
+    # require Google's DKIM signature to have passed.
+    results = " ".join(str(v) for k in ("Authentication-Results", "ARC-Authentication-Results") for v in (message.get_all(k) or [])).casefold()
+    if results and not re.search(r"dkim=pass[^;]*(header\.d=google\.com|header\.i=@google\.com)", results):
+        return None
     subject = str(message.get("Subject", ""))
     if "forwarding confirmation" not in subject.casefold():
         return None
@@ -110,15 +116,25 @@ def _key(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.casefold())
 
 
-def saved_payer(store: PaymentStore, user_id: int, payer: str) -> str | None:
+def match_payer(store: PaymentStore, user_id: int, payer: str) -> tuple[str | None, bool]:
+    """The saved payer this name refers to, and whether the match is exact. Only an exact match
+    (same letters and digits) may mark a job paid automatically; a partial match waits for review."""
     wanted = _key(payer)
     if not wanted:
-        return None
-    for rule in store.rules(user_id):
-        saved = _key(rule["payer"])
-        if saved == wanted or (len(saved) >= 4 and (saved in wanted or wanted in saved)):
-            return rule["payer"]
-    return None
+        return None, False
+    rules = store.rules(user_id)
+    for rule in rules:
+        if _key(rule["payer"]) == wanted:
+            return rule["payer"], True
+    if len(wanted) < 5:
+        return None, False
+    partial = {rule["payer"] for rule in rules if len(_key(rule["payer"])) >= 5 and (_key(rule["payer"]) in wanted or wanted in _key(rule["payer"]))}
+    # Several saved payers fit: don't guess.
+    return (partial.pop(), False) if len(partial) == 1 else (None, False)
+
+
+def saved_payer(store: PaymentStore, user_id: int, payer: str) -> str | None:
+    return match_payer(store, user_id, payer)[0]
 
 
 def parse_notification(text: str) -> tuple[Decimal | None, str]:
@@ -178,10 +194,22 @@ async def forwarding_confirmed(request: Request, authorization: str | None = Hea
     return pay_in_status(store, user_id)
 
 
+@router.post("/pay-in/forwarding/rotate")
+async def rotate_forwarding(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """A new private address: the old one stops working straight away (e.g. if it was shared by mistake)."""
+    store, user_id = _store(request, authorization)
+    with store.db:
+        store.db.execute("INSERT INTO pay_in_settings(user_id,forward_token,forward_confirmation) VALUES(?,?,NULL) "
+                         "ON CONFLICT(user_id) DO UPDATE SET forward_token=excluded.forward_token,forward_confirmation=NULL",
+                         (user_id, secrets.token_hex(16)))
+    return pay_in_status(store, user_id)
+
+
 @router.post("/notification")
 async def record_notification(payload: Notification, request: Request, authorization: str | None = Header(default=None)) -> dict:
     """Pay received, as read from a bank app notification on the person's iPhone."""
     store, user_id = _store(request, authorization)
+    limit(request, "notification", maximum=120, key=str(user_id))
     parsed_amount, parsed_payer = parse_notification(payload.text)
     try:
         amount = Decimal(payload.amount.replace(",", "")) if payload.amount else parsed_amount
@@ -191,7 +219,7 @@ async def record_notification(payload: Notification, request: Request, authoriza
     if amount is None or amount <= 0:
         return {"status": "ignored", "message": "That notification doesn't look like money received."}
     amount = amount.quantize(Decimal("0.01"))
-    payer = saved_payer(store, user_id, payer_text)
+    payer, exact = match_payer(store, user_id, payer_text)
     if not payer:
         name = payer_text or "this payer"
         return {"status": "unknown_payer", "amount": str(amount), "payer": payer_text,
@@ -200,7 +228,9 @@ async def record_notification(payload: Notification, request: Request, authoriza
     fingerprint = f"{now.isoformat()}|{amount}|{_key(payer)}"
     parsed = {"amount": str(amount), "currency": payload.currency.upper(), "payer": payer, "received_at": now.isoformat(),
               "account_last4": "", "reason": "", "receipt_key": hashlib.sha256(("notif:" + fingerprint).encode()).hexdigest()}
-    auto = bool(settings(store, user_id)["notifications_auto"])
+    auto = bool(settings(store, user_id)["notifications_auto"]) and exact
+    if not exact:
+        parsed["reason"] = f"Matched {payer} from \"{payer_text}\" by part of the name; check it's right."
     receipt_id = store.ingest(user_id, "notif:" + fingerprint, parsed, trusted=True, auto=auto)
     receipt = store.receipt(user_id, receipt_id)
     if receipt["status"] in {"auto_paid", "confirmed_paid"}:
@@ -225,7 +255,7 @@ def parse_forwarded(raw: bytes) -> tuple[str | None, dict | None]:
     """The forwarding token and the DBS alert inside a forwarded email (auto-forwarded or forwarded by hand)."""
     message = email.message_from_bytes(raw, policy=policy.default)
     recipients = " ".join(str(message.get(h, "")) for h in ("X-Original-To", "Delivered-To", "To"))
-    token = re.search(r"pay\+([0-9a-f]{16})@", recipients, re.I)
+    token = re.search(r"pay\+([0-9a-f]{32}|[0-9a-f]{16})@", recipients, re.I)
     subject = re.sub(r"^\s*((fwd?|fw)\s*:\s*)+", "", str(message.get("Subject", "")), flags=re.I)
     text = _plain_text(message)
     sender = str(message.get("From", ""))

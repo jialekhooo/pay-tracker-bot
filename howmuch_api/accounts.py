@@ -38,6 +38,13 @@ async def delete_account(payload:AppleSignIn,request:Request,authorization:str|N
             except (httpx.HTTPError,ValueError):pending=True
         else:pending=True
     else:pending=True
+    # Withdraw HowMuch's Gmail access at Google too, not just forget the token (best effort).
+    try:
+        from .gmail_payments import revoke_google
+        connection=db.execute('SELECT * FROM payment_connections WHERE user_id=?',(account['id'],)).fetchone()
+        await revoke_google(dict(connection) if connection else None)
+    except Exception:
+        pass
     with db:
         deleted=db.execute('DELETE FROM auth_challenges WHERE challenge_hash=? AND expires>?',(digest(payload.challenge),int(time.time())))
         if deleted.rowcount!=1:raise HTTPException(401,'This Apple authorization has expired or was already used.')
