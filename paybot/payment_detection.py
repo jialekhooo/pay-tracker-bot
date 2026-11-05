@@ -1,7 +1,3 @@
-"""DBS receipt parsing and conservative, transactional payment reconciliation.
-
-Mail content is data only. No generative model or amount-only automatic matching is used.
-"""
 from __future__ import annotations
 
 import hashlib
@@ -59,7 +55,6 @@ def parse_dbs_alert(subject: str, sender: str, text: str) -> dict | None:
     subject = subject.replace("’", "'").strip()
     if subject.casefold() != DBS_SUBJECT.casefold():
         return None
-    # Whitespace may differ between plain-text and HTML versions of the same alert.
     match = re.search(
         r"You have received\s+SGD\s+((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\s+via FAST transfer on\s+"
         r"(\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s+\d{2}:\d{2})\s+SGT", text, re.I,
@@ -67,7 +62,6 @@ def parse_dbs_alert(subject: str, sender: str, text: str) -> dict | None:
     payer = re.search(r"(?:^|\n)\s*From:\s*([^\r\n]+)", text, re.I)
     account = re.search(r"To:\s*Your DBS/POSB account ending\s+(\d{4})\b", text, re.I)
     reference = re.search(r"Transaction Ref:\s*([^\r\n]+)", text, re.I)
-    # Avoid consuming the following greeting when the reference line is empty.
     reference_value = reference.group(1).strip() if reference else ""
     if reference_value.lower().startswith("dear "):
         reference_value = ""
@@ -87,21 +81,15 @@ def parse_dbs_alert(subject: str, sender: str, text: str) -> dict | None:
         "received_at": received_at.isoformat() if received_at else None,
         "account_last4": account[1] if account else "", "reason": reason,
     }
-    # Reference is hashed, never retained. A missing reference uses a conservative fingerprint.
     key = ("ref:" + reference_value) if reference_value else json.dumps(fields, sort_keys=True)
     fields["receipt_key"] = hashlib.sha256(key.encode()).hexdigest()
     return fields
 
 
 def gmail_authenticated(headers: list[dict], labels: list[str]) -> bool:
-    """Require Google's incoming-mail authentication result, as well as the exact From.
-
-    Results supplied by other mail servers and mail in Spam/Trash never authorize auto-pay.
-    """
     if set(labels) & {"SPAM", "TRASH", "SENT", "DRAFT"}:
         return False
     results = [h["value"] for h in headers if h["name"].lower() == "authentication-results"]
-    # The first result for mx.google.com is the receiving Gmail server's result.
     for result in results:
         if not re.match(r"\s*mx\.google\.com\s*;", result, re.I):
             continue
@@ -194,7 +182,6 @@ class PaymentStore:
         for shift in self.storage.list_shifts(user_id):
             all_groups.setdefault(shift.event.casefold(), []).append(shift)
         for key, shifts in all_groups.items():
-            # Reused event names and partially paid events need human review, not subset guessing.
             ends = [datetime.combine(s.day, s.end, shift_zone) + (timedelta(days=1) if s.end <= s.start else timedelta()) for s in shifts]
             if any(s.paid or s.id in allocated_refs or s.currency != receipt["currency"] for s in shifts) or max(ends) > received:
                 continue
@@ -214,7 +201,6 @@ class PaymentStore:
         return candidates
 
     def ingest(self, user_id: int, message_id: str, parsed: dict, trusted: bool) -> int:
-        # This transaction has no awaits; a receipt and its paid flags commit together.
         with self.db:
             self.db.execute(
                 "INSERT OR IGNORE INTO payment_receipts(user_id,message_id,receipt_key,amount,currency,payer,received_at,"
@@ -254,7 +240,6 @@ class PaymentStore:
         for shift in self.storage.list_shifts(user_id):
             if shift.id not in ids:
                 continue
-            # ShiftRecord.id is a per-user ref; allocations retain the immutable DB id.
             raw = self.db.execute("SELECT id FROM shifts WHERE user_id=? AND ref=?", (user_id, shift.id)).fetchone()
             if not raw:
                 raise ValueError("A linked shift no longer exists.")
@@ -294,7 +279,6 @@ class PaymentStore:
             for allocation in allocations:
                 row = self.db.execute("SELECT * FROM shifts WHERE id=? AND user_id=?", (allocation["shift_id"], user_id)).fetchone()
                 expected = json.loads(allocation["snapshot"])
-                # Compare time values semantically: old rows may store HH:MM rather than HH:MM:SS.
                 if not row or not row["paid"] or any(
                     (str(row[k])[:5] != v[:5]) if k in {"start_time", "end_time"} else str(row[k]) != v
                     for k, v in expected.items()
@@ -311,8 +295,6 @@ class PaymentStore:
         allowed = self.allowed_payers(user_id)
         for row in self.db.execute("SELECT * FROM payment_receipts WHERE user_id=? ORDER BY id DESC", (user_id,)):
             item = dict(row)
-            # Keep reconciled history/undo accessible even after a company is removed.
-            # Unrelated legacy imports must not fill the latest-50 window.
             if normalized(item["payer"]) not in allowed and not item["event"]:
                 continue
             item.pop("receipt_key")

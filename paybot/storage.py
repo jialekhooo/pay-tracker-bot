@@ -1,5 +1,3 @@
-"""SQLite persistence for shifts and per-user rate settings."""
-
 from __future__ import annotations
 
 import sqlite3
@@ -155,7 +153,6 @@ class Storage:
         self._conn.commit()
 
     def _migrate(self) -> None:
-        """Add columns introduced after a database was first created."""
         additions = {
             "settings": {
                 "default_break_hours": "TEXT NOT NULL DEFAULT '0'",
@@ -188,7 +185,6 @@ class Storage:
         self._number_shifts()
 
     def _number_shifts(self) -> None:
-        """Give every shift a number of its own per user, so each user starts at #1."""
         self._conn.execute(
             """
             UPDATE shifts SET ref = (
@@ -261,7 +257,6 @@ class Storage:
         self._conn.commit()
 
     def get_avatar(self, user_id: int) -> tuple[bytes, str] | None:
-        """A user-uploaded custom avatar, or None if they haven't set one."""
         row = self._conn.execute(
             "SELECT image, content_type FROM avatars WHERE user_id = ?", (user_id,)
         ).fetchone()
@@ -351,7 +346,6 @@ class Storage:
         return [_to_record(row) for row in self._conn.execute(query, params)]
 
     def shifts_between(self, user_id: int, first: date, last: date) -> list[ShiftRecord]:
-        """Shifts whose date falls in [first, last], earliest first."""
         rows = self._conn.execute(
             """
             SELECT * FROM shifts
@@ -528,7 +522,6 @@ class Storage:
         return None if row is None else _to_record(row)
 
     def find_shifts(self, user_id: int, event: str) -> list[ShiftRecord]:
-        """Shifts whose event name matches, exactly or as a fragment, ignoring case."""
         rows = self._conn.execute(
             """
             SELECT * FROM shifts
@@ -540,7 +533,6 @@ class Storage:
         return [_to_record(row) for row in rows]
 
     def search_shifts(self, user_id: int, keyword: str, limit: int = 50) -> list[ShiftRecord]:
-        """Shifts whose event OR location contains keyword, ignoring case, newest first."""
         pattern = f"%{keyword}%"
         rows = self._conn.execute(
             """
@@ -554,7 +546,6 @@ class Storage:
         return [_to_record(row) for row in rows]
 
     def shifts_for_event(self, user_id: int, event: str) -> list[ShiftRecord]:
-        """Every shift for one event, newest first — an exact match, ignoring case."""
         rows = self._conn.execute(
             """
             SELECT * FROM shifts
@@ -566,8 +557,6 @@ class Storage:
         return [_to_record(row) for row in rows]
 
     def mark_event_paid(self, user_id: int, event: str) -> int:
-        """Marks every shift for this event as paid in one go — gigs are almost always
-        paid out as a lump sum per event, not shift by shift."""
         cursor = self._conn.execute(
             "UPDATE shifts SET paid = 1 WHERE user_id = ? AND lower(event) = lower(?)",
             (user_id, event),
@@ -576,7 +565,6 @@ class Storage:
         return cursor.rowcount
 
     def update_shift(self, user_id: int, shift_id: int, **fields: object) -> bool:
-        """Overwrite the given columns of one shift."""
         allowed = {
             "day",
             "start_time",
@@ -603,7 +591,6 @@ class Storage:
         return cursor.rowcount > 0
 
     def due_payments(self, user_id: int, today: date) -> list[ShiftRecord]:
-        """Unpaid shifts whose payment due date has arrived, earliest due first."""
         rows = self._conn.execute(
             """
             SELECT * FROM shifts

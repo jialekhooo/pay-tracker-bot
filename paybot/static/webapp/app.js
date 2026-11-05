@@ -49,7 +49,6 @@
     toastAction: document.getElementById("toast-action"),
   };
 
-  // Clean line icons (stroke = currentColor) used instead of emoji throughout the app.
   const ICONS = {
     calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/></svg>`,
     calendarDays: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8 3.2v3.6M16 3.2v3.6"/><path d="M7.7 13.3h1.6M11.2 13.3h1.6M14.7 13.3h1.6M7.7 16.6h1.6M11.2 16.6h1.6"/></svg>`,
@@ -68,56 +67,51 @@
   };
 
   let summaryData = null;
-  let view = "dashboard"; // dashboard | summary | calendar | settings
-  let dashboardOverviewMode = "all"; // all-time totals or a browsed month
-  let dashboardDetail = null; // null | "worked" | "upcoming" — drill-down from the Overview cards
+  let view = "dashboard";
+  let dashboardOverviewMode = "all";
+  let dashboardDetail = null;
   let scope = "all";
-  let monthDetail = null; // set when drilled into a month from the "Months" view
-  let eventsData = null; // event list fetched lazily for event detail navigation
-  let eventDetail = null; // set when drilled into one event from the "Events" view
+  let monthDetail = null;
+  let eventsData = null;
+  let eventDetail = null;
   let cabClaimsData = null;
   let paymentDetectionData = null;
-  let settingsData = null; // fetched lazily the first time the Settings tab is opened
-  let settingsSection = null; // null | "profile" | "pay" | "reminders" | "calendar" | "export" — drill-down within Settings
-  let telegramFirstName = ""; // fallback greeting name when no display name is set
-  let telegramUsername = ""; // @handle, shown under the name in Settings (absent for users without one)
-  let telegramPhotoUrl = ""; // Telegram profile photo, shown in the avatar when available
-  const shiftsById = new Map(); // repopulated on every render, keyed by shift id
+  let settingsData = null;
+  let settingsSection = null;
+  let telegramFirstName = "";
+  let telegramUsername = "";
+  let telegramPhotoUrl = "";
+  const shiftsById = new Map();
   let editingShiftId = null;
-  let editorMode = null; // "edit" | "create"
-  let editingShiftSnapshot = null; // the shift currently open for editing, for live badge sync
+  let editorMode = null;
+  let editingShiftSnapshot = null;
   let cabClaimOpener = null;
-  let paymentDueTouched = false; // true once the user edits the due-date field themselves
-  let hasDateOverlap = false; // true while any two bulk-create dates overlap in time
-  let activeEditField = null; // focused input inside the edit sheet, while the keyboard is up
-  let overviewMonth = null; // "YYYY-MM" shown by the Month quick action; null = the live current month
-  let overviewMonthData = null; // fetched /month/{key} detail when overviewMonth isn't the live month
-  let overviewWeekStart = null; // Monday (YYYY-MM-DD) shown by the Week quick action; null = the live week
-  let overviewWeekData = null; // fetched /week/{start} detail when overviewWeekStart isn't the live week
-  let overviewDay = null; // "YYYY-MM-DD" shown by the Day quick action; null = the live current day
-  let overviewDayData = null; // fetched /day/{date} detail when overviewDay isn't the live day
+  let paymentDueTouched = false;
+  let hasDateOverlap = false;
+  let activeEditField = null;
+  let overviewMonth = null;
+  let overviewMonthData = null;
+  let overviewWeekStart = null;
+  let overviewWeekData = null;
+  let overviewDay = null;
+  let overviewDayData = null;
   let allTimeGroupBy = "event";
-  let eventSort = "desc"; // "desc" | "asc" — most recent event first or last
-  let eventPayoutFilter = "all"; // all | ongoing | upcoming | completed unpaid | completed paid
-  let dateOrder = "asc"; // "asc" | "desc" — date order for grouped shift lists
-  let upcomingRange = "all"; // "tomorrow" | "7" | "14" | "30" | "all" — the Upcoming tab's selected range
-  let upcomingRangeData = null; // fetched /upcoming/{scope} detail for the selected range
-  let calendarMonth = null; // "YYYY-MM" currently visible in Calendar
-  let calendarMonthData = null; // /month/{key} payload used by the calendar grid
-  let calendarSelectedDay = null; // "YYYY-MM-DD" selected inside the calendar grid
-  let searchDebounce = null; // setTimeout handle for debouncing the search input
-  let toastTimeout = null; // setTimeout handle for auto-dismissing the undo toast
+  let eventSort = "desc";
+  let eventPayoutFilter = "all";
+  let dateOrder = "asc";
+  let upcomingRange = "all";
+  let upcomingRangeData = null;
+  let calendarMonth = null;
+  let calendarMonthData = null;
+  let calendarSelectedDay = null;
+  let searchDebounce = null;
+  let toastTimeout = null;
 
   function initTelegram() {
     if (!tg) return;
     tg.ready();
     tg.expand();
-    // Without this, Telegram treats vertical drags on our content as its own
-    // swipe-to-collapse/close gesture, dragging the whole app instead of scrolling the list.
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
-    // The app ships a fixed palette, so pin Telegram's own chrome to it instead of letting
-    // the client theme frame the app: the header matches the top of the header artwork.
-    // Hex colours here need Bot API 6.9; older clients (mostly Android) reject the call.
     const canPinChrome = !tg.isVersionAtLeast || tg.isVersionAtLeast("6.9");
     if (canPinChrome && tg.setHeaderColor) tg.setHeaderColor("#123e38");
     if (canPinChrome && tg.setBackgroundColor) tg.setBackgroundColor("#f3f6f5");
@@ -130,8 +124,6 @@
     }
   }
 
-  // initDataUnsafe.user.photo_url is frequently missing (older clients, privacy
-  // settings), so fetch the photo ourselves via the bot's server-side Bot API access.
   async function loadAvatarPhoto() {
     const headers = authHeader();
     if (!headers) return;
@@ -177,15 +169,11 @@
     }
   }
 
-  // Keep the modal pinned above the on-screen keyboard instead of letting it cover the buttons.
   function syncAppHeight() {
     const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     document.documentElement.style.setProperty("--app-height", `${height}px`);
   }
 
-  // The keyboard shrinks the visual viewport but not the sheet's own scroll content, so a
-  // field near the bottom of the form has nowhere to scroll to once the keyboard covers it.
-  // Pad the sheet by the keyboard's height so every field can still scroll clear of it.
   function adjustForKeyboard() {
     const sheet = els.editSheet;
     const viewport = window.visualViewport;
@@ -320,21 +308,14 @@
     return isoDateUTC(new Date(Date.UTC(year, month - 1, day) + n * 86400000));
   }
 
-  // Best-effort client-side preview only (matches a single shift's own day) — the real
-  // default, based on the last day of the whole event, is computed server-side at save time
-  // whenever the user hasn't touched this field themselves. Two weeks out, rolled to a Friday.
   function defaultPaymentDue(dayStr) {
     const due = new Date(`${addDays(dayStr, 14)}T00:00:00Z`);
-    const daysUntilFriday = (5 - due.getUTCDay() + 7) % 7; // Friday = 5 in getUTCDay()
+    const daysUntilFriday = (5 - due.getUTCDay() + 7) % 7;
     due.setUTCDate(due.getUTCDate() + daysUntilFriday);
     return isoDateUTC(due);
   }
 
-  // Keeps the due-date preview tracking the sheet's dates: whenever any event date changes
-  // (or a date row is added/removed) and the user hasn't picked a due date themselves,
-  // re-derive the default from whichever day falls last — the same anchor the server uses.
   function syncDefaultPaymentDue() {
-    // A hand-picked due date and a completed payment both outrank the derived default.
     if (paymentDueTouched || els.editForm.paid.checked) return;
     const days = [els.editForm.day.value, ...extraDateGroups().map(({ day }) => day.value)]
       .filter(Boolean);
@@ -347,7 +328,7 @@
   function mondayOf(dateStr) {
     const [year, month, day] = dateStr.split("-").map(Number);
     const utc = Date.UTC(year, month - 1, day);
-    const weekday = new Date(utc).getUTCDay(); // 0=Sun..6=Sat
+    const weekday = new Date(utc).getUTCDay();
     const sinceMonday = (weekday + 6) % 7;
     return isoDateUTC(new Date(utc - sinceMonday * 86400000));
   }
@@ -369,15 +350,12 @@
 
   const STATE_ICON = { done: "✓", running: "⏳", upcoming: "📅" };
 
-  // Every shift is always in exactly one of these three payment states.
   const PAYMENT_STATUS_META = {
     upcoming: { label: "Upcoming", cls: "tag-upcoming" },
     pending_payment: { label: "Pending payment", cls: "tag-pending" },
     payment_completed: { label: "Payment completed", cls: "tag-paid" },
   };
 
-  // Falls back to computing the status client-side for shifts fetched before this field
-  // existed, or wherever a caller only has a bare {state, paid} pair to hand.
   function paymentStatusOf(shift, state) {
     if (shift.payment_status) return shift.payment_status;
     const effectiveState = state || shift.state;
@@ -390,7 +368,6 @@
     return `<span class="tag ${meta.cls}">${meta.label}</span>`;
   }
 
-  // A consistent color per event name, so the same gig always looks the same in every list.
   const EVENT_COLORS = [
     { bg: "#ffe0e6", fg: "#c2185b" },
     { bg: "#e3f2fd", fg: "#1565c0" },
@@ -454,8 +431,6 @@
       </div>`;
   }
 
-  // Shifts split into one card per calendar day, headed by the day and its own total, so a
-  // long list reads as a schedule instead of a wall of repeated dates.
   function shiftGroups(shifts, currency, options = {}) {
     const payOf = options.payOf || ((shift) => shift.pay);
     const ordered = (options.order || orderedByDay)(shifts);
@@ -527,8 +502,6 @@
     return `<div class="card-list shift-card">${rows}</div>`;
   }
 
-  // A tally block's whole-period figures, counting shifts that haven't happened yet, so a
-  // live period's hero reads the same as a browsed one (which comes from a plain totals API).
   function tallyTotals(block) {
     if (!Array.isArray(block.shifts)) return { hours: block.hours, count: Number(block.shifts) };
     return {
@@ -702,14 +675,12 @@
     const tomorrowLabel = dayKeyLabel(tomorrow);
     const tomorrowBody = tomorrowShifts.length
       ? shiftDayCard(tomorrowShifts, data.currency)
-      : `<div class="dashboard-empty"><span class="empty-icon" aria-hidden="true">${ICONS.calendar}</span><strong>A little breathing room</strong><p>No shifts booked for ${escapeHtml(tomorrowLabel)}.</p><button type="button" class="empty-add" data-action="create-shift">Add a shift</button></div>`;
+      : `<div class="dashboard-empty"><span class="empty-icon" aria-hidden="true">${ICONS.calendar}</span><strong>No shifts booked</strong><p>No shifts booked for ${escapeHtml(tomorrowLabel)}.</p><button type="button" class="empty-add" data-action="create-shift">Add a shift</button></div>`;
     const month = data.month;
     const planned =
       Number(month.to_come) > 0 ? money(month.to_come, data.currency) : "No upcoming pay";
 
     return {
-      // The hero and the two stat cards sit in the head so they stay inside the header
-      // artwork while the list below them scrolls.
       head: `
         ${periodControls}
         ${heroBlock(data.all_time, data.currency)}
@@ -760,8 +731,6 @@
     if (dashboardDetail === "worked") {
       const worked = data.month.shifts
         .filter((s) => s.state !== "upcoming");
-      // This drill-down is explicitly about work already done, so its hero counts what has
-      // been earned rather than the month's full booked total.
       const earnedSoFar = {
         ...data.month,
         projected: data.month.earned,
@@ -862,7 +831,6 @@
     return shift.state === "upcoming" ? shift.pay : shift.earned_pay;
   }
 
-  // The hero card for a period detail (used once pinned above its list, and once inline).
   function periodHero(detail) {
     return `<div class="hero">
         <div class="amount">${money(detail.pay, detail.currency)}</div>
@@ -1610,13 +1578,14 @@
               <label>Spreadsheet</label>
               <p>Download every logged shift as a CSV file for Excel, Numbers, or Google Sheets.</p>
               <button type="button" class="btn secondary" data-action="export-csv">Download CSV</button>
+              <a id="csv-browser-link" class="payment-text-button hidden" target="_blank" rel="noopener noreferrer">Open CSV in browser</a>
+              <p class="payment-note">On iPhone, if a preview opens, tap Share → Save to Files. Download links expire after five minutes; tap Download CSV again for a fresh link.</p>
             </div>
           </div>
           <p class="modal-error hidden" id="settings-export-error"></p>
         `,
       };
     }
-    // section === "calendar"
     return {
       head: back,
       body: `
@@ -1689,7 +1658,6 @@
     }
     els.contentHead.innerHTML = result.head;
     els.contentList.innerHTML = result.body;
-    // Settings previews are freshly created above; repaint it after every render.
     updateGreeting();
   }
 
@@ -1807,8 +1775,6 @@
       render();
       updateGreeting();
     } catch (err) {
-      // a background/lazy fetch — the Settings tab just keeps showing "Loading…" and
-      // retries next time it's opened, without hijacking whatever view is on screen
     }
   }
 
@@ -1969,8 +1935,6 @@
     render();
   }
 
-  // Gigs are almost always paid out as one lump sum, not shift by shift — one click marks
-  // every shift for this event as paid instead of opening each one individually.
   async function markEventPaid(eventName) {
     const confirmed = await confirmDialog(`Mark every shift for "${eventName}" as paid?`);
     if (!confirmed) return;
@@ -2133,12 +2097,8 @@
     }
   }
 
-  // Session-only — a shift skipped this way is asked about again next time the app opens,
-  // as long as it's still unpaid and its due date has passed.
   const dismissedPaymentPrompts = new Set();
 
-  // Surfaces unpaid shifts whose payment due date has arrived, one at a time, so the user
-  // can confirm marking each as paid instead of it silently flipping on its own.
   async function checkDuePayments() {
     try {
       const result = await api("/webapp/api/payments/due");
@@ -2154,12 +2114,9 @@
       }
       checkDuePayments();
     } catch (err) {
-      // a background nicety — silently skip if it fails, the shift will surface again next load
     }
   }
 
-  // iOS renders native date/time inputs with no custom styling ability, so we mirror
-  // their value into a compact custom display (see .field-control in style.css).
   function formatDayDisplay(value) {
     if (!value) return "";
     const [year, month, day] = value.split("-");
@@ -2190,8 +2147,6 @@
     );
   }
 
-  // Reflects the paid checkbox and the shift's own state (upcoming shifts are never
-  // "pending"/"completed", however the paid flag happens to be set) as a nicer status pill.
   function syncPaymentBadge() {
     if (!els.editPaymentBadge) return;
     const state = editingShiftSnapshot ? editingShiftSnapshot.state : "upcoming";
@@ -2227,8 +2182,6 @@
     });
   }
 
-  // A lump sum covers the whole booking — spell out how many days it spans so the amount
-  // isn't mistaken for a per-day figure when extra dates are on the sheet.
   function syncAmountSuffix() {
     const fixed = els.editForm.pay_is_fixed.value === "yes";
     const days = 1 + extraDateGroups().length;
@@ -2239,8 +2192,6 @@
         : "\u00b7 lump sum";
   }
 
-  // Worked hours across every date on the sheet (main day plus extras), each less its own
-  // unpaid break — the whole booking, mirroring how the server totals a bulk create.
   function currentFormHours() {
     const breakHours =
       els.editForm.break_paid.value !== "yes" ? Number(els.editForm.break_hours.value || 0) : 0;
@@ -2295,12 +2246,10 @@
     if (!dayStr || !startStr || !endStr) return null;
     const start = new Date(`${dayStr}T${startStr}:00Z`).getTime();
     let end = new Date(`${dayStr}T${endStr}:00Z`).getTime();
-    if (end <= start) end += 86400000; // an overnight shift rolls into the next day
+    if (end <= start) end += 86400000;
     return [start, end];
   }
 
-  // Flags any two dates in the bulk-create sheet (main + extras) whose times overlap,
-  // outlining the offending cards in red instead of letting the save silently double-book.
   function updateDateOverlapWarnings() {
     const form = els.editForm;
     const entries = [
@@ -2352,8 +2301,6 @@
     });
   }
 
-  // One group per extra date, each with its own Date/Start/End — different days of the
-  // same event often run at different times, so nothing here is locked to the first day.
   function addExtraDateRow(prefillDate, prefillStart, prefillEnd) {
     if (extraDateGroups().length >= MAX_BULK_DATES - 1) return;
     const row = document.createElement("div");
@@ -2470,7 +2417,6 @@
     els.editForm.end.value = shift.end;
     setPayMode(shift.pay_is_fixed ? "fixed" : "hourly");
     els.editForm.rate.value = shift.rate;
-    // Blank when zero so the "0h" placeholder shows, matching the create sheet.
     els.editForm.break_hours.value = Number(shift.break_hours) ? shift.break_hours : "";
     setBreakPaid(shift.break_paid ? "yes" : "no");
     els.editForm.payment_due.value = shift.payment_due || defaultPaymentDue(shift.day);
@@ -2619,7 +2565,6 @@
       payload.break_hours = form.break_hours.value;
       payload.break_paid = form.break_paid.value === "yes";
     }
-    // Left untouched — the server computes the real default from the whole event's last day.
     if (paymentDueTouched && form.payment_due.value) payload.payment_due = form.payment_due.value;
     if (shifts.length > 1) {
       return api("/webapp/api/shifts/bulk", { method: "POST", body: { ...payload, shifts } });
@@ -2708,9 +2653,6 @@
     }
   }
 
-  // Prefills the create-shift form from the shift currently open for editing, advancing the
-  // date by a day, so logging the same event across several days doesn't mean retyping
-  // the location/time/rate each time.
   function duplicateEditingShift() {
     if (editorMode !== "edit" || !editingShiftId) return;
     const form = els.editForm;
@@ -2862,7 +2804,7 @@
 
   async function handleAvatarFileSelected(event) {
     const file = event.target.files && event.target.files[0];
-    event.target.value = ""; // allow choosing the same file again later
+    event.target.value = "";
     if (!file) return;
     hideSettingsError("settings-avatar-error");
     if (file.size > 2 * 1024 * 1024) {
@@ -2966,9 +2908,6 @@
     }
   }
 
-  // Telegram only reliably opens http(s) links via tg.openLink() (custom schemes like webcal:
-  // get swallowed as a generic document share instead). Serving the feed without a forced
-  // download means Safari/Calendar recognize text/calendar and show their own import screen.
   function openCalendarSubscription(button) {
     const url = button.dataset.calendarUrl;
     if (!url) return;
@@ -2985,27 +2924,36 @@
     hideSettingsError("settings-export-error");
     setButtonSaving(button, true, "Preparing…");
     try {
-      const response = await fetch("/webapp/api/export/csv", { headers });
-      if (!response.ok) {
-        let detail;
-        try {
-          detail = (await response.json()).detail;
-        } catch (err) {
-          detail = undefined;
-        }
-        const error = new Error("csv-export-failed");
-        error.detail = detail;
-        throw error;
+      const file = await api("/webapp/api/export/csv/link", { method: "POST" });
+      const url = new URL(file.url, window.location.origin).href;
+      const fallback = document.getElementById("csv-browser-link");
+      if (fallback) {
+        fallback.href = url;
+        fallback.classList.remove("hidden");
+        fallback.onclick = (event) => {
+          if (tg && tg.openLink) { event.preventDefault(); tg.openLink(url); }
+        };
       }
-      const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "howmuch-shifts.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      showSuccessToast("CSV downloaded successfully");
+      if (tg && typeof tg.downloadFile === "function" && (!tg.isVersionAtLeast || tg.isVersionAtLeast("8.0"))) {
+        try {
+          tg.downloadFile({ url, file_name: file.file_name }, (accepted) => {
+            if (accepted) showSuccessToast("CSV download requested");
+          });
+          return;
+        } catch (err) {
+        }
+      }
+      if (tg && tg.openLink) {
+        tg.openLink(url);
+        showSuccessToast("CSV opened in browser · use Share to save");
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = file.file_name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
     } catch (err) {
       showSettingsError("settings-export-error", err.detail || "Couldn't export CSV — try again.");
     } finally {
@@ -3023,7 +2971,6 @@
         button.textContent = original;
       }, 1500);
     } catch (err) {
-      // clipboard API unavailable — the link is already shown on screen to copy by hand
     }
   }
 
@@ -3339,14 +3286,10 @@
   });
   els.editForm.addEventListener("focusin", (event) => {
     activeEditField = event.target;
-    // Run once immediately (helps on Android, where the viewport often resizes right away)
-    // and again after the iOS keyboard has finished animating in.
     adjustForKeyboard();
     setTimeout(adjustForKeyboard, 320);
   });
   els.editForm.addEventListener("focusout", (event) => {
-    // Defer clearing so a click that moves focus to another field in the same form doesn't
-    // momentarily reset the sheet's padding before the new field's focusin fires.
     setTimeout(() => {
       if (!els.editForm.contains(document.activeElement)) {
         activeEditField = null;

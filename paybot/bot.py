@@ -1,5 +1,3 @@
-"""Telegram bot that logs shifts and calculates pay."""
-
 from __future__ import annotations
 
 import calendar
@@ -92,7 +90,6 @@ def _storage(context: ContextTypes.DEFAULT_TYPE) -> Storage:
 
 
 def _offset(storage: Storage, user_id: int) -> int:
-    """The user's timezone offset in minutes, defaulting to UTC+8."""
     reminder = storage.get_reminder(user_id)
     return reminder.utc_offset_minutes if reminder else DEFAULT_UTC_OFFSET_MINUTES
 
@@ -110,7 +107,6 @@ def _amount(value: Decimal) -> str:
 
 
 def _aligned(rows: list[tuple[str, ...]], right: set[int]) -> list[str]:
-    """Pad the columns so a monospace block lines up."""
     widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
     return [
         "  ".join(
@@ -122,7 +118,6 @@ def _aligned(rows: list[tuple[str, ...]], right: set[int]) -> list[str]:
 
 
 def _block(lines: list[str]) -> str:
-    """A monospace Telegram block — the only way columns stay aligned in chat."""
     return "<pre>" + "\n".join(escape(line) for line in lines) + "</pre>"
 
 
@@ -143,7 +138,6 @@ def _where(event: str, location: str) -> str:
 
 
 def _entries(heads: list[tuple[str, ...]], details: list[str], right: set[int]) -> list[str]:
-    """Two lines per shift: the name gets a line of its own so nothing is cut off."""
     lines: list[str] = []
     for head, detail in zip(_aligned(heads, right), details):
         lines.append(head)
@@ -353,7 +347,6 @@ def _summarise(
     pay: Decimal,
     rate: Decimal,
 ) -> tuple[tuple[str, ...], str]:
-    """One logged shift as a heading row and the sum behind its pay."""
     what = _where(shift.event, shift.location)
     if shift.rest.hours:
         kind = "paid" if shift.rest.paid else "unpaid"
@@ -500,7 +493,6 @@ EDIT_USAGE = (
 
 
 def parse_edit(text: str) -> tuple[str, str, str] | None:
-    """Read `<field> <event or #id> <value>` into (field, target, value)."""
     head, _, rest = text.strip().partition(" ")
     field = _FIELDS.get(head.lower())
     if field is None or not rest.strip():
@@ -519,7 +511,6 @@ def parse_edit(text: str) -> tuple[str, str, str] | None:
 
 
 def _rehours(record: ShiftRecord, start: time, end: time) -> Decimal:
-    """Paid hours for a new time range, keeping the shift's unpaid break."""
     begins, ends = span(record.day, start, end)
     worked = Decimal((ends - begins).total_seconds()) / Decimal(3600)
     if not record.break_paid:
@@ -530,7 +521,6 @@ def _rehours(record: ShiftRecord, start: time, end: time) -> Decimal:
 def _edit_record(
     record: ShiftRecord, field: str, value: str, config: RateConfig
 ) -> dict[str, object]:
-    """Columns to write for one shift, recalculating pay when it changes."""
     if field == "location":
         return {"location": value}
     if field == "name":
@@ -560,7 +550,6 @@ def _edit_record(
 
 
 async def add_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Backfill a detail — location, rate, name or time — on shifts already logged."""
     parsed = parse_edit(" ".join(context.args))
     if parsed is None:
         await update.message.reply_text(EDIT_USAGE, parse_mode=ParseMode.MARKDOWN)
@@ -605,7 +594,6 @@ _MONTH_NAMES = {
 
 
 def parse_month(args: list[str], today: date | None = None) -> str | None:
-    """Normalise `/list aug`, `/list 8`, `/list 2026-08` to a YYYY-MM key."""
     if not args:
         return None
     today = today or date.today()
@@ -660,7 +648,6 @@ async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Month-by-month summary, or every shift in one month."""
     if context.args:
         await list_shifts(update, context)
         return
@@ -691,7 +678,6 @@ async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Turn the day-before reminder on/off and set when it arrives."""
     storage = _storage(context)
     user_id = update.effective_user.id
     existing = storage.get_reminder(user_id)
@@ -742,7 +728,6 @@ async def reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def send_due_reminders(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Job: message each user whose reminder time has arrived."""
     storage: Storage = context.application.bot_data["storage"]
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     for reminder, day in due_reminders(storage.enabled_reminders(), now_utc):
@@ -775,7 +760,6 @@ async def _show_booked(
     days: int,
     window: str,
 ) -> None:
-    """The shifts booked from today over the given window, flagging any clashes."""
     storage = _storage(context)
     user_id = update.effective_user.id
     today = _today(storage, user_id)
@@ -812,7 +796,6 @@ async def _show_booked(
 
 
 async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show the shifts already booked in the next fortnight, or a given number of days."""
     days = 14
     if context.args and context.args[0].isdigit():
         days = max(1, min(int(context.args[0]), 365))
@@ -820,7 +803,6 @@ async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def upcoming_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Every shift booked from today onwards, however far ahead it sits."""
     await _show_booked(update, context, 366, "all upcoming")
 
 
@@ -863,18 +845,14 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 @dataclass(frozen=True)
 class Worked:
-    """One shift measured against the clock: what it has paid out so far."""
-
     record: ShiftRecord
     hours: Decimal
     pay: Decimal
-    state: str  # "done", "running" or "upcoming"
+    state: str
 
 
 @dataclass(frozen=True)
 class Earned:
-    """Pay counted up to a moment in time, splitting off what is still to come."""
-
     pay: Decimal
     hours: Decimal
     finished: int
@@ -885,7 +863,6 @@ class Earned:
 
 
 def worked_by(record: ShiftRecord, now: datetime) -> Worked:
-    """A finished shift pays in full, a running one pro-rata, a future one nothing yet."""
     start, end = span(record.day, record.start, record.end)
     if end <= now:
         return Worked(record, record.hours, record.pay, "done")
@@ -898,7 +875,6 @@ def worked_by(record: ShiftRecord, now: datetime) -> Worked:
 
 
 def earned_by(records: list[ShiftRecord], now: datetime) -> Earned:
-    """Count finished shifts in full and the one running now pro-rata."""
     pay = hours = booked_pay = Decimal("0")
     finished = booked = 0
     running: ShiftRecord | None = None
@@ -917,7 +893,6 @@ def earned_by(records: list[ShiftRecord], now: datetime) -> Earned:
 
 
 def _breakdown_table(shifts: list[Worked]) -> list[str]:
-    """Two lines per shift: when and what, then the hours × rate that made the pay."""
     heads: list[tuple[str, ...]] = []
     details: list[str] = []
     tags = {"done": "", "running": "  ← running now", "upcoming": "  ← to come"}
@@ -941,7 +916,6 @@ def _breakdown_table(shifts: list[Worked]) -> list[str]:
 def _earnings_block(
     label: str, records: list[ShiftRecord], now: datetime, currency: str
 ) -> list[str]:
-    """A section of the /earnings reply, as Telegram HTML."""
     if not records:
         return [f"<b>{escape(label)}</b>", "nothing logged", ""]
     tally = earned_by(records, now)
@@ -972,7 +946,6 @@ async def _send_earnings(update: Update, header: str, blocks: list[str]) -> None
 
 
 async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """How much has been earned so far this week and this month."""
     storage = _storage(context)
     user_id = update.effective_user.id
     now = local_clock(_offset(storage, user_id))
@@ -1024,7 +997,6 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _totals_line(storage: Storage, user_id: int, month: str | None, currency: str) -> str:
-    """Recomputed totals so the user sees numbers drop after a delete."""
     lines = []
     if month:
         records = storage.list_shifts(user_id, month=month)
@@ -1046,7 +1018,6 @@ _UNDO_TTL_SECONDS = 120
 def _remember_undo(
     context: ContextTypes.DEFAULT_TYPE, user_id: int, records: list[ShiftRecord]
 ) -> None:
-    """Keeps a short-lived snapshot of deleted shifts so /undo can restore them."""
     buffer: dict[int, dict[str, object]] = context.application.bot_data.setdefault(
         "undo_buffer", {}
     )
@@ -1054,7 +1025,6 @@ def _remember_undo(
 
 
 async def undo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Restores the shifts most recently removed by /delete or /clear."""
     storage = _storage(context)
     user_id = update.effective_user.id
     buffer: dict[int, dict[str, object]] = context.application.bot_data.get("undo_buffer", {})
@@ -1097,7 +1067,6 @@ async def undo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def find_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Search shifts by event or location keyword."""
     storage = _storage(context)
     user_id = update.effective_user.id
     keyword = " ".join(context.args).strip()
@@ -1164,7 +1133,6 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Delete every shift, or every shift in one month, after a confirmation."""
     storage = _storage(context)
     user_id = update.effective_user.id
     config = storage.get_config(user_id)
@@ -1254,7 +1222,6 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def _calendar_records(
     storage: Storage, user_id: int, args: list[str]
 ) -> tuple[list[ShiftRecord], str]:
-    """Shifts for /calendar: specific ids, a month, or everything from today on."""
     if args and all(arg.startswith("#") and arg[1:].isdigit() for arg in args):
         records = [storage.get_shift(user_id, int(arg[1:])) for arg in args]
         return [r for r in records if r is not None], "selected shifts"
@@ -1268,7 +1235,6 @@ def _calendar_records(
 
 
 async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send the shifts as a .ics file plus one-tap Google Calendar links."""
     storage = _storage(context)
     user_id = update.effective_user.id
     try:
@@ -1306,7 +1272,6 @@ async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def calendar_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Give the user a personal subscription URL their calendar app keeps in sync."""
     storage = _storage(context)
     base_url = context.application.bot_data.get("feed_base_url")
     if not base_url:
@@ -1344,8 +1309,6 @@ async def calendar_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 @dataclass(frozen=True)
 class Command:
-    """One bot command: how it's registered, listed and described."""
-
     names: tuple[str, ...]
     usage: str
     summary: str
@@ -1373,7 +1336,6 @@ async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a button that opens the mini app dashboard in place of a wall of text."""
     url = context.application.bot_data.get("webapp_url")
     if not url:
         await update.message.reply_text(
@@ -1517,7 +1479,6 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
 
 
 async def _publish_commands(application: Application) -> None:
-    """Show a tidy command menu in Telegram's ⌘ button, and open the mini app from the ☰ button."""
     menu = [
         BotCommand(command.name, command.summary)
         for _, commands_in_section in SECTIONS

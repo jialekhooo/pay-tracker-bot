@@ -31,7 +31,7 @@ To fix up shifts you already logged, use `/add <field> <event or #id> <value>`:
 /add pay Hermes Private Sale 200 flat
 /add name Hermes Private Sale = Hermes PS
 /add time Hermes Private Sale 9am-8pm
-/add time #12 9am-8pm          # just that one shift
+/add time #12 9am-8pm
 ```
 
 Event names match ignoring case, and a fragment (`hermes`) matches too. Changing
@@ -82,8 +82,8 @@ from an .ics URL. `/calendarlink new` rotates the link if it leaks.
 The feed only runs when the bot is started with a reachable address:
 
 ```bash
-export PAYBOT_FEED_PORT=8799            # local port the feed listens on
-export PAYBOT_FEED_URL=https://your-host # public base URL of that port
+export PAYBOT_FEED_PORT=8799
+export PAYBOT_FEED_URL=https://your-host
 ```
 
 Google Calendar refuses URLs carrying basic-auth credentials, so host the feed
@@ -91,12 +91,9 @@ somewhere with a plain `https://host/<token>.ics` address (see below).
 
 ## Mini app dashboard
 
-`/app` sends a button that opens a Telegram Mini App — a native-feeling web
-dashboard showing all-time earnings by default, with a toggle to browse monthly
-earnings, what's upcoming with clashes flagged, and a tap-through by-month
-breakdown. It reuses the calendar feed's public address, so no extra hosting is
-needed. The bot also sets it as the chat's ☰ menu button, so tapping that opens
-the dashboard directly.
+`/app` opens the Telegram Mini App. It shows total earnings, monthly breakdowns,
+upcoming shifts, and scheduling clashes. It uses the calendar feed's public
+address. You can also open it from the chat's ☰ menu button.
 
 The dashboard only runs alongside `paybot.web` (see *Hosting* below) since it's
 served over HTTP; set `PAYBOT_WEBAPP_URL` to override the address it's hosted at
@@ -110,6 +107,13 @@ or remove dated claims with a note. Claims never change the earnings recorded
 for a shift. In Earnings, filter events by ongoing, upcoming, completion, and
 payout status, and sort them from most recent to oldest or oldest to most
 recent.
+
+In Settings → Export shifts, **Download CSV** uses Telegram's native download
+prompt on supported clients. **Open CSV in browser** is also available after
+preparing the file; on iPhone, use Share → Save to Files if a preview opens.
+Download links are private bearer links valid for five minutes and should not be
+shared. They contain no Telegram credentials, are scoped to the exporting user,
+are excluded from application access logs, and return uncached attachments.
 
 ## Reminders
 
@@ -175,7 +179,7 @@ Months can be written as `2026-08`, `aug`, `August 2025`, `8`, `this month`, or
 ```bash
 pip install -r requirements.txt
 export TELEGRAM_BOT_TOKEN="123456:ABC..."
-export PAYBOT_DB="paybot.sqlite3"   # optional, defaults to ./paybot.sqlite3
+export PAYBOT_DB="paybot.sqlite3"
 python -m paybot.bot
 ```
 
@@ -190,7 +194,7 @@ is what any host (Fly.io, Render, Railway, a VPS) needs:
 
 ```bash
 export TELEGRAM_BOT_TOKEN="123456:ABC..."
-export PAYBOT_FEED_URL="https://your-app.example.com"   # public address of this service
+export PAYBOT_FEED_URL="https://your-app.example.com"
 uvicorn paybot.web:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
 

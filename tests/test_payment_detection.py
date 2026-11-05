@@ -222,12 +222,10 @@ def test_shift_form_and_job_card_share_payer(store):
     sid = response.json()['id']
     cards = client.get('/webapp/api/cab-claims', headers=headers).json()
     assert cards['events'][0]['payers'] == ['refix pte. ltd.']
-    # A normal shift edit preserves the shared setting; payer-only edits replace it.
     assert client.patch(f'/webapp/api/shifts/{sid}', json={'location': 'Hall'}, headers=headers).status_code == 200
     assert store.rules(42)[0]['payer'] == 'refix pte. ltd.'
     assert client.patch(f'/webapp/api/shifts/{sid}', json={'payer': 'Other company'}, headers=headers).status_code == 200
     assert store.rules(42)[0]['payer'] == 'other company'
-    # Editing the card changes the same rule used by the form and automatic detection.
     assert client.put('/webapp/api/payment-detection/event-payer', json={'event':'New job','payer':'REFIX PTE. LTD.'}, headers=headers).status_code == 200
     assert client.get('/webapp/api/cab-claims', headers=headers).json()['events'][0]['payers'] == ['refix pte. ltd.']
     assert client.patch(f'/webapp/api/shifts/{sid}', json={'payer':''}, headers=headers).status_code == 200
@@ -277,7 +275,7 @@ def test_oauth_single_use_state_browser_binding_and_rejection(store, monkeypatch
     response = client.get(link, follow_redirects=False)
     assert response.status_code == 303
     state = parse_qs(urlparse(response.headers['location']).query)['state'][0]
-    assert client.get(link).status_code == 200  # expired ticket result page
+    assert client.get(link).status_code == 200
     other = TestClient(client.app, base_url='https://app.test')
     result = other.get('/webapp/api/payment-detection/gmail/callback', params={'state':state,'code':'stolen'})
     assert 'could not be verified' in result.text
@@ -516,7 +514,7 @@ def test_company_search_and_actual_payer_filter_exclude_personal_transfers(store
     assert '{"refix pte. ltd."}' in queries[0] and 'khoo' not in queries[0]
     assert [row[0] for row in store.db.execute('SELECT message_id FROM payment_receipts')] == ['relevant']
     assert store.status(42)['receipts'][0]['payer'] == 'REFIX PTE. LTD.'
-    assert not store.storage.list_shifts(42)[0].paid  # Automatic marking stays off.
+    assert not store.storage.list_shifts(42)[0].paid
 
 
 def test_legacy_unrelated_alerts_hidden_before_history_limit_and_suggestions(store):
@@ -583,3 +581,42 @@ def test_removing_company_during_scan_stops_reading_results(store, monkeypatch):
     asyncio.run(gmail.scan_mailbox(store.storage, 42))
     assert store.connection(42)['last_scan'] == 0
     assert not store.status(42)['receipts']
+
+
+def test_native_csv_download_link_auth_scope_and_headers(store, monkeypatch):
+    shift(store, event='My private job')
+    shift(store, event='Other user private job', user=99)
+    client, headers = client_for(store)
+    assert client.post('/webapp/api/export/csv/link').status_code == 401
+    result = client.post('/webapp/api/export/csv/link', headers=headers)
+    assert result.status_code == 200
+    assert result.headers['cache-control'] == 'no-store'
+    link = result.json()['url']
+    assert result.json()['file_name'] == 'howmuch-shifts.csv'
+    assert 'TEST' not in link and 'auth_date' not in link
+    download = client.get(link)
+    assert download.status_code == 200
+    assert 'My private job' in download.text and 'Other user private job' not in download.text
+    assert download.headers['content-disposition'] == 'attachment; filename="howmuch-shifts.csv"'
+    assert download.headers['access-control-allow-origin'] == 'https://web.telegram.org'
+    assert download.headers['cache-control'] == 'no-store'
+    assert client.head(link).status_code == 200
+    assert client.get(link + 'tampered').status_code == 403
+    for invalid in ['bad', 'abc.£', '.', 'x' * 513]:
+        assert client.get('/webapp/api/export/csv/download', params={'ticket':invalid}).status_code == 403
+    ticket = parse_qs(urlparse(link).query)['ticket'][0]
+    payload, signature = ticket.split('.')
+    plain = base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)).decode()
+    forged = base64.urlsafe_b64encode(plain.replace('42:', '99:', 1).encode()).decode().rstrip('=') + '.' + signature
+    assert client.get('/webapp/api/export/csv/download', params={'ticket':forged}).status_code == 403
+    now = clock.time()
+    monkeypatch.setattr(clock, 'time', lambda:now + 301)
+    assert client.get(link).status_code == 403
+
+
+def test_csv_download_access_log_hides_ticket():
+    import logging
+    from paybot.webapp import CsvDownloadAccessFilter
+    record = logging.LogRecord('uvicorn.access',20,'',1,'%s %s %s %s %s',('client','GET','/webapp/api/export/csv/download?ticket=SECRET','1.1',200),None)
+    CsvDownloadAccessFilter().filter(record)
+    assert 'SECRET' not in record.getMessage()
