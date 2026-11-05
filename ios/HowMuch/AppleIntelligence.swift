@@ -62,6 +62,30 @@ enum AppleIntelligence {
         return nil
     }
 
+    // MARK: Receipts
+
+    struct ReceiptRead { var total: Decimal?; var day: String?; var category: ClaimCategory?; var note: String? }
+
+    /// Reads a receipt's text (already recognised on the iPhone) for a claim. The total is only
+    /// trusted if it's printed on the receipt; the date must be a real date.
+    static func readReceipt(_ text: String) async -> ReceiptRead? {
+        guard isAvailable, !text.isEmpty else { return nil }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), let read = try? await ReceiptReader.read(text) {
+            var result = ReceiptRead()
+            if let total = read.total, total > 0 {
+                let suggested = Decimal(string: String(format: "%.2f", total))
+                if let suggested, PayInText.amounts(in: text).contains(suggested) || text.contains(String(format: "%.2f", total)) { result.total = suggested }
+            }
+            if let day = read.date?.trimmed, Shift.date(day) != nil { result.day = day }
+            result.category = ClaimCategory(rawValue: read.category.lowercased()) ?? (read.category.lowercased() == "other" ? .miscellaneous : nil)
+            if let note = read.note?.trimmed, !note.isEmpty { result.note = note.split(separator: " ").prefix(6).joined(separator: " ") }
+            return result
+        }
+        #endif
+        return nil
+    }
+
     // MARK: Recaps
 
     /// Two friendly sentences about the month, written from the numbers it's given (and nothing else).
@@ -121,6 +145,25 @@ private extension JobReader.Shift {
         guard (try? HowMuchCore.Shift(event: "x", day: date, startMinute: 0, endMinute: 60, rate: 0)) != nil,
               let start = minutes(start), let end = minutes(end), start != end else { return nil }
         return PastedJobDate(day: date, startMinute: start, endMinute: end)
+    }
+}
+
+@available(iOS 26.0, *)
+private enum ReceiptReader {
+    @Generable struct Receipt {
+        @Guide(description: "The amount actually charged, as printed next to labels like You paid, Total, Grand total, Amount, NETS or Paid. A number like 19.30.") var total: Double?
+        @Guide(description: "The date on the receipt as yyyy-MM-dd. Empty if none.") var date: String?
+        @Guide(description: "What kind of expense", .anyOf(["cab", "food", "other"])) var category: String
+        @Guide(description: "What it was for, in 3 to 6 words, e.g. Grab to Marina Bay Sands, Lunch at Toast Box, Stationery from Popular") var note: String?
+    }
+
+    static func read(_ text: String) async throws -> Receipt {
+        let session = LanguageModelSession(instructions: """
+            You read text recognised from a receipt photo, for a work expense claim in Singapore. \
+            Taxi, Grab, Gojek, Tada, CDG and ComfortDelGro rides are "cab". Meals, drinks and groceries are "food". Anything else is "other". \
+            Copy numbers exactly as printed. Leave a field empty rather than guess.
+            """)
+        return try await session.respond(to: String(text.prefix(4000)), generating: Receipt.self).content
     }
 }
 

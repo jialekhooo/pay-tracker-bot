@@ -8,9 +8,9 @@ public struct ReceiptSuggestions {
         var candidates: [(Int, Decimal)] = []
         let number = #"(?<![0-9.\-])[0-9][0-9,]*\s*\.\s*[0-9]{2}(?![0-9])"#
         for (index, line) in lines.enumerated() {
-            guard let label = line.range(of: #"^\s*(grand\s+total|total(?:\s+(?:paid|amount|fare))?|amount\s+(?:paid|due|charged)|payment\s+total|fare)\b"#, options: [.regularExpression, .caseInsensitive]) else { continue }
+            guard let label = line.range(of: #"^\s*(grand\s+total|net\s+total|total(?:\s+(?:paid|amount|fare|charged))?|amount(?:\s+(?:paid|due|charged))?|payment\s+total|you\s+paid|paid|nets|fare)\b"#, options: [.regularExpression, .caseInsensitive]) else { continue }
             let title = String(line[label]).lowercased()
-            let priority = title.contains("grand") || title.contains("paid") || title.contains("charged") ? 3 : title == "fare" ? 1 : 2
+            let priority = title.contains("grand") || title.contains("paid") || title.contains("charged") || title == "nets" ? 3 : title == "fare" ? 1 : 2
             var suffix = String(line[label.upperBound...])
             // OCR often returns the total label and right-aligned price as separate observations.
             if suffix.range(of: #"^\s*:?\s*(?:SGD|S\$|SG\$|USD|US\$|EUR|GBP|MYR|RM|\$|€|£)?\s*$"#, options: [.regularExpression, .caseInsensitive]) != nil, index + 1 < lines.count {

@@ -428,7 +428,7 @@ struct ClaimEditor: View {
                         TextField("Note (optional)", text: $note).frame(minHeight: 44).font(.subheadline).accessibilityIdentifier("claim.note")
                     }
                     ReceiptAttachmentEditor(receiptID: $receiptID, photoData: $receiptData, processing: $receiptProcessing,
-                                            amount: $amount, useDay: { day = $0 })
+                                            amount: $amount, category: $category, note: $note, useDay: { day = $0 })
                     if let error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red) }
                     Label("Your claim stays attached to this shift and syncs with your HowMuch account.", systemImage: "checkmark.shield").font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
                 }.padding(20)
@@ -480,7 +480,10 @@ struct ReceiptAttachmentEditor: View {
     @Binding var photoData: Data?
     @Binding var processing: Bool
     @Binding var amount: String
+    @Binding var category: ClaimCategory
+    @Binding var note: String
     let useDay: (Date) -> Void
+    @State private var suggestedCategory: ClaimCategory?
     @State private var selected: PhotosPickerItem?
     @State private var preview: Data?
     @State private var message = ""
@@ -508,6 +511,7 @@ struct ReceiptAttachmentEditor: View {
             }
             if let total = suggestion.amount { Button("Use suggested total: \(total)") { amount = NSDecimalNumber(decimal: total).stringValue }.rowAction().accessibilityIdentifier("receipt.useAmount") }
             if let day = suggestion.day, let date = TrackerCalendar.localDate(day) { Button("Use suggested date: " + displayDay(day)) { useDay(date) }.rowAction().accessibilityIdentifier("receipt.useDate") }
+            if let kind = suggestedCategory, kind != category { Button("Use suggested type: \(kind.title)") { category = kind }.rowAction().accessibilityIdentifier("receipt.useCategory") }
             if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.muted) }
             Text("The detected total fills the amount automatically; check it before saving. Receipt copies are saved privately to your HowMuch account with the claim. Open View or save receipt to download a copy.").font(.caption).foregroundStyle(Palette.muted)
         }
@@ -564,8 +568,18 @@ struct ReceiptAttachmentEditor: View {
             } catch { return "" }
         }.value
         suggestion = ReceiptSuggestions(text: text)
+        suggestedCategory = nil
+        // Apple Intelligence (on the iPhone) fills what the rules missed: the total, any date format,
+        // the claim type and a short note. Its total is only used if it's printed on the receipt.
+        var helped = false
+        if let read = await AppleIntelligence.readReceipt(text) {
+            if suggestion.amount == nil, let total = read.total { suggestion.amount = total; helped = true }
+            if suggestion.day == nil, let day = read.day { suggestion.day = day; helped = true }
+            if let kind = read.category { suggestedCategory = kind }
+            if note.trimmingCharacters(in: .whitespaces).isEmpty, let text = read.note { note = text; helped = true }
+        }
         if let total = suggestion.amount {
-            if amount == originalAmount { amount = NSDecimalNumber(decimal: total).stringValue; message = "Detected total filled in. Check the amount against your receipt before saving." }
+            if amount == originalAmount { amount = NSDecimalNumber(decimal: total).stringValue; message = helped ? "Apple Intelligence read this receipt on your iPhone. Check the amount, date and note before saving." : "Detected total filled in. Check the amount against your receipt before saving." }
             else { message = "Total detected. Your amount was edited while scanning, so it has been kept. Use the suggested total to replace it." }
         } else { message = "Photo attached. A clear total could not be found; enter the amount or try a sharper receipt photo." }
     }
