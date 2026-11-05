@@ -145,3 +145,66 @@ def test_forwarding_address_can_be_replaced_and_fake_google_confirmations_are_ig
     fake.set_content('Confirmation code: 999999999')
     assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(fake)).json()['status'] != 'confirmation'
     assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(forwarded(old, 'You have received SGD 120.00 from REFIX PTE. LTD.'))).json()['status'] == 'ignored'
+
+
+def account_with(setup, events):
+    """Finished, unpaid shifts (one per entry, oldest first) all paid by REFIX."""
+    import copy, uuid
+    session, _ = login(setup)
+    data = document()
+    base = data['shifts'][0]
+    data['shifts'] = []
+    for index, event in enumerate(events):
+        shift = copy.deepcopy(base)
+        shift['id'] = str(uuid.uuid4()); shift['event'] = event
+        shift['day'] = (datetime.now(timezone.utc) - timedelta(days=10 - index)).date().isoformat()
+        data['shifts'].append(shift)
+    data['claims'] = []
+    assert write(setup, session, data).status_code == 200
+    for event in set(events):
+        setup.client.put('/v1/payment-detection/event-payer', json={'event': event, 'payer': 'REFIX PTE. LTD.'}, headers=headers(session))
+    return session, base['pay']
+
+
+def latest_receipt(setup, session):
+    return setup.client.get('/v1/payment-detection', headers=headers(session)).json()['receipts'][0]
+
+
+def shifts_paid(setup, session):
+    return [s['paid'] for s in setup.client.get('/v1/data', headers=headers(session)).json()['data']['shifts']]
+
+
+def test_one_transfer_for_two_events_is_offered_as_combined(setup):
+    session, pay = account_with(setup, ['Roadshow', 'Gala'])
+    setup.client.patch('/v1/payment-detection/pay-in', json={'notifications_auto': True}, headers=headers(session))
+    total = str(pay_in.Decimal(str(pay)) * 2)
+    assert setup.client.post('/v1/payment-detection/notification', json={'amount': total, 'payer': 'REFIX PTE. LTD.'}, headers=headers(session)).json()['status'] == 'review'
+    receipt = latest_receipt(setup, session)
+    combined = [c for c in receipt['candidates'] if c['kind'] == 'combined']
+    assert combined and set(combined[0]['events']) == {'Roadshow', 'Gala'}
+    assert not any(shifts_paid(setup, session))  # never applied automatically
+    assert setup.client.post(f"/v1/payment-detection/receipts/{receipt['id']}/confirm", json={'event': combined[0]['event']}, headers=headers(session)).status_code == 200
+    assert all(shifts_paid(setup, session))
+
+
+def test_a_transfer_for_the_first_shifts_of_an_event_pays_those_shifts(setup):
+    session, pay = account_with(setup, ['Roadshow', 'Roadshow', 'Roadshow'])
+    total = str(pay_in.Decimal(str(pay)) * 2)
+    setup.client.post('/v1/payment-detection/notification', json={'amount': total, 'payer': 'REFIX PTE. LTD.'}, headers=headers(session))
+    receipt = latest_receipt(setup, session)
+    some = [c for c in receipt['candidates'] if c['kind'] == 'some']
+    assert some and some[0]['event'] == 'Roadshow (first 2 unpaid shifts)'
+    setup.client.post(f"/v1/payment-detection/receipts/{receipt['id']}/confirm", json={'event': some[0]['event']}, headers=headers(session))
+    assert sorted(shifts_paid(setup, session)) == [False, True, True]
+
+
+def test_a_short_payment_shows_what_is_missing(setup):
+    session, pay = account_with(setup, ['Roadshow'])
+    short = str(pay_in.Decimal(str(pay)) - 20)
+    setup.client.post('/v1/payment-detection/notification', json={'amount': short, 'payer': 'REFIX PTE. LTD.'}, headers=headers(session))
+    receipt = latest_receipt(setup, session)
+    assert receipt['candidates'][0]['kind'] == 'short' and receipt['candidates'][0]['shortfall'] == '20.00'
+    assert 'Less than' in receipt['reason']
+    setup.client.post(f"/v1/payment-detection/receipts/{receipt['id']}/confirm", json={'event': 'Roadshow'}, headers=headers(session))
+    assert all(shifts_paid(setup, session))
+    assert '20.00 less' in latest_receipt(setup, session)['reason']

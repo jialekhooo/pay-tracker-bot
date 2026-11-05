@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from itertools import combinations
 import re
 import sqlite3
 import time
@@ -202,18 +203,58 @@ class PaymentStore:
             if any(s.paid or s.id in allocated_refs or s.currency != receipt["currency"] for s in shifts) or max(ends) > received:
                 continue
             groups[key] = shifts
-        candidates = []
         rules = self.rules(user_id)
+        amount = Decimal(receipt["amount"])
+        payer = normalized(receipt["payer"])
+        claims = self.storage.cab_claims(user_id)
+
+        def payer_matches(key: str) -> bool:
+            return any(r["payer"] == payer and r["event"].casefold() == key for r in rules)
+
+        def candidate(event, shifts, kind, cab=False, shortfall=None, events=None):
+            return {"event": event, "shift_ids": [s.id for s in shifts], "payer_match": all(payer_matches(e.casefold()) for e in (events or [shifts[0].event])),
+                    "includes_cab": cab, "kind": kind, "shortfall": str(shortfall) if shortfall is not None else None,
+                    "events": events or [shifts[0].event]}
+
+        candidates = []
+        totals = {}
         for key, shifts in groups.items():
             earnings = sum((s.pay for s in shifts), Decimal(0))
-            cab = sum((c.amount for c in self.storage.cab_claims(user_id) if c.event and c.event.casefold() == key and c.currency == receipt["currency"]), Decimal(0))
-            if Decimal(receipt["amount"]) not in {earnings, earnings + cab}:
+            totals[key] = earnings
+            cab = sum((c.amount for c in claims if c.event and c.event.casefold() == key and c.currency == receipt["currency"]), Decimal(0))
+            if amount in {earnings, earnings + cab}:
+                candidates.append(candidate(shifts[0].event, shifts, "exact", cab=bool(cab and amount == earnings + cab)))
+
+        # Combined: one transfer that pays several of the same payer's events at once.
+        payer_keys = sorted(k for k in groups if payer_matches(k))[:10]
+        for size in range(2, len(payer_keys) + 1):
+            for combo in combinations(payer_keys, size):
+                if sum((totals[k] for k in combo), Decimal(0)) == amount:
+                    names = [groups[k][0].event for k in combo]
+                    candidates.append(candidate(" + ".join(names), [s for k in combo for s in groups[k]], "combined", events=names))
+
+        # Some of the shifts: the oldest unpaid, finished shifts of an event (clients often pay week by week).
+        for key, shifts in all_groups.items():
+            if not payer_matches(key):
                 continue
-            candidates.append({
-                "event": shifts[0].event, "shift_ids": [s.id for s in shifts],
-                "payer_match": any(r["payer"] == normalized(receipt["payer"]) and r["event"].casefold() == key for r in rules),
-                "includes_cab": bool(cab and Decimal(receipt["amount"]) == earnings + cab),
-            })
+            open_shifts = sorted(
+                (s for s in shifts if not s.paid and s.id not in allocated_refs and s.currency == receipt["currency"]
+                 and datetime.combine(s.day, s.end, shift_zone) + (timedelta(days=1) if s.end <= s.start else timedelta()) <= received),
+                key=lambda s: (s.day, s.start))
+            running = Decimal(0)
+            for count, shift in enumerate(open_shifts, 1):
+                running += shift.pay
+                if running == amount and (key not in groups or count < len(groups[key])):
+                    candidates.append(candidate(f"{shift.event} (first {count} unpaid {'shift' if count == 1 else 'shifts'})", open_shifts[:count], "some"))
+                    break
+                if running > amount:
+                    break
+
+        # Short-paid: less than an event's total arrived (a fee or deduction, or an underpayment).
+        if not candidates:
+            for key, shifts in groups.items():
+                if payer_matches(key) and totals[key] * Decimal("0.5") <= amount < totals[key]:
+                    candidates.append(candidate(shifts[0].event, shifts, "short", shortfall=totals[key] - amount))
         return candidates
 
     def ingest(self, user_id: int, message_id: str, parsed: dict, trusted: bool, auto: bool | None = None, review_reason: str = "") -> int:
@@ -232,7 +273,9 @@ class PaymentStore:
             if not created:
                 return receipt["id"]
             choices = self.candidates(user_id, receipt)
-            matched = [c for c in choices if c["payer_match"]]
+            # Only an exact single-event match can be applied automatically; combined, partial
+            # and short payments always wait for the person to choose.
+            matched = [c for c in choices if c["payer_match"] and c["kind"] == "exact"]
             connection = self.connection(user_id)
             since = connection["auto_since"] if connection else 0
             timestamp = datetime.fromisoformat(receipt["received_at"]).timestamp() if receipt["received_at"] else 0
@@ -243,7 +286,9 @@ class PaymentStore:
                 reason = parsed["reason"] or (
                     (review_reason or "Email authentication could not be verified.") if not trusted and not (auto is not None and choices) else
                     "Multiple payer matches; choose the correct event." if len(matched) > 1 else
-                    "Exact amount found; confirm the event or add a payer rule." if choices else
+                    "Exact amount found; confirm the event or add a payer rule." if any(c["kind"] == "exact" for c in choices) else
+                    "Looks like a combined payment or one covering some of the shifts; choose how to apply it." if any(c["kind"] in ("combined", "some") for c in choices) else
+                    "Less than the event's total arrived; mark it paid only if that's what you agreed." if choices else
                     "No exact unpaid event total found. Partial and combined payments need manual reconciliation."
                 )
                 self.db.execute("UPDATE payment_receipts SET reason=? WHERE id=?", (reason, receipt["id"]))
@@ -270,7 +315,12 @@ class PaymentStore:
             cursor = self.db.execute("UPDATE shifts SET paid=1 WHERE id=? AND user_id=? AND paid=0", (database_id, user_id))
             if cursor.rowcount != 1:
                 raise ValueError("The shifts changed. Refresh and review this alert again.")
-        self.db.execute("UPDATE payment_receipts SET status=?,event=?,reason=? WHERE id=?", (action, candidate["event"], "Matched exact event total and currency.", receipt["id"]))
+        reason = {
+            "combined": "One payment covering " + ", ".join(candidate.get("events") or []) + ".",
+            "some": "Paid the oldest unpaid shifts that add up to this amount.",
+            "short": f"Paid {receipt['currency']} {candidate.get('shortfall')} less than the event's total.",
+        }.get(candidate.get("kind", "exact"), "Matched exact event total and currency.")
+        self.db.execute("UPDATE payment_receipts SET status=?,event=?,reason=? WHERE id=?", (action, candidate["event"], reason, receipt["id"]))
         self.db.execute("INSERT INTO payment_audit(user_id,receipt_id,action,created_at) VALUES(?,?,?,?)", (user_id, receipt["id"], action, int(time.time())))
 
     def confirm(self, user_id: int, receipt_id: int, event: str, acknowledge_unverified: bool = False) -> None:

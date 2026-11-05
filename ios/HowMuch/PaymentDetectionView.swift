@@ -28,6 +28,7 @@ struct PaymentDetectionView: View {
         #endif
     }
     @State private var replacingAddress = false
+    @State private var pendingShort: (id: Int, event: String, shortfall: String)?
     @State private var pendingDismiss: String?
     @State private var settingUpBank = false
     var body: some View {
@@ -137,7 +138,8 @@ struct PaymentDetectionView: View {
                             Text(receipt.reason).font(.caption).foregroundStyle(Palette.muted)
                             if receipt.status == "review" {
                                 ForEach(receipt.candidates, id: \.event) { candidate in
-                                    Button("Mark \(candidate.event) paid\(candidate.includesCab ? " · includes claims" : "")") { if receipt.trusted == false { pendingReceipt = receipt; pendingEvent = candidate.event; confirmBank = true }
+                                    Button(candidate.label) { if receipt.trusted == false { pendingReceipt = receipt; pendingEvent = candidate.event; confirmBank = true }
+                                        else if candidate.kind == "short" { pendingShort = (receipt.id, candidate.event, candidate.shortfall ?? "") }
                                         else { Task { await action("/receipts/\(receipt.id)/confirm", body: ["event": candidate.event]) } } }.font(.caption).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).confirm")
                                 }
                                 // Destructive and confirmed: a dismissed payment isn't matched to any job.
@@ -159,6 +161,11 @@ struct PaymentDetectionView: View {
                 Button("Get a new address", role: .destructive) { Task { await rotateAddress() } }
                 Button("Cancel", role: .cancel) {}
             }
+            .confirmationDialog(pendingShort.map { "\($0.shortfall) less than \($0.event)'s total arrived. Mark it paid anyway?" } ?? "",
+                                isPresented: Binding(get: { pendingShort != nil }, set: { if !$0 { pendingShort = nil } }), titleVisibility: .visible) {
+                Button("Mark paid") { if let short = pendingShort { pendingShort = nil; Task { await action("/receipts/\(short.id)/confirm", body: ["event": short.event]) } } }
+                Button("Not yet", role: .cancel) { pendingShort = nil }
+            } message: { Text("Only if that's what you agreed with the payer. The shortfall is kept in your payment history.") }
             .confirmationDialog("Dismiss this payment alert? It won't be matched to any job.", isPresented: Binding(get: { pendingDismiss != nil }, set: { if !$0 { pendingDismiss = nil } }), titleVisibility: .visible) {
                 Button("Dismiss alert", role: .destructive) { if let path = pendingDismiss { pendingDismiss = nil; Task { await action(path) } } }
                 Button("Keep it", role: .cancel) { pendingDismiss = nil }
@@ -317,7 +324,20 @@ private struct DetectionStatus: Decodable {
     let events: [String]
 }
 private struct DetectionRule: Decodable, Identifiable { let id: Int; let payer: String; let event: String }
-private struct DetectionCandidate: Decodable { let event: String; let includesCab: Bool }
+private struct DetectionCandidate: Decodable {
+    let event: String; let includesCab: Bool
+    /// exact, combined (several events in one transfer), some (the oldest unpaid shifts) or short (less than the total).
+    var kind: String? = nil
+    var shortfall: String? = nil
+    var label: String {
+        switch kind {
+        case "combined": return "Mark \(event) paid (one combined payment)"
+        case "some": return "Mark \(event) paid"
+        case "short": return "Mark \(event) paid · \(shortfall ?? "") short"
+        default: return "Mark \(event) paid\(includesCab ? " · includes claims" : "")"
+        }
+    }
+}
 private struct DetectionReceipt: Decodable, Identifiable {
     let trusted: Bool?
     let id: Int
