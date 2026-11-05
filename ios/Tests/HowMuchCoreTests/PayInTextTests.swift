@@ -14,4 +14,13 @@ final class PayInTextTests: XCTestCase {
         XCTAssertFalse(PayInText.looksLikeMoneyIn("We received your application. We'll be in touch."))
         XCTAssertFalse(PayInText.looksLikeMoneyIn("Enjoy 5% cashback this weekend!"))
     }
+
+    func testOnlyAmountsWrittenInTheAlertAreTrusted() {
+        let alert = "PayNow: SGD 88.50 has come in to your account from TAN AH KOW"
+        XCTAssertEqual(PayInText.confirmedAmount(in: alert, suggested: 23.46), 88.5) // a made-up number is replaced
+        XCTAssertEqual(PayInText.confirmedAmount(in: alert, suggested: 88.5), 88.5)
+        XCTAssertEqual(PayInText.confirmedAmount(in: "Received $1,200.00 into a/c 1234, balance $5,000.00", suggested: nil), nil) // two amounts, no guess
+        XCTAssertEqual(PayInText.confirmedAmount(in: "Received $1,200.00 into a/c 1234, balance $5,000.00", suggested: 1200), 1200)
+        XCTAssertNil(PayInText.confirmedAmount(in: "Money came in", suggested: 50))
+    }
 }

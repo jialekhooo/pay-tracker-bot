@@ -109,7 +109,16 @@ struct ShiftEditor: View {
             .onAppear {
                 guard !loaded else { return }
                 load(); loaded = true
-                if let initialMessage { applyPasted(JobMessageParser.parse(initialMessage)) }
+                if let initialMessage {
+                    applyPasted(JobMessageParser.parse(initialMessage))
+                    // Apple Intelligence may fill in what the rules missed; it only adds, never overrides.
+                    if AppleIntelligence.isAvailable {
+                        Task { @MainActor in
+                            let read = await AppleIntelligence.readJob(initialMessage)
+                            if read != JobMessageParser.parse(initialMessage) { applyPasted(read) }
+                        }
+                    }
+                }
             }
             .onChange(of: [event, location, amount, breakMinutes, currency, threshold, multiplier]) { _, _ in error = nil }
         }

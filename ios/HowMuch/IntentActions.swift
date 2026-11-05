@@ -113,9 +113,15 @@ struct RecordPayReceivedIntent: AppIntent {
 extension IntentActions {
     static func recordPayReceived(text: String, amount: Double?, payer: String?) async throws -> String {
         // Only money coming in leaves the phone; codes, spending and promotions are dropped here.
-        guard amount != nil || PayInText.looksLikeMoneyIn(text) else {
-            PayInLog.record("Not money coming in, so it stayed on your iPhone.")
-            return "Not a payment."
+        var amount = amount, payer = payer
+        if amount == nil, !PayInText.looksLikeMoneyIn(text) {
+            // Wording the rules don't know: Apple Intelligence decides on the iPhone whether it's money in.
+            guard let read = await AppleIntelligence.readPayment(text) else {
+                PayInLog.record("Not money coming in, so it stayed on your iPhone.")
+                return "Not a payment."
+            }
+            amount = read.amount
+            if (payer ?? "").isEmpty, !read.payer.isEmpty { payer = read.payer }
         }
         let account = AppleAccountStore.shared
         guard await tracker() != nil, account.account != nil, !account.isDemo else {

@@ -140,6 +140,7 @@ struct DashboardView: View {
                 }
                 if store.data.currencies.count > 1 { PillPicker(values: store.data.currencies, selection: $currency, onDark: false) }
                 EarningsHero(shifts: shifts, currency: currency, label: period == "All time" ? "ALL-TIME EARNINGS" : month.formatted(.dateTime.month(.wide)).uppercased() + " EARNINGS", now: clock.date)
+                MonthRecapCard(now: clock.date)
                 if period == "All time" {
                 HStack(spacing: 12) {
                     NavigationLink { ShiftBrowser(mode: "Worked this month") } label: {

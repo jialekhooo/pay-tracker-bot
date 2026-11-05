@@ -12,10 +12,14 @@ struct PasteJobCard: View {
             Label("PASTE A JOB MESSAGE", systemImage: "text.bubble").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
             Text("Copy a job offer from WhatsApp or Telegram and paste it here. The dates, times, location and pay are filled in below for you to check.")
                 .font(.caption).foregroundStyle(Palette.muted)
+            if AppleIntelligence.isAvailable {
+                Label("Apple Intelligence reads unusual wording, on your iPhone", systemImage: "apple.intelligence")
+                    .font(.caption2.weight(.medium)).foregroundStyle(Palette.teal)
+            }
             HStack(spacing: 10) {
                 PasteButton(payloadType: String.self) { strings in
                     let text = strings.joined(separator: "\n")
-                    DispatchQueue.main.async { onRead(JobMessageParser.parse(text)) }
+                    Task { @MainActor in onRead(await AppleIntelligence.readJob(text)) }
                 }
                 .buttonBorderShape(.capsule).tint(Palette.teal).labelStyle(.titleAndIcon)
                 .accessibilityIdentifier("paste.clipboard")
@@ -67,7 +71,7 @@ struct JobMessageEntry: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Fill in") { onRead(JobMessageParser.parse(text)); dismiss() }
+                    Button("Fill in") { let text = text; Task { @MainActor in onRead(await AppleIntelligence.readJob(text)) }; dismiss() }
                         .fontWeight(.semibold)
                         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("paste.fill")
