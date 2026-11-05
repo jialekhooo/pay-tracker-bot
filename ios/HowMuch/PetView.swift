@@ -435,11 +435,20 @@ struct PetStage: View {
     }
 }
 
-/// Penny's wardrobe and coins, saved on this phone for each account.
-private struct PetClosetStorage {
-    static func key(_ accountID: String) -> String { "pet.closet.\(accountID)" }
-    static func decode(_ json: String) -> PetCloset { (try? JSONDecoder().decode(PetCloset.self, from: Data(json.utf8))) ?? PetCloset() }
-    static func encode(_ closet: PetCloset) -> String { (try? String(decoding: JSONEncoder().encode(closet), as: UTF8.self)) ?? "" }
+/// Where Penny lived before she synced with the account; moved into the account on first open.
+enum PetLegacyStorage {
+    static let nameKey = "pet.name"
+    static func closetKey(_ accountID: String) -> String { "pet.closet.\(accountID)" }
+    static func closet(_ json: String?) -> PetCloset? { json.flatMap { try? JSONDecoder().decode(PetCloset.self, from: Data($0.utf8)) } }
+}
+
+extension TrackerStore {
+    var petPreferences: PetPreferences { data.settings.pet ?? PetPreferences() }
+    var petCloset: PetCloset { petPreferences.closet ?? PetCloset() }
+    @discardableResult
+    func savePet(_ change: (inout PetPreferences) -> Void) -> Bool {
+        updatePreferences { settings in var pet = settings.pet ?? PetPreferences(); change(&pet); settings.pet = pet }
+    }
 }
 
 private func outfit(_ closet: PetCloset, _ pet: PetProgress) -> [PetSlot: PetItem] {
@@ -450,21 +459,10 @@ private func outfit(_ closet: PetCloset, _ pet: PetProgress) -> [PetSlot: PetIte
 struct PetCard: View {
     @EnvironmentObject private var store: TrackerStore
     let now: Date
-    var body: some View { PetCardContent(now: now, accountID: store.accountID) }
-}
-
-private struct PetCardContent: View {
-    @EnvironmentObject private var store: TrackerStore
-    @AppStorage("pet.name") private var name = "Penny"
-    @AppStorage private var closetJSON: String
-    let now: Date
-    init(now: Date, accountID: String) {
-        self.now = now
-        _closetJSON = AppStorage(wrappedValue: "", PetClosetStorage.key(accountID))
-    }
     var body: some View {
         let pet = PetProgress(shifts: store.data.shifts, now: now)
-        let closet = PetClosetStorage.decode(closetJSON)
+        let closet = store.petCloset
+        let name = store.petPreferences.displayName
         Card {
             HStack(alignment: .center, spacing: 14) {
                 PetStage(pet: pet, outfit: outfit(closet, pet), name: name, size: 72, corner: 16)
@@ -494,30 +492,26 @@ private struct PetCardContent: View {
 
 struct PetDetailView: View {
     @EnvironmentObject private var store: TrackerStore
-    var body: some View { PetDetailContent(accountID: store.accountID) }
-}
-
-private struct PetDetailContent: View {
-    @EnvironmentObject private var store: TrackerStore
-    @AppStorage("pet.name") private var name = "Penny"
-    @AppStorage private var closetJSON: String
+    @State private var name = ""
     @State private var slot: PetSlot = .hat
     @State private var buying: PetItem?
     @State private var notice: String?
-    init(accountID: String) { _closetJSON = AppStorage(wrappedValue: "", PetClosetStorage.key(accountID)) }
+    @FocusState private var naming: Bool
 
-    private var displayName: String { name.isEmpty ? "Your pet" : name }
+    private var displayName: String { store.petPreferences.displayName }
 
     var body: some View {
         let pet = PetProgress(shifts: store.data.shifts)
-        let closet = PetClosetStorage.decode(closetJSON)
+        let closet = store.petCloset
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Card {
                     VStack(spacing: 12) {
                         PetStage(pet: pet, outfit: outfit(closet, pet), name: displayName, size: 150, corner: 22)
-                        TextField("Name", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
-                            .submitLabel(.done).accessibilityIdentifier("pet.name")
+                        TextField("Penny", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
+                            .submitLabel(.done).focused($naming).accessibilityIdentifier("pet.name")
+                            .onSubmit(saveName)
+                            .onChange(of: naming) { _, focused in if !focused { saveName() } }
                         Text("Level \(pet.level) · \(pet.stage.title)").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.teal)
                         ProgressView(value: pet.levelProgress).tint(Palette.teal)
                         Text("\(pet.xpToNextLevel) XP to level \(pet.level + 1) · tap \(displayName) to play").font(.caption).foregroundStyle(Palette.muted)
@@ -548,6 +542,8 @@ private struct PetDetailContent: View {
             }.padding(20)
         }
         .detailStyle("Your pet")
+        .onAppear { name = displayName }
+        .onDisappear(perform: saveName)
         .confirmationDialog(buying.map { "Buy \($0.name) for \($0.requirement)?" } ?? "", isPresented: Binding(get: { buying != nil }, set: { if !$0 { buying = nil } }), titleVisibility: .visible) {
             if let item = buying { Button("Buy \(item.name)") { buy(item, pet) } }
         }
@@ -580,8 +576,7 @@ private struct PetDetailContent: View {
     private func isCoinItem(_ item: PetItem) -> Bool { if case .coins = item.unlock { return true }; return false }
 
     private func tap(_ item: PetItem, _ pet: PetProgress, _ closet: PetCloset) {
-        var updated = closet
-        if closet.owns(item, pet) { try? updated.toggle(item, pet); closetJSON = PetClosetStorage.encode(updated); return }
+        if closet.owns(item, pet) { store.savePet { var updated = $0.closet ?? PetCloset(); try? updated.toggle(item, pet); $0.closet = updated }; return }
         switch item.unlock {
         case .coins(let price):
             if closet.balance(pet) >= price { buying = item }
@@ -593,10 +588,16 @@ private struct PetDetailContent: View {
     }
 
     private func buy(_ item: PetItem, _ pet: PetProgress) {
-        var closet = PetClosetStorage.decode(closetJSON)
-        do { try closet.buy(item, pet); closetJSON = PetClosetStorage.encode(closet) }
+        var closet = store.petCloset
+        do { try closet.buy(item, pet); store.savePet { $0.closet = closet } }
         catch { notice = "Not enough coins for \(item.name)." }
         buying = nil
+    }
+
+    private func saveName() {
+        let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
+        guard trimmed != (store.petPreferences.name ?? "") else { return }
+        store.savePet { $0.name = trimmed.isEmpty ? nil : trimmed }
     }
 
     private func badge(_ achievement: PetAchievement) -> some View {

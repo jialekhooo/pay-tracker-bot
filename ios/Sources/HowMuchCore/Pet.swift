@@ -167,7 +167,8 @@ public struct PetItem: Identifiable, Equatable, Sendable {
 public struct PetCloset: Codable, Equatable, Sendable {
     public var bought: Set<String> = []
     public var spent = 0
-    public var outfit: [PetSlot: String] = [.background: "mint"]
+    /// Item id worn in each slot, keyed by `PetSlot.rawValue` so it stays a plain JSON object.
+    public var outfit: [String: String] = [PetSlot.background.rawValue: "mint"]
     public init() {}
 
     public func balance(_ pet: PetProgress) -> Int { max(0, pet.coinsEarned - spent) }
@@ -182,7 +183,7 @@ public struct PetCloset: Codable, Equatable, Sendable {
     }
 
     public func wearing(_ slot: PetSlot, _ pet: PetProgress) -> PetItem? {
-        guard let item = PetItem.named(outfit[slot]), owns(item, pet) else { return nil }
+        guard let item = PetItem.named(outfit[slot.rawValue]), owns(item, pet) else { return nil }
         return item
     }
 
@@ -191,15 +192,55 @@ public struct PetCloset: Codable, Equatable, Sendable {
     /// Buys a coin item with the coins available and puts it on.
     public mutating func buy(_ item: PetItem, _ pet: PetProgress) throws {
         guard case .coins(let price) = item.unlock else { throw ClosetError.locked }
-        guard !bought.contains(item.id) else { outfit[item.slot] = item.id; return }
+        guard !bought.contains(item.id) else { outfit[item.slot.rawValue] = item.id; return }
         let available = balance(pet)
         guard available >= price else { throw ClosetError.notEnoughCoins(needed: price - available) }
-        bought.insert(item.id); spent += price; outfit[item.slot] = item.id
+        bought.insert(item.id); spent += price; outfit[item.slot.rawValue] = item.id
     }
 
     /// Puts on an item already owned, or takes it off if it's being worn.
     public mutating func toggle(_ item: PetItem, _ pet: PetProgress) throws {
         guard owns(item, pet) else { throw ClosetError.locked }
-        if outfit[item.slot] == item.id, item.slot != .background { outfit[item.slot] = nil } else { outfit[item.slot] = item.id }
+        if outfit[item.slot.rawValue] == item.id, item.slot != .background { outfit[item.slot.rawValue] = nil } else { outfit[item.slot.rawValue] = item.id }
     }
+}
+
+/// Penny's settings, synced with the account.
+public struct PetPreferences: Codable, Equatable, Sendable {
+    public var name: String?
+    public var closet: PetCloset?
+    public init(name: String? = nil, closet: PetCloset? = nil) { self.name = name; self.closet = closet }
+    public var displayName: String { (name ?? "").trimmingCharacters(in: .whitespaces).isEmpty ? "Penny" : name! }
+    func validate() throws {
+        guard (name ?? "").count <= 40, (closet?.bought.count ?? 0) <= 200, (closet?.spent ?? 0) >= 0, (closet?.outfit.count ?? 0) <= PetSlot.allCases.count else {
+            throw TrackerError.invalid("Penny's settings couldn't be saved.")
+        }
+    }
+}
+
+/// Live shift choices, synced with the account so every iPhone signed in behaves the same.
+public struct LiveShiftPreferences: Codable, Equatable, Sendable {
+    public var lockScreen: Bool?
+    public var askFinish: Bool?
+    /// Shifts whose finishing time was already confirmed (most recent last).
+    public var confirmedFinishes: [UUID]?
+    public init() {}
+    public var showsOnLockScreen: Bool { lockScreen ?? true }
+    public var asksFinishTime: Bool { askFinish ?? true }
+    public var confirmed: Set<UUID> { Set(confirmedFinishes ?? []) }
+    public mutating func confirm(_ id: UUID) {
+        var list = (confirmedFinishes ?? []).filter { $0 != id }
+        list.append(id)
+        confirmedFinishes = Array(list.suffix(300))
+    }
+    func validate() throws {
+        guard (confirmedFinishes?.count ?? 0) <= 300 else { throw TrackerError.invalid("Too many confirmed finish times.") }
+    }
+}
+
+/// Settings → Widgets preview toggles.
+public struct WidgetPreviewPreferences: Codable, Equatable, Sendable {
+    public var showPay: Bool?
+    public var showLocation: Bool?
+    public init() {}
 }

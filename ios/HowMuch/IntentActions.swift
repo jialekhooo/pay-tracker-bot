@@ -17,7 +17,10 @@ enum IntentActions {
     }
 
     static func finishOnTime(shiftID: UUID, accountID: String) async {
-        LiveShiftCenter.confirm(shiftID, accountID: accountID)
+        if let store = await tracker(), store.accountID == accountID.lowercased() {
+            LiveShiftCenter.confirm(shiftID, in: store)
+            await AppleAccountStore.shared.synchronize()
+        }
         for activity in Activity<LiveShiftAttributes>.activities where activity.attributes.shiftID == shiftID {
             await activity.end(nil, dismissalPolicy: .immediate)
         }

@@ -144,6 +144,41 @@ final class TrackerStore: ObservableObject {
         }
     }
 
+    /// Settings that 1.1 and earlier kept only on this iPhone (Penny, live shift choices, widget previews)
+    /// move into the account the first time it's opened here, after its records have synced, so every
+    /// device signed in to the account shares them. Values already in the account win.
+    func adoptDeviceSettings(_ defaults: UserDefaults = .standard) {
+        guard writable, !isPreview else { return }
+        var settings = data.settings
+        var adopted = false
+        let closetKey = PetLegacyStorage.closetKey(accountID)
+        if settings.pet == nil, defaults.object(forKey: closetKey) != nil || defaults.object(forKey: PetLegacyStorage.nameKey) != nil {
+            settings.pet = PetPreferences(name: defaults.string(forKey: PetLegacyStorage.nameKey), closet: PetLegacyStorage.closet(defaults.string(forKey: closetKey)))
+            adopted = true
+        }
+        let confirmedKey = LiveShiftCenter.legacyConfirmedKey(accountID)
+        if settings.liveShift == nil, [LiveShiftCenter.lockScreenKey, LiveShiftCenter.askFinishKey, confirmedKey].contains(where: { defaults.object(forKey: $0) != nil }) {
+            var live = LiveShiftPreferences()
+            live.lockScreen = defaults.object(forKey: LiveShiftCenter.lockScreenKey) as? Bool
+            live.askFinish = defaults.object(forKey: LiveShiftCenter.askFinishKey) as? Bool
+            let confirmed = (defaults.stringArray(forKey: confirmedKey) ?? []).compactMap(UUID.init(uuidString:))
+            live.confirmedFinishes = confirmed.isEmpty ? nil : Array(confirmed.suffix(300))
+            settings.liveShift = live
+            adopted = true
+        }
+        let widgetPrefix = "howmuch.widgetPreviews." + accountID
+        if settings.widgetPreview == nil, defaults.object(forKey: widgetPrefix + ".showPay") != nil || defaults.object(forKey: widgetPrefix + ".showLocation") != nil {
+            var previews = WidgetPreviewPreferences()
+            previews.showPay = defaults.object(forKey: widgetPrefix + ".showPay") as? Bool
+            previews.showLocation = defaults.object(forKey: widgetPrefix + ".showLocation") as? Bool
+            settings.widgetPreview = previews
+            adopted = true
+        }
+        guard !adopted || update({ $0.preferences = settings }) else { return }
+        for key in [closetKey, PetLegacyStorage.nameKey, confirmedKey, LiveShiftCenter.lockScreenKey, LiveShiftCenter.askFinishKey,
+                    widgetPrefix + ".showPay", widgetPrefix + ".showLocation"] { defaults.removeObject(forKey: key) }
+    }
+
     func importCSV(_ url: URL) throws -> (added: Int, skipped: Int) {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }

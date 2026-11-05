@@ -102,4 +102,31 @@ final class PetTests: XCTestCase {
         let saved = try JSONDecoder().decode(PetCloset.self, from: JSONEncoder().encode(closet))
         XCTAssertEqual(saved, closet)
     }
+
+    func testAccountSettingsTravelWithTheAccountAsPlainJSON() throws {
+        var settings = AppPreferences()
+        var closet = PetCloset(); closet.bought = ["party-hat"]; closet.spent = 40; closet.outfit["hat"] = "party-hat"
+        settings.pet = PetPreferences(name: "Coco", closet: closet)
+        var live = LiveShiftPreferences(); live.lockScreen = false
+        for _ in 0..<305 { live.confirm(UUID()) }
+        settings.liveShift = live
+        var previews = WidgetPreviewPreferences(); previews.showPay = true
+        settings.widgetPreview = previews
+        XCTAssertEqual(live.confirmedFinishes?.count, 300)
+        XCTAssertNoThrow(try settings.validate())
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as! [String: Any]
+        let outfit = ((json["pet"] as? [String: Any])?["closet"] as? [String: Any])?["outfit"] as? [String: String]
+        XCTAssertEqual(outfit?["hat"], "party-hat") // an object the server can read, not a key/value array
+        let decoded = try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(settings))
+        XCTAssertEqual(decoded, settings)
+        XCTAssertEqual(decoded.pet?.displayName, "Coco")
+        XCTAssertFalse(decoded.liveShift!.showsOnLockScreen)
+        // Accounts saved before 1.1 have none of these and keep the defaults.
+        let older = try JSONDecoder().decode(AppPreferences.self, from: Data(#"{"displayName":"A","defaultBreakMinutes":0,"defaultBreakPaid":false,"eventRates":{},"payers":{},"remindersEnabled":false,"reminderMinute":1200}"#.utf8))
+        XCTAssertNil(older.pet)
+        XCTAssertEqual(PetPreferences().displayName, "Penny")
+        XCTAssertTrue(LiveShiftPreferences().showsOnLockScreen)
+        var tooLong = AppPreferences(); tooLong.pet = PetPreferences(name: String(repeating: "x", count: 41))
+        XCTAssertThrowsError(try tooLong.validate())
+    }
 }

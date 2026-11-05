@@ -15,6 +15,12 @@ public struct AppPreferences: Codable, Equatable {
     public var notifications: JobNotificationOptions?
     public var travel: TravelReminderOptions?
     public var jobTemplates: [JobTemplate]?
+    /// Penny's name, wardrobe and spent coins.
+    public var pet: PetPreferences?
+    /// Live shift choices and which finished shifts already had their finish time confirmed.
+    public var liveShift: LiveShiftPreferences?
+    /// Settings → Widgets preview toggles.
+    public var widgetPreview: WidgetPreviewPreferences?
     public init() {}
     public func validate() throws {
         guard (0..<1440).contains(defaultBreakMinutes), (0..<1440).contains(reminderMinute),
@@ -28,6 +34,8 @@ public struct AppPreferences: Codable, Equatable {
             guard jobTemplates.count <= 100, Set(jobTemplates.map(\.id)).count == jobTemplates.count else { throw TrackerError.invalid("Keep up to 100 unique templates.") }
             for template in jobTemplates { try template.validate() }
         }
+        if let pet { try pet.validate() }
+        if let liveShift { try liveShift.validate() }
     }
     public var travelEnabled: Bool { travel?.enabled == true }
     public var jobNotifications: JobNotificationOptions { notifications ?? JobNotificationOptions() }

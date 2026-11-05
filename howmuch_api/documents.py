@@ -119,6 +119,27 @@ class JobTemplate(BaseModel):
     shift: WorkShift
     payerID: uuid.UUID | None=None
 
+class PetCloset(BaseModel):
+    bought: list[str]=Field(default_factory=list,max_length=200)
+    spent: int=Field(default=0,ge=0,le=10_000_000)
+    outfit: dict[str,str]=Field(default_factory=dict,max_length=8)
+
+class PetPreferences(BaseModel):
+    name: str | None=Field(default=None,max_length=40)
+    closet: PetCloset | None=None
+
+class LiveShiftPreferences(BaseModel):
+    lockScreen: bool | None=None
+    askFinish: bool | None=None
+    confirmedFinishes: list[uuid.UUID] | None=Field(default=None,max_length=300)
+
+class WidgetPreviewPreferences(BaseModel):
+    showPay: bool | None=None
+    showLocation: bool | None=None
+
+# Account-wide settings added in 1.1. Older app versions don't send them, so a save without them keeps them.
+ACCOUNT_SETTINGS={'pet':PetPreferences,'liveShift':LiveShiftPreferences,'widgetPreview':WidgetPreviewPreferences}
+
 class Preferences(BaseModel):
     model_config=ConfigDict(extra='allow')
     travel: TravelPreferences | None=None
@@ -134,6 +155,9 @@ class Preferences(BaseModel):
     savedPayers: list[SavedPayer] | None=Field(default=None,max_length=2000)
     eventPayerIDs: dict[str,uuid.UUID] | None=Field(default=None,max_length=2000)
     notifications: NotificationPreferences | None=None
+    pet: PetPreferences | None=None
+    liveShift: LiveShiftPreferences | None=None
+    widgetPreview: WidgetPreviewPreferences | None=None
     @model_validator(mode='after')
     def validate_preferences(self):
         if self.jobTemplates:
@@ -355,6 +379,9 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
         preferences.groupUpcomingByEvent=prior_preferences['groupUpcomingByEvent']
     if preferences and 'jobTemplates' not in preferences.model_fields_set and prior_preferences.get('jobTemplates') is not None:
         preferences.jobTemplates=[JobTemplate.model_validate(t) for t in prior_preferences['jobTemplates']]
+    for key,model in ACCOUNT_SETTINGS.items():
+        if preferences and key not in preferences.model_fields_set and prior_preferences.get(key) is not None:
+            setattr(preferences,key,model.model_validate(prior_preferences[key]))
     if preferences:
         from .payers import prepare
         try: prepare(preferences,prior_preferences)

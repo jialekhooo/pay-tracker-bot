@@ -903,14 +903,13 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertFalse(app.buttons["nav.earnings"].isSelected)
     }
     @MainActor
-    func testWidgetPreviewOptionsSurviveReopeningAndAppRelaunch() {
+    func testWidgetPreviewOptionsSurviveReopening() {
+        // Preview choices are account settings now; the demo account isn't saved between launches,
+        // so this checks they stick while the app is open. Account sync is covered by the server tests.
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-widgets"]; app.launch()
-        func openWidgets() {
-            app.buttons["nav.settings"].tap()
-            tapTrailingArea(app.staticTexts["Widgets"], in: app)
-            XCTAssertTrue(app.navigationBars["Widgets"].waitForExistence(timeout: 5))
-        }
-        openWidgets()
+        app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Widgets"], in: app)
+        XCTAssertTrue(app.navigationBars["Widgets"].waitForExistence(timeout: 5))
         let pay = app.switches["widgets.previewPay"]
         let location = app.switches["widgets.previewLocation"]
         if pay.value as? String != "1" { pay.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
@@ -918,12 +917,11 @@ final class HowMuchUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         tapTrailingArea(app.staticTexts["Widgets"], in: app)
         XCTAssertEqual(pay.value as? String, "1"); XCTAssertEqual(location.value as? String, "0")
-        app.terminate(); app.launch(); openWidgets()
-        XCTAssertEqual(pay.value as? String, "1"); XCTAssertEqual(location.value as? String, "0")
-        attach("Saved widget preview preferences after relaunch", app: app)
+        attach("Saved widget preview preferences", app: app)
         pay.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
         location.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
-        app.terminate(); app.launch(); openWidgets()
+        app.navigationBars.buttons.firstMatch.tap()
+        tapTrailingArea(app.staticTexts["Widgets"], in: app)
         XCTAssertEqual(pay.value as? String, "0"); XCTAssertEqual(location.value as? String, "1")
     }
     @MainActor

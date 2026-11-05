@@ -79,6 +79,7 @@ final class AppleAccountStore: ObservableObject {
             openAccount(cached.account)
             restoring = false
             await synchronize()
+            adoptDeviceSettings()
             await registerPushIfAllowed()
         } catch {
             // Never display an unverified account or shared data when credential state cannot be checked.
@@ -144,6 +145,7 @@ final class AppleAccountStore: ObservableObject {
             api.setSession(session)
             openAccount(session.account)
             await synchronize()
+            adoptDeviceSettings()
             await registerPushIfAllowed()
         } catch let error as ASAuthorizationError where error.code == .canceled {
             // Cancellation does not create a local account or reveal data.
@@ -174,6 +176,11 @@ final class AppleAccountStore: ObservableObject {
             guard let body = try? JSONEncoder().encode(["token": value, "environment": environment, "shiftID": shift.uuidString]) else { return }
             _ = try? await api.request("/v1/devices/live-activity", method: "PUT", body: body)
         }
+    }
+    /// Once the account's records are in, older on-phone settings join them (only if the sync succeeded).
+    private func adoptDeviceSettings() {
+        guard let tracker, tracker.lastSyncedData != nil, conflict == nil else { return }
+        tracker.adoptDeviceSettings()
     }
     func scheduleSync() {
         guard !isDemo else { return }

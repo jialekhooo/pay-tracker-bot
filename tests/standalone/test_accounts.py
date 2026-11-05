@@ -509,3 +509,26 @@ def test_old_client_keeps_multiple_times_when_saving_unrelated_preferences(setup
     assert response.status_code==200
     assert response.json()['data']['preferences']['notifications'].get('startLeadMinutes') is None
     assert setup.storage._conn.execute("SELECT count(*) FROM notification_jobs WHERE kind='start' AND status='pending'").fetchone()[0]==1
+
+
+def test_pet_live_shift_and_widget_settings_sync_and_survive_older_apps(setup):
+    session,_=login(setup)
+    data=document()
+    data['preferences']['pet']={'name':'Coco','closet':{'bought':['party-hat'],'spent':40,'outfit':{'hat':'party-hat','background':'mint'}}}
+    data['preferences']['liveShift']={'lockScreen':False,'askFinish':True,'confirmedFinishes':[data['shifts'][0]['id']]}
+    data['preferences']['widgetPreview']={'showPay':True}
+    first=write(setup,session,data)
+    assert first.status_code==200
+    # Another device signed in to the same account sees them.
+    other,_=login(setup)
+    synced=setup.client.get('/v1/data',headers=headers(other)).json()
+    assert synced['data']['preferences']['pet']['closet']['outfit']['hat']=='party-hat'
+    assert synced['data']['preferences']['liveShift']['lockScreen'] is False
+    # An older app version saves without the new settings: they are kept.
+    old=document(); old['shifts']=data['shifts']
+    assert write(setup,other,old,revision=synced['revision']).status_code==200
+    kept=setup.client.get('/v1/data',headers=headers(session)).json()['data']['preferences']
+    assert kept['pet']['name']=='Coco' and kept['widgetPreview']['showPay'] is True
+    # Nonsense values are rejected.
+    bad=document(); bad['preferences']['pet']={'name':'x'*41}
+    assert write(setup,session,bad,revision=kept and setup.client.get('/v1/data',headers=headers(session)).json()['revision']).status_code==422

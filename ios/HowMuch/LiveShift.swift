@@ -7,10 +7,14 @@ import HowMuchCore
 /// HowMuch is opened or its data changes (including from a job notification tap).
 @MainActor
 enum LiveShiftCenter {
+    /// Where 1.1 and earlier kept these choices on the phone; moved into the account on first open.
     static let lockScreenKey = "liveShift.lockScreen"
     static let askFinishKey = "liveShift.askFinish"
-    static var lockScreenEnabled: Bool { !automatedTest && (UserDefaults.standard.object(forKey: lockScreenKey) as? Bool ?? true) }
-    static var askFinishEnabled: Bool { !automatedTest && (UserDefaults.standard.object(forKey: askFinishKey) as? Bool ?? true) }
+    static func legacyConfirmedKey(_ accountID: String) -> String { "liveShift.confirmed.\(accountID)" }
+    /// The signed-in account's live shift choices (synced), as of the last time its records were seen.
+    private static var preferences = LiveShiftPreferences()
+    static var lockScreenEnabled: Bool { !automatedTest && preferences.showsOnLockScreen }
+    static var askFinishEnabled: Bool { !automatedTest && preferences.asksFinishTime }
     /// UI tests use sample shifts that end around launch; a finish question would cover the screens they check.
     private static var automatedTest: Bool {
         #if DEBUG
@@ -23,6 +27,7 @@ enum LiveShiftCenter {
     static var systemAllows: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
 
     static func sync(_ data: TrackerData, accountID: String, now: Date = Date()) {
+        preferences = data.settings.liveShift ?? LiveShiftPreferences()
         let details = data.settings.jobNotifications.showDetails
         let activities = Activity<LiveShiftAttributes>.activities
         activities.forEach(watch)
@@ -138,19 +143,20 @@ enum LiveShiftCenter {
 
     // MARK: Finish-time questions
 
-    private static func confirmedKey(_ accountID: String) -> String { "liveShift.confirmed.\(accountID)" }
-    static func confirmed(accountID: String) -> Set<UUID> {
-        Set((UserDefaults.standard.stringArray(forKey: confirmedKey(accountID)) ?? []).compactMap(UUID.init(uuidString:)))
-    }
-    static func confirm(_ id: UUID, accountID: String) {
-        var saved = UserDefaults.standard.stringArray(forKey: confirmedKey(accountID)) ?? []
-        saved.removeAll { $0 == id.uuidString }; saved.append(id.uuidString)
-        UserDefaults.standard.set(Array(saved.suffix(300)), forKey: confirmedKey(accountID))
+    /// Records the confirmation in the account, so other iPhones don't ask again.
+    @discardableResult
+    static func confirm(_ id: UUID, in store: TrackerStore) -> Bool {
+        store.updatePreferences { settings in
+            var live = settings.liveShift ?? LiveShiftPreferences()
+            live.confirm(id)
+            settings.liveShift = live
+        }
     }
     /// The next ended hourly shift whose actual finishing time hasn't been confirmed.
     static func nextToConfirm(_ data: TrackerData, accountID: String, now: Date = Date()) -> Shift? {
+        preferences = data.settings.liveShift ?? LiveShiftPreferences()
         guard askFinishEnabled else { return nil }
-        return LiveShiftPlanner.awaitingFinish(in: data.shifts, confirmed: confirmed(accountID: accountID), at: now).first
+        return LiveShiftPlanner.awaitingFinish(in: data.shifts, confirmed: preferences.confirmed, at: now).first
     }
 }
 
@@ -217,7 +223,7 @@ struct FinishShiftSheet: View {
                            : "\(length) shorter than booked: \(difference) less."
     }
     private func finishOnTime() {
-        LiveShiftCenter.confirm(shift.id, accountID: store.accountID); dismiss()
+        LiveShiftCenter.confirm(shift.id, in: store); dismiss()
     }
     private func save() {
         do {
@@ -233,12 +239,23 @@ struct FinishShiftSheet: View {
 
 struct LiveShiftSettingsView: View {
     @EnvironmentObject private var store: TrackerStore
-    @AppStorage(LiveShiftCenter.lockScreenKey) private var lockScreen = true
-    @AppStorage(LiveShiftCenter.askFinishKey) private var askFinish = true
+    private var live: LiveShiftPreferences { store.data.settings.liveShift ?? LiveShiftPreferences() }
+    private var lockScreen: Binding<Bool> {
+        Binding(get: { live.showsOnLockScreen }, set: { value in
+            store.updatePreferences { var live = $0.liveShift ?? LiveShiftPreferences(); live.lockScreen = value; $0.liveShift = live }
+            LiveShiftCenter.sync(store.data, accountID: store.accountID)
+            Task { await LiveShiftCenter.reportStart() }
+        })
+    }
+    private var askFinish: Binding<Bool> {
+        Binding(get: { live.asksFinishTime }, set: { value in
+            store.updatePreferences { var live = $0.liveShift ?? LiveShiftPreferences(); live.askFinish = value; $0.liveShift = live }
+        })
+    }
     var body: some View {
         Form {
             Section {
-                Toggle("Show on Lock Screen", isOn: $lockScreen).accessibilityIdentifier("live.lockScreen")
+                Toggle("Show on Lock Screen", isOn: lockScreen).accessibilityIdentifier("live.lockScreen")
                 Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears on its own when the shift starts, even if HowMuch is closed, and stays live through long shifts. Tap +30 min if you're staying late, or Finished on time once it ends. Job names follow your Job notifications privacy setting.")
                     .font(.caption).foregroundStyle(Palette.muted)
                 if !LiveShiftCenter.systemAllows {
@@ -246,15 +263,11 @@ struct LiveShiftSettingsView: View {
                 }
             } header: { Text("Lock Screen") }
             Section {
-                Toggle("Ask what time I finished", isOn: $askFinish).accessibilityIdentifier("live.askFinish")
+                Toggle("Ask what time I finished", isOn: askFinish).accessibilityIdentifier("live.askFinish")
                 Text("After an hourly shift ends, HowMuch asks once whether you finished on time. Staying late updates that shift's pay, including overtime.")
                     .font(.caption).foregroundStyle(Palette.muted)
             } header: { Text("Finish time") }
         }
         .detailStyle("Live shift")
-        .onChange(of: lockScreen) { _, _ in
-            LiveShiftCenter.sync(store.data, accountID: store.accountID)
-            Task { await LiveShiftCenter.reportStart() }
-        }
     }
 }
