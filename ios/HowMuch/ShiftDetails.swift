@@ -20,10 +20,12 @@ struct ShiftDetailView: View {
                             HStack { Text("WORK PAYOUT").font(.caption.weight(.semibold)).tracking(1.3).foregroundStyle(Palette.muted); Spacer(); StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date()) }
                             Text(money(shift.pay, shift.currency)).font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink).minimumScaleFactor(0.6).lineLimit(1)
                             Text("\(PayEngine.rounded(shift.hours)) paid hours · \(shift.fixedPay == nil ? "Hourly" : "Fixed payout")").font(.subheadline).foregroundStyle(Palette.muted)
-                            Button(shift.paid ? "Mark as unpaid" : "Mark as paid", systemImage: shift.paid ? "arrow.uturn.backward" : "checkmark.circle") {
-                                var updated = shift; updated.paid.toggle(); _ = store.save(updated)
-                            }.primaryButton().accessibilityIdentifier("shift.paid").disabled(shift.endDate > Date())
-                            if shift.endDate > Date() { Text("Payment can be marked after this shift ends.").font(.caption).foregroundStyle(Palette.muted) }
+                            // Payment only makes sense once the work is done.
+                            if shift.endDate <= Date() {
+                                Button(shift.paid ? "Mark as unpaid" : "Mark as paid", systemImage: shift.paid ? "arrow.uturn.backward" : "checkmark.circle") {
+                                    var updated = shift; updated.paid.toggle(); _ = store.save(updated)
+                                }.primaryButton().accessibilityIdentifier("shift.paid")
+                            }
                         }
                         Card {
                             Label(shift.startDate.formatted(.dateTime.weekday(.wide).day().month(.wide).year()), systemImage: "calendar").font(.subheadline.weight(.semibold))
@@ -33,7 +35,10 @@ struct ShiftDetailView: View {
                         }
                         if !shift.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Button("Map & directions", systemImage: "map.fill") { directions = true }.glassAction().accessibilityIdentifier("shift.directions")
-                            NavigationLink("Time to leave", destination: TravelDepartureView(shift: shift)).glassAction().accessibilityIdentifier("shift.travel")
+                            if shift.startDate > Date() {
+                                NavigationLink(destination: TravelDepartureView(shift: shift)) { Label("Time to leave", systemImage: "figure.walk.departure") }
+                                    .glassAction().accessibilityIdentifier("shift.travel")
+                            }
                         }
                         let clashes = store.data.shifts.filter { shift.overlaps($0) }
                         if !clashes.isEmpty {

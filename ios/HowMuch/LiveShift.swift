@@ -239,7 +239,7 @@ struct LiveShiftSettingsView: View {
         Form {
             Section {
                 Toggle("Show on Lock Screen", isOn: $lockScreen).accessibilityIdentifier("live.lockScreen")
-                Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears on its own when the shift starts, even if HowMuch is closed, and stays live through long shifts. Job names follow your Job notifications privacy setting.")
+                Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears on its own when the shift starts, even if HowMuch is closed, and stays live through long shifts. Tap +30 min if you're staying late, or Finished on time once it ends. Job names follow your Job notifications privacy setting.")
                     .font(.caption).foregroundStyle(Palette.muted)
                 if !LiveShiftCenter.systemAllows {
                     Text("Live Activities are turned off for HowMuch in iPhone Settings.").font(.caption).foregroundStyle(.orange)
@@ -249,9 +249,9 @@ struct LiveShiftSettingsView: View {
                 Toggle("Ask what time I finished", isOn: $askFinish).accessibilityIdentifier("live.askFinish")
                 Text("After an hourly shift ends, HowMuch asks once whether you finished on time. Staying late updates that shift's pay, including overtime.")
                     .font(.caption).foregroundStyle(Palette.muted)
-            }
+            } header: { Text("Finish time") }
         }
-        .navigationTitle("Live shift")
+        .detailStyle("Live shift")
         .onChange(of: lockScreen) { _, _ in
             LiveShiftCenter.sync(store.data, accountID: store.accountID)
             Task { await LiveShiftCenter.reportStart() }

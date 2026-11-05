@@ -189,7 +189,7 @@ struct HowMuchWidgetContents: View {
             Circle().fill(day.shiftCount > 0 ? jade : .clear).frame(width: 3, height: 3)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(day.date!.formatted(.dateTime.day().month(.wide).year())), \(day.shiftCount) shifts\(today ? ", today" : "")")
+            .accessibilityLabel("\(day.date!.formatted(.dateTime.day().month(.wide).year())), \(counted(day.shiftCount, "shift"))\(today ? ", today" : "")")
     }
     private func month(_ data: WidgetSnapshot) -> some View {
         let code = currency ?? data.preferredCurrency
@@ -201,7 +201,7 @@ struct HowMuchWidgetContents: View {
             Text(showPay ? "Scheduled work pay · \(code)" : "Scheduled paid hours · \(code)").font(.caption).foregroundStyle(.secondary)
             Spacer(minLength: 0)
             HStack {
-                Text("\(summary.shifts.count) shifts").font(.caption.weight(.semibold))
+                Text(counted(summary.shifts.count, "shift")).font(.caption.weight(.semibold))
                 if family != .systemSmall { Spacer(); Text(showPay ? amount(summary.awaitingPayment, code) + " awaiting payment" : "Pay hidden · edit widget to show").font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
             }
             if family != .systemSmall { Text("Work only · claims excluded").font(.caption2).foregroundStyle(.secondary) }
@@ -215,7 +215,6 @@ struct HowMuchWidgetContents: View {
         }
     }
     private func amount(_ value: Decimal, _ currency: String) -> String {
-        let formatter = NumberFormatter(); formatter.numberStyle = .currency; formatter.currencyCode = currency
-        return currency + " " + (formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)")
+        formattedMoney(value, currency)
     }
 }

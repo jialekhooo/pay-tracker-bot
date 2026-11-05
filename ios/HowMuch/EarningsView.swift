@@ -29,7 +29,7 @@ struct EarningsView: View {
             switch filter {
             case "Ongoing": return !done && !upcoming
             case "Upcoming": return items.contains { $0.endDate > Date() }
-            case "Completed, unpaid": return done && items.contains { !$0.paid }
+            case "Unpaid": return done && items.contains { !$0.paid }
             case "Paid out": return done && items.allSatisfy(\.paid)
             default: return true
             }
@@ -45,15 +45,15 @@ struct EarningsView: View {
                 PillPicker(values: ["Day", "Week", "Month", "All time"], selection: $scope, onDark: false)
                 if scope != "All time" { PeriodNavigator(label: periodLabel, dark: false, previous: { move(-1) }, next: { move(1) }) }
                 if store.data.currencies.count > 1 { PillPicker(values: store.data.currencies, selection: $currency, onDark: false) }
-                EarningsHero(shifts: shifts, currency: currency, label: "\(scope.uppercased()) EARNINGS", now: clock.date)
+                EarningsHero(shifts: shifts, currency: currency, label: scope == "All time" ? "ALL-TIME EARNINGS" : "\(scope.uppercased()) EARNINGS", now: clock.date)
                 if scope == "All time" {
                     PillPicker(values: ["Events", "Months"], selection: $grouping)
                     if grouping == "Events" {
-                        PillPicker(values: ["All events", "Ongoing", "Upcoming", "Completed, unpaid", "Paid out"], selection: $filter)
+                        PillPicker(values: ["All events", "Ongoing", "Upcoming", "Unpaid", "Paid out"], selection: $filter)
                         if filter == "Upcoming" {
                             UpcomingGroupingControl()
                             HStack {
-                                SectionHeading(title: "Upcoming work", detail: "\(shifts.filter { $0.endDate > Date() }.count) shifts")
+                                SectionHeading(title: "Upcoming work", detail: counted(shifts.filter { $0.endDate > Date() }.count, "shift"))
                                 Button { upcomingAscending.toggle() } label: { Image(systemName: upcomingAscending ? "arrow.up" : "arrow.down") }.iconAction().accessibilityLabel(upcomingAscending ? "Earliest first" : "Latest first")
                             }
                             UpcomingWorkList(shifts: shifts.filter { $0.endDate > Date() }, ascending: upcomingAscending)
@@ -73,7 +73,7 @@ struct EarningsView: View {
                                         Image(systemName: "calendar").foregroundStyle(Palette.teal)
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(TrackerCalendar.localDate(month + "-01")?.formatted(.dateTime.month(.wide).year()) ?? month).font(.headline)
-                                            Text("\(records.count) shifts · \(PayEngine.rounded(records.reduce(0) { $0 + $1.hours }))h").font(.caption).foregroundStyle(Palette.muted)
+                                            Text("\(counted(records.count, "shift")) · \(PayEngine.rounded(records.reduce(0) { $0 + $1.hours }))h").font(.caption).foregroundStyle(Palette.muted)
                                         }
                                         Spacer()
                                         Text(money(records.reduce(0) { $0 + $1.pay }, currency)).font(.subheadline.bold())

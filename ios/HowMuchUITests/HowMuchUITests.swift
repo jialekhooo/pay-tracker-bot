@@ -166,7 +166,7 @@ final class HowMuchUITests: XCTestCase {
         openShift("Roadshow", in: app)
         let breakdown = app.buttons["Pay breakdown"]
         tapTrailingArea(breakdown, in: app)
-        XCTAssertTrue(app.staticTexts["Hourly Rate, $20.00/h"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Hourly Rate, SGD 20.00/h"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Paid hours, 8"].exists)
         XCTAssertTrue(app.staticTexts["Break, 60 min · unpaid"].exists)
         XCTAssertFalse(app.staticTexts["Pay type"].exists)
@@ -178,9 +178,9 @@ final class HowMuchUITests: XCTestCase {
         amount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (amount.value as? String ?? "").count)); amount.typeText("200")
         app.buttons["Save"].tap()
         XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5))
-        if !app.staticTexts["Lump Sum Rate, $200.00"].exists { tapTrailingArea(breakdown, in: app) }
-        XCTAssertTrue(app.staticTexts["Lump Sum Rate, $200.00"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["Hourly Rate, $20.00/h"].exists)
+        if !app.staticTexts["Lump Sum Rate, SGD 200.00"].exists { tapTrailingArea(breakdown, in: app) }
+        XCTAssertTrue(app.staticTexts["Lump Sum Rate, SGD 200.00"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Hourly Rate, SGD 20.00/h"].exists)
         attach("Lump sum pay breakdown", app: app)
         tapTrailingArea(app.buttons["View event earnings"], in: app)
         XCTAssertTrue(app.scrollViews["event.detail"].waitForExistence(timeout: 5))
@@ -340,7 +340,7 @@ final class HowMuchUITests: XCTestCase {
         let result = app.staticTexts.matching(identifier: "Editor design QA").allElementsBoundByIndex.last!
         XCTAssertTrue(result.waitForExistence(timeout: 5)); result.tap()
         XCTAssertTrue(app.navigationBars["Editor design QA"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["$200.00"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["SGD 200.00"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["Edit"].tap()
         XCTAssertTrue(app.textFields["Event name"].waitForExistence(timeout: 5))
         let editedAmount = app.textFields["shift.amount"]; reveal(editedAmount, in: app)
@@ -348,7 +348,7 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertEqual(editedAmount.value as? String, "200")
         editedAmount.tap(); editedAmount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3)); editedAmount.typeText("250")
         app.buttons["Save"].tap()
-        XCTAssertTrue(app.staticTexts["$250.00"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["SGD 250.00"].firstMatch.waitForExistence(timeout: 5))
     }
     @MainActor
     func testShiftAndClaimSurviveRelaunch() {
@@ -461,7 +461,7 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(months.isSelected)
         attach("Earnings by month", app: app)
         app.buttons["nav.settings"].tap()
-        XCTAssertTrue(app.staticTexts["Calendar & sync"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Apple Calendar"].waitForExistence(timeout: 5))
         attach("Settings", app: app)
     }
     @MainActor
@@ -500,7 +500,7 @@ final class HowMuchUITests: XCTestCase {
         let destinations = [
             ("Pay & breaks", "Pay & breaks"),
             ("Job notifications", "Job notifications"),
-            ("Calendar & sync", "Calendar & sync"),
+            ("Apple Calendar", "Apple Calendar"),
             ("Data & backups", "Data & backups"),
             ("Account & sync", "Account & sync"),
             ("Payment detection", "Payment detection")
@@ -548,7 +548,7 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
         app.buttons["nav.settings"].tap()
-        for title in ["Pay & breaks", "Job notifications", "Calendar & sync", "Data & backups", "Account & sync", "Payment detection"] {
+        for title in ["Pay & breaks", "Job notifications", "Apple Calendar", "Data & backups", "Account & sync", "Payment detection"] {
             let label = app.staticTexts[title].firstMatch
             reveal(label, in: app)
             XCTAssertTrue(label.isHittable)
@@ -676,7 +676,7 @@ final class HowMuchUITests: XCTestCase {
         app.navigationBars["Brand launch"].buttons.firstMatch.tap()
         let updatedTotal = app.staticTexts["earnings.total"].firstMatch.label
         XCTAssertNotEqual(updatedTotal, initialTotal)
-        XCTAssertTrue(app.staticTexts["$999.00"].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["SGD 999.00"].firstMatch.exists)
         tapTrailingArea(cards.firstMatch, in: app)
         tapTrailingArea(app.buttons["Delete shift"], in: app)
         app.sheets.buttons["Delete shift"].tap()
@@ -688,7 +688,7 @@ final class HowMuchUITests: XCTestCase {
         let before = try XCTUnwrap(Decimal(string: updatedTotal.filter { $0.isNumber || $0 == "." }))
         let after = try XCTUnwrap(Decimal(string: total.label.filter { $0.isNumber || $0 == "." }))
         XCTAssertEqual(after, before - 999)
-        XCTAssertFalse(app.staticTexts["$999.00"].firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["SGD 999.00"].firstMatch.exists)
         attach("Monthly earnings updates after edit and deletion", app: app)
     }
     @MainActor
@@ -770,11 +770,11 @@ final class HowMuchUITests: XCTestCase {
             XCTAssertTrue(app.navigationBars["Data & backups"].waitForExistence(timeout: 5))
         }
         app.navigationBars.buttons.firstMatch.tap()
-        tapTrailingArea(app.staticTexts["Calendar & sync"], in: app)
+        tapTrailingArea(app.staticTexts["Apple Calendar"], in: app)
         tapTrailingArea(app.buttons["calendar.exportICS"], in: app)
         XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["Cancel"].firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["Calendar & sync"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Apple Calendar"].waitForExistence(timeout: 5))
     }
     @MainActor
     func testEditDuplicateDeleteAndCalendarEditor() {
@@ -1185,7 +1185,11 @@ final class HowMuchUITests: XCTestCase {
             let option = app.switches["notifications.start.\(minutes)"]
             reveal(option, in: app)
             XCTAssertTrue(option.isHittable)
-            if option.value as? String != "1" { option.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+            // A slow simulator can drop the first tap; wait for the switch, and try once more if it didn't turn on.
+            for _ in 0..<2 where option.value as? String != "1" {
+                option.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+                _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '1'"), object: option)], timeout: 2)
+            }
             XCTAssertEqual(option.value as? String, "1")
         }
         tapTrailingArea(app.buttons["notifications.save"], in: app)
@@ -1231,7 +1235,7 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["QA cab ride updated"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "claim.actions.")).count, 1)
         XCTAssertTrue(app.buttons[identity].exists, "Editing must keep the existing claim identity")
-        XCTAssertTrue(app.staticTexts["$178.75"].exists)
+        XCTAssertTrue(app.staticTexts["SGD 178.75"].exists)
         attach("Updated cab reimbursement", app: app)
         reveal(app.buttons[identity], in: app); app.buttons[identity].tap(); app.buttons["Delete claim"].tap()
         app.buttons["Delete claim"].tap()

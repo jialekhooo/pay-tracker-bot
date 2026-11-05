@@ -15,9 +15,9 @@ public enum SpokenSummary {
         let done = items.filter { $0.endDate <= now }, booked = items.filter { $0.endDate > now }
         let opening = name.prefix(1).uppercased() + name.dropFirst()
         if done.isEmpty {
-            return "You haven't finished a shift \(name) yet. \(total(booked)) is booked across \(count(booked.count, "shift"))."
+            return "You haven't finished a shift \(name) yet. \(total(booked)) is booked across \(counted(booked.count, "shift"))."
         }
-        var text = "\(opening) you've earned \(total(done)) from \(count(done.count, "shift"))"
+        var text = "\(opening) you've earned \(total(done)) from \(counted(done.count, "shift"))"
         text += booked.isEmpty ? "." : ", with \(total(booked)) more booked."
         return text
     }
@@ -28,7 +28,7 @@ public enum SpokenSummary {
         guard !unpaid.isEmpty else { return "Nothing is owed. Every finished shift is marked paid." }
         let today = Shift.dayString(now)
         let overdue = unpaid.filter { ($0.paymentDue ?? "9999-12-31") < today }
-        var text = "You're owed \(total(unpaid)) for \(count(unpaid.count, "shift"))."
+        var text = "You're owed \(total(unpaid)) for \(counted(unpaid.count, "shift"))."
         if !overdue.isEmpty {
             let oldest = overdue.min { ($0.paymentDue ?? "", $0.day) < ($1.paymentDue ?? "", $1.day) }!
             text += " \(total(overdue)) of it is overdue, the oldest from \(oldest.event)."
@@ -55,5 +55,20 @@ public enum SpokenSummary {
         return currency + " " + (formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)")
     }
 
-    private static func count(_ value: Int, _ noun: String) -> String { "\(value) \(noun)\(value == 1 ? "" : "s")" }
+}
+
+/// "1 shift", "3 shifts": a count with its noun in the right number.
+public func counted(_ value: Int, _ noun: String, plural: String? = nil) -> String {
+    "\(value) " + (value == 1 ? noun : plural ?? noun + "s")
+}
+
+/// "SGD 1,664.00": the currency code, then the amount with cents. Used across the app, widgets and Live Activity
+/// so an amount never reads as a bare "$" that could be any dollar.
+public func formattedMoney(_ value: Decimal, _ currency: String, locale: Locale = .current) -> String {
+    let formatter = NumberFormatter()
+    formatter.locale = locale
+    formatter.numberStyle = .decimal
+    formatter.minimumFractionDigits = 2
+    formatter.maximumFractionDigits = 2
+    return currency + " " + (formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)")
 }

@@ -43,7 +43,7 @@ struct WorkCalendarView: View {
                                     .foregroundStyle(chosen ? .white : today ? Palette.teal : Palette.ink)
                                     .background(chosen ? Palette.teal : today ? Palette.mint : .clear, in: RoundedRectangle(cornerRadius: 12))
                                     .contentShape(Rectangle())
-                            }.buttonStyle(.plain).accessibilityLabel("\(date.formatted(.dateTime.day().month(.wide).year())), \(items.count) shifts")
+                            }.buttonStyle(.plain).accessibilityLabel("\(date.formatted(.dateTime.day().month(.wide).year())), \(counted(items.count, "shift"))")
                                 .accessibilityIdentifier("calendar.day.\(key)").accessibilityAddTraits(chosen ? .isSelected : [])
                         } else { Color.clear.frame(height: 40) }
                     }
@@ -52,11 +52,11 @@ struct WorkCalendarView: View {
                 HStack(spacing: 6) { Circle().fill(Palette.teal).frame(width: 5, height: 5); Text("Booked shift"); Spacer(); Circle().fill(.orange).frame(width: 5, height: 5); Text("Overlapping") }.font(.system(size: 10)).foregroundStyle(Palette.muted)
             }
             HStack {
-                Text("\(monthShifts.count) shifts this month").font(.caption).foregroundStyle(Palette.muted)
+                Text("\(counted(monthShifts.count, "shift")) this month").font(.caption).foregroundStyle(Palette.muted)
                 Spacer()
                 NavigationLink { CalendarSettingsView() } label: { Label("Export", systemImage: "square.and.arrow.up").font(.caption.bold()) }.accessibilityIdentifier("calendar.export")
             }
-            SectionHeading(title: selected.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)), detail: "\(selectedShifts.count) shifts")
+            SectionHeading(title: selected.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)), detail: counted(selectedShifts.count, "shift"))
             if selectedShifts.isEmpty { EmptyCard(title: "A day with possibilities", message: "No shifts booked for this date.") }
             else { ShiftCards(shifts: selectedShifts) }
             Button("Add shift on this day", systemImage: "plus") { adding = true }.primaryButton().accessibilityIdentifier("calendar.add")

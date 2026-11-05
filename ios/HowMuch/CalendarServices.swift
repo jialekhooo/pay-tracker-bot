@@ -54,9 +54,9 @@ struct CalendarSettingsView: View {
         Form {
             Section {
                 Label("Your work calendar", systemImage: "calendar.badge.clock").font(.headline)
-                Text("The Calendar tab shows every local shift. Tap any shift to add it directly to Apple Calendar, or export a calendar file below.").font(.subheadline).foregroundStyle(Palette.muted)
+                Text("Tap any shift to add it to Apple Calendar, export a calendar file below, or create a calendar link that stays up to date.").font(.subheadline).foregroundStyle(Palette.muted)
             }
-            Section("Export local shifts") {
+            Section("Export shifts") {
                 Picker("Include", selection: $scope) { Text("Upcoming").tag("Upcoming"); Text("This month").tag("This month"); Text("All shifts").tag("All shifts") }
                 Button("Export calendar (.ics)", systemImage: "square.and.arrow.up") {
                     let shifts = store.data.shifts.filter { shift in
@@ -64,7 +64,7 @@ struct CalendarSettingsView: View {
                     }
                     document = TextFile(CalendarExport.encode(shifts)); export = true
                 }.rowAction().accessibilityIdentifier("calendar.exportICS")
-                Text("Open the .ics file from Files to import it into your calendar. This is a snapshot; later local edits require a new export.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Open the .ics file from Files to add it to your calendar. The file is a one-time copy, so export again after changing shifts.").font(.caption).foregroundStyle(Palette.muted)
             }
             Section("Your account’s calendar subscription") {
                 if let link, let url = URL(string: link) {
@@ -80,7 +80,7 @@ struct CalendarSettingsView: View {
                 Text("This feed contains your signed-in account’s synced shifts and updates as its records change. Anyone with the link can read the schedule; replacing it invalidates the previous link.").font(.caption).foregroundStyle(Palette.muted)
                 if !linkMessage.isEmpty { Text(linkMessage).font(.caption).foregroundStyle(Palette.muted) }
             }
-        }.detailStyle("Calendar & sync")
+        }.detailStyle("Apple Calendar")
             .fileExporter(isPresented: $export, document: document, contentType: .calendarEvent, defaultFilename: "howmuch-shifts.ics") { result in if case .failure(let error) = result { store.error = error.localizedDescription } }
             .onAppear { if let id = auth.account?.id { link = AccountVault.read("calendar." + id, as: String.self) } }
             .confirmationDialog("Create a new private link? Any previous subscription link will stop working.", isPresented: $rotateLink, titleVisibility: .visible) {

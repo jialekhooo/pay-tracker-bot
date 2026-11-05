@@ -258,9 +258,10 @@ final class TrackerStore: ObservableObject {
 private struct SyncMetadata: Codable { let revision: Int; let data: TrackerData }
 private struct LegacyImport: Codable { let accountID: String; let complete: Bool }
 
-func money(_ value: Decimal, _ currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = currency
-    return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(currency) \(value)"
+func money(_ value: Decimal, _ currency: String) -> String { formattedMoney(value, currency) }
+
+/// "13h 28m" (or "8h") rather than a decimal like "13.47h".
+func hoursText(_ hours: Decimal) -> String {
+    let minutes = Int((NSDecimalNumber(decimal: hours).doubleValue * 60).rounded())
+    return minutes % 60 == 0 ? "\(minutes / 60)h" : "\(minutes / 60)h \(minutes % 60)m"
 }

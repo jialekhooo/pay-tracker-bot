@@ -37,7 +37,7 @@ struct SettingsView: View {
                 Divider()
                 settingsRow("Live shift", "Lock Screen timer · confirm finish time", "timer") { LiveShiftSettingsView() }
                 Divider()
-                settingsRow("Calendar & sync", "Apple Calendar · subscription · export", "calendar") { CalendarSettingsView() }
+                settingsRow("Apple Calendar", "Add shifts · calendar link · export", "calendar") { CalendarSettingsView() }
                 Divider()
                 settingsRow("Data & backups", "CSV import · export · restore", "square.and.arrow.down") { DataToolsView() }
             }
@@ -233,12 +233,12 @@ struct DataToolsView: View {
                 do {
                     let url = try result.get()
                     if archiveImport { pending = try store.readArchive(url); restore = true }
-                    else { let report = try store.importCSV(url); message = "Imported \(report.added) shifts; skipped \(report.skipped) repeats." }
+                    else { let report = try store.importCSV(url); message = "Imported \(counted(report.added, "shift")); skipped \(counted(report.skipped, "repeat"))." }
                 } catch { if (error as NSError).code != NSUserCancelledError { store.error = error.localizedDescription } }
             }
             .fileExporter(isPresented: $exporting, document: document, contentType: exportType, defaultFilename: exportType == .json ? "howmuch-archive" : "howmuch-shifts") { result in if case .failure(let error) = result { store.error = error.localizedDescription } }
             .confirmationDialog("Replace all current records? Export a full archive first to keep a copy.", isPresented: $restore, titleVisibility: .visible) {
-                Button("Restore \(pending?.shifts.count ?? 0) shifts", role: .destructive) { if let pending, store.update({ $0 = pending }) { message = "Archive restored." }; pending = nil }
+                Button("Restore \(counted(pending?.shifts.count ?? 0, "shift"))", role: .destructive) { if let pending, store.update({ $0 = pending }) { message = "Archive restored." }; pending = nil }
                 Button("Cancel", role: .cancel) { pending = nil }
             }
             .confirmationDialog("Import the earlier beta’s work records into this Apple account?", isPresented: $legacyImport, titleVisibility: .visible) {

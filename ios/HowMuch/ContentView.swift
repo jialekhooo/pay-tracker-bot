@@ -109,7 +109,8 @@ struct ContentView: View {
     private func nav(_ name: String, _ icon: String) -> some View {
         Button { tab = name } label: {
             VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 19, weight: tab == name ? .semibold : .regular))
+                // A fixed icon box keeps every label on the same line, whatever the symbol's height.
+                Image(systemName: icon).font(.system(size: 19, weight: tab == name ? .semibold : .regular)).frame(height: 22)
                 Text(name).font(.system(size: 9, weight: tab == name ? .bold : .medium)).lineLimit(1)
             }.foregroundStyle(tab == name ? Palette.teal : Palette.muted)
                 .frame(maxWidth: .infinity, minHeight: 48).contentShape(Capsule())
@@ -142,20 +143,27 @@ struct DashboardView: View {
                 if period == "All time" {
                 HStack(spacing: 12) {
                     NavigationLink { ShiftBrowser(mode: "Worked this month") } label: {
-                        GlanceCard(title: "Worked this month", value: "\(workedHours(clock.date))h", symbol: "clock")
+                        GlanceCard(title: "Worked this month", value: hoursText(workedHours(clock.date)), symbol: "clock")
                     }
                     NavigationLink { ShiftBrowser(mode: "Upcoming shifts") } label: {
                         let next = store.data.shifts.filter { $0.currency == currency && $0.endDate > clock.date && $0.day.hasPrefix(String(Shift.dayString(clock.date).prefix(7))) }
-                        GlanceCard(title: "Upcoming shifts", value: money(next.reduce(0) { $0 + $1.pay - $1.earned(at: clock.date) }, currency), symbol: "arrow.up.right")
+                        GlanceCard(title: "Left to earn this month", value: money(next.reduce(0) { $0 + $1.pay - $1.earned(at: clock.date) }, currency), symbol: "arrow.up.right")
                     }.accessibilityIdentifier("overview.upcoming")
                 }.buttonStyle(.plain)
+                // Today first: what's on now or later today (including an overnight shift that started yesterday).
+                let todayShifts = store.data.shifts.filter { $0.day == Shift.dayString(clock.date) || ($0.startDate <= clock.date && clock.date < $0.endDate) }
+                    .sorted { $0.startDate < $1.startDate }
+                if !todayShifts.isEmpty {
+                    SectionHeading(title: "Today", detail: clock.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                    ShiftCards(shifts: todayShifts)
+                }
                 let tomorrow = TrackerCalendar.calendar.date(byAdding: .day, value: 1, to: clock.date)!
                 SectionHeading(title: "Tomorrow", detail: tomorrow.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
                 let tomorrowShifts = store.data.shifts.filter { $0.day == Shift.dayString(tomorrow) }.sorted { $0.startMinute < $1.startMinute }
                 if tomorrowShifts.isEmpty { EmptyCard(message: "Nothing booked for tomorrow. Your next opportunity is ahead.") }
                 else { UpcomingWorkList(shifts: tomorrowShifts) }
                 } else {
-                    SectionHeading(title: month.formatted(.dateTime.month(.wide)), detail: "\(shifts.count) shifts")
+                    SectionHeading(title: month.formatted(.dateTime.month(.wide)), detail: counted(shifts.count, "shift"))
                     if shifts.isEmpty { EmptyCard(title: "No shifts this month", message: "Browse another month or add your first shift.") }
                     else { ShiftCards(shifts: shifts.sorted { $0.startDate < $1.startDate }) }
                 }
@@ -197,7 +205,7 @@ struct EarningsHero: View {
             }
             Text(money(total, currency)).font(.system(size: 40, weight: .bold, design: .rounded)).tracking(-1.5)
                 .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink).accessibilityIdentifier("earnings.total")
-            Text("\(PayEngine.rounded(shifts.reduce(0) { $0 + $1.hours })) hours · \(shifts.count) shifts")
+            Text("\(PayEngine.rounded(shifts.reduce(0) { $0 + $1.hours })) hours · \(counted(shifts.count, "shift"))")
                 .font(.caption).foregroundStyle(Palette.muted)
             Divider().overlay(Palette.line)
             HStack {
@@ -244,7 +252,7 @@ struct ShiftsView: View {
             VStack(spacing: 16) {
                 PillPicker(values: ["All", "Upcoming", "Unpaid"], selection: $filter)
                 UpcomingGroupingControl()
-                HStack { Text("\(shifts.count) shifts").font(.caption).foregroundStyle(Palette.muted); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.caption) }
+                HStack { Text(counted(shifts.count, "shift")).font(.caption).foregroundStyle(Palette.muted); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.caption) }
                 if shifts.isEmpty { EmptyCard(title: "No shifts here", message: "Try another search or add a new shift.") }
                 else if filter == "Upcoming" { UpcomingWorkList(shifts: shifts, ascending: ascending) }
                 else if store.data.settings.groupUpcomingByEvent ?? false { groupedCards }
@@ -307,7 +315,7 @@ struct ShiftBrowser: View {
                     PillPicker(values: ["Tomorrow", "7 days", "14 days", "30 days", "All time"], selection: $range)
                     UpcomingGroupingControl()
                 }
-                HStack { Text("\(shifts.count) shifts").font(.caption); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.caption) }
+                HStack { Text(counted(shifts.count, "shift")).font(.caption); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.caption) }
                 if mode == "Upcoming shifts" { UpcomingWorkList(shifts: shifts, ascending: ascending) }
                 else if shifts.isEmpty { EmptyCard() } else { ShiftCards(shifts: shifts) }
             }.padding(20)

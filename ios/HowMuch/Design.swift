@@ -59,7 +59,9 @@ struct ScreenShell<Content: View>: View {
     @EnvironmentObject private var store: TrackerStore
     @State private var search = false
     var body: some View {
-        VStack(spacing: 4) {
+        // The header scrolls away with the page so content gets the whole screen.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("HOWMUCH").font(.system(size: 10, weight: .bold)).tracking(2.2).opacity(0.65)
@@ -73,12 +75,10 @@ struct ScreenShell<Content: View>: View {
                     }.accessibilityLabel("Search shifts")
                     NavigationLink { ProfileSettingsView() } label: { ProfileAvatar(size: 38).frame(width: 46, height: 46).contentShape(Circle()).glassChrome(in: Circle()) }
                         .accessibilityLabel("Profile settings")
-                }.foregroundStyle(Palette.ink).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 14)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) { content }
-                        .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 24)
-                }.scrollIndicators(.hidden).clipped()
-        }
+                }.foregroundStyle(Palette.ink).padding(.top, 10)
+                content
+            }.padding(.horizontal, 20).padding(.bottom, 24)
+        }.scrollIndicators(.hidden)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $search) { NavigationStack { ShiftsView().toolbar { Button("Done") { search = false } } } }
     }
@@ -128,6 +128,8 @@ struct PillPicker: View {
                 }
             }
         }.scrollIndicators(.hidden)
+            // Pills scroll out to the screen edge instead of being cut off at the card margin.
+            .scrollClipDisabled()
     }
 }
 
@@ -174,7 +176,7 @@ struct ShiftRow: View {
             HStack {
                 StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date())
                 Spacer()
-                Text("\(PayEngine.rounded(shift.hours))h paid").font(.caption).foregroundStyle(Palette.muted)
+                Text(hoursText(shift.hours) + " paid time").font(.caption).foregroundStyle(Palette.muted)
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.muted)
             }
             if store.data.shifts.contains(where: { shift.overlaps($0) }) {

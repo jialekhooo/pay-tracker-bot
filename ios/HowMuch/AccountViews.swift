@@ -172,7 +172,7 @@ struct AccountConflictView: View {
     private func version(_ title: String, _ data: TrackerData) -> some View {
         Card {
             Text(title).font(.headline)
-            Text("\(data.shifts.count) shifts · \(data.claims.count) claims").font(.caption).foregroundStyle(Palette.muted)
+            Text("\(counted(data.shifts.count, "shift")) · \(counted(data.claims.count, "claim"))").font(.caption).foregroundStyle(Palette.muted)
             ForEach(Array(Set(data.shifts.map(\.currency))).sorted(), id: \.self) { currency in
                 Text(money(data.shifts.filter { $0.currency == currency }.reduce(0) { $0 + $1.pay }, currency)).font(.subheadline.bold())
             }
