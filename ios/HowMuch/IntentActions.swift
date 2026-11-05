@@ -95,16 +95,18 @@ struct OwedIntent: AppIntent {
 /// unpaid event total matches exactly; otherwise the payment waits in Pay-in tracking.
 struct RecordPayReceivedIntent: AppIntent {
     static var title: LocalizedStringResource = "Record pay received"
-    static var description = IntentDescription("Matches money received, from a bank notification or its text, against your unpaid jobs. Payments from saved payers are marked paid or kept for you to check in Pay-in tracking.")
-    @Parameter(title: "Notification text", description: "The bank notification's text, e.g. the Notification's Body from the automation.") var text: String
-    @Parameter(title: "Amount", description: "Optional. Fill in when a model step has read the amount.") var amount: Double?
-    @Parameter(title: "From", description: "Optional. Who sent the money, when a model step has read it.") var payer: String?
+    static var description = IntentDescription("Give it your bank app's notification. When it says money came in from someone who pays you, HowMuch matches it to your unpaid jobs. Other notifications are ignored.")
+    /// The whole notification works: HowMuch reads the amount and who sent it from the title and message.
+    @Parameter(title: "Notification", description: "Pick the Notification variable from the automation.") var text: String
+    @Parameter(title: "Amount", description: "Optional. Only needed if HowMuch can't read your bank's wording.") var amount: Double?
+    @Parameter(title: "From", description: "Optional. Who sent the money, if HowMuch can't read it.") var payer: String?
     static var parameterSummary: some ParameterSummary { Summary("Record pay received from \(\.$text)") { \.$amount; \.$payer } }
 
+    /// Runs quietly: a matched payment posts its own HowMuch notification, and everything else
+    /// (codes, card spending, promotions) is ignored without a pop-up every time.
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
-        let message = try await IntentActions.recordPayReceived(text: text, amount: amount, payer: payer)
-        return .result(dialog: IntentDialog(stringLiteral: message))
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        .result(value: try await IntentActions.recordPayReceived(text: text, amount: amount, payer: payer))
     }
 }
 
@@ -149,6 +151,9 @@ struct HowMuchShortcuts: AppShortcutsProvider {
             "How much is owed to me in \(.applicationName)",
             "\(.applicationName) unpaid pay",
         ], shortTitle: "Owed to me", systemImageName: "hourglass")
+        AppShortcut(intent: RecordPayReceivedIntent(), phrases: [
+            "Record pay received in \(.applicationName)",
+        ], shortTitle: "Record pay received", systemImageName: "banknote")
         AppShortcut(intent: AddJobIntent(), phrases: [
             "Add a job in \(.applicationName)",
             "Add a shift in \(.applicationName)",

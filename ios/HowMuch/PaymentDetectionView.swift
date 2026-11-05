@@ -277,40 +277,64 @@ private struct PayInStatus: Decodable {
 /// Step-by-step setup for the iOS 27 Shortcuts automation that runs on bank app notifications.
 struct BankNotificationsGuide: View {
     @State private var copied = false
-    static let prompt = "If this notification says money was received, reply with only the amount as a number. Otherwise reply 0."
     var body: some View {
-        Form {
-            Section {
-                Text("When your bank app tells you money came in, HowMuch can mark the matching job paid. It reads the notification on your iPhone; notifications that aren't pay are ignored.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("When your bank app says money came in, HowMuch marks the matching job paid. It takes one automation in the Shortcuts app, about a minute to set up.")
                     .font(.subheadline).foregroundStyle(Palette.muted)
-            }
-            Section("Before you start") {
-                step(1, "Save who pays you", "On each event, choose Paid by and save the company name as it appears in your bank app, e.g. REFIX PTE. LTD.")
-                step(2, "Turn on bank notifications", "In your bank app (e.g. DBS digibank), turn on notifications for incoming transfers and PayNow.")
-            }
-            Section("Create the automation (iOS 27)") {
-                step(3, "Open Shortcuts → Automation → +", "Choose Notification, pick your bank app, and select Run Immediately.")
-                step(4, "Add the HowMuch action", "Search for Record pay received and add it. Set Notification text to the notification's Body.")
-                step(5, "Done", "Pay from a saved payer now shows up in Pay-in tracking. Turn on Mark matching pay as paid to mark exact matches automatically.")
-            }
-            Section("Optional: other banks' wording") {
-                Text("If HowMuch doesn't recognise your bank's wording, add Apple Intelligence's Use Model action before Record pay received with this request, and pass its result as Amount:").font(.caption).foregroundStyle(Palette.muted)
-                Text(Self.prompt).font(.callout).textSelection(.enabled)
-                Button(copied ? "Copied" : "Copy request", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = Self.prompt; copied = true }.rowAction()
-            }
-            Section {
-                Link(destination: URL(string: "shortcuts://")!) { Label("Open Shortcuts", systemImage: "square.2.layers.3d") }
-            }
+
+                group("Before you start", [
+                    ("building.2", "Save who pays you", "On a job, set Paid by to the company name as your bank shows it, e.g. REFIX PTE. LTD."),
+                    ("bell.badge", "Allow your bank's notifications", "In your bank app, turn on alerts for incoming transfers and PayNow."),
+                ])
+
+                group("Create the automation (iOS 27)", [
+                    ("square.2.layers.3d", "Open Shortcuts", "Tap Automation at the bottom, then +."),
+                    ("app.badge", "Choose Notification", "Under When, tap App, pick your bank app (e.g. digibank) and tap Done."),
+                    ("line.3.horizontal.decrease", "Only money coming in", "Tap Add Filter, choose Message, set it to contains, and type received. Codes and card alerts then never run it."),
+                    ("bolt", "Run Immediately", "Choose Run Immediately, then tap Next."),
+                    ("plus.square", "Add HowMuch's action", "Tap New Blank Automation, search HowMuch and tap Record pay received."),
+                    ("text.bubble", "Give it the notification", "Tap the Notification field in the action and choose the Notification variable. Tap Done. That's it."),
+                ])
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Filter word").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    HStack {
+                        Text("received").font(.body.monospaced())
+                        Spacer()
+                        Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = "received"; copied = true }
+                            .font(.subheadline.weight(.semibold)).buttonStyle(.borderless)
+                    }
+                }.padding(14).background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 16))
+
+                group("What happens next", [
+                    ("checkmark.seal", "Pay comes in", "You get a HowMuch notification, and the payment shows in Pay-in tracking to check."),
+                    ("wand.and.stars", "Hands-free", "Turn on Mark matching pay as paid in Pay-in tracking, and exact matches from saved payers are marked paid for you."),
+                ])
+
+                Link(destination: URL(string: "shortcuts://")!) { Text("Open Shortcuts").frame(maxWidth: .infinity) }.primaryButton()
+                Text("Needs iOS 27. If your bank words its alerts differently, the payment still shows up in Pay-in tracking for you to check.")
+                    .font(.caption).foregroundStyle(Palette.muted)
+            }.padding(.horizontal, 20).padding(.vertical, 12)
         }.detailStyle("Bank notifications")
     }
-    private func step(_ number: Int, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 26, height: 26).background(Palette.teal, in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.caption).foregroundStyle(Palette.muted)
-            }
-        }.padding(.vertical, 4)
+    private func group(_ title: String, _ steps: [(String, String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                    if index > 0 { Divider().padding(.leading, 44) }
+                    HStack(alignment: .top, spacing: 12) {
+                        Text("\(index + 1)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 28, height: 28).background(Palette.teal, in: Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Label(step.1, systemImage: step.0).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                            Text(step.2).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }.padding(.vertical, 10).accessibilityElement(children: .combine)
+                }
+            }.padding(.horizontal, 14).padding(.vertical, 2).background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 16))
+        }
     }
 }
 
