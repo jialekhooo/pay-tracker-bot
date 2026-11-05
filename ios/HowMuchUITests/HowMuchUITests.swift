@@ -447,6 +447,10 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.textFields["pet.name"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["pet.name"].value as? String, "Penny")
         attach("Pet page", app: app)
+        let missions = app.staticTexts["This week's missions"]
+        reveal(missions, in: app)
+        XCTAssertTrue(missions.exists)
+        attach("Pet stats and missions", app: app)
         // Buy and wear a party hat with the demo's coins, then try on a background.
         let partyHat = app.buttons["pet.item.party-hat"]
         reveal(partyHat, in: app)
@@ -456,7 +460,7 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(buy.waitForExistence(timeout: 5))
         buy.tap()
         XCTAssertTrue(partyHat.staticTexts["Wearing"].waitForExistence(timeout: 5))
-        app.buttons["Backgrounds"].tap()
+        app.buttons["Scenes"].tap()
         let mint = app.buttons["pet.item.mint"]
         XCTAssertTrue(mint.waitForExistence(timeout: 5))
         attach("Pet in a party hat", app: app)
@@ -765,6 +769,8 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertNotEqual(updatedTotal, initialTotal)
         XCTAssertTrue(app.staticTexts["SGD 999.00"].firstMatch.exists)
         tapTrailingArea(cards.firstMatch, in: app)
+        reveal(app.buttons["Delete shift"], in: app)
+        attach("Shift details with the delete button", app: app)
         tapTrailingArea(app.buttons["Delete shift"], in: app)
         app.sheets.buttons["Delete shift"].tap()
         // Offscreen cards are omitted from SwiftUI's accessibility tree. Verify

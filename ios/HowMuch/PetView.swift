@@ -1,535 +1,491 @@
 import SwiftUI
 import HowMuchCore
 
-private let gold = Color(red: 0.97, green: 0.78, blue: 0.29)
-private let goldDeep = Color(red: 0.84, green: 0.6, blue: 0.13)
-private let goldLight = Color(red: 1.0, green: 0.9, blue: 0.55)
-private let jade = Color(red: 0.2, green: 0.6, blue: 0.47)
-private let shell = Color(red: 0.86, green: 0.95, blue: 0.9)
+// MARK: - Colours
 
-/// Penny's coin colours. The classic gold, or a special skin.
+enum PetPalette {
+    static let outline = Color(red: 0.13, green: 0.20, blue: 0.22)
+    static let cheek = Color(red: 1.0, green: 0.62, blue: 0.62)
+    static let leaf = Color(red: 0.30, green: 0.70, blue: 0.32)
+    static let leafDark = Color(red: 0.18, green: 0.50, blue: 0.22)
+    static let shell = Color(red: 0.99, green: 0.96, blue: 0.88)
+    static let shellShade = Color(red: 0.90, green: 0.85, blue: 0.74)
+    static let tear = Color(red: 0.45, green: 0.70, blue: 1.0)
+    static let gold = Color(red: 1.0, green: 0.80, blue: 0.20)
+    static let goldDark = Color(red: 0.85, green: 0.60, blue: 0.10)
+    static let red = Color(red: 0.90, green: 0.27, blue: 0.27)
+    static let redDark = Color(red: 0.70, green: 0.15, blue: 0.18)
+    static let pink = Color(red: 1.0, green: 0.55, blue: 0.72)
+    static let jade = Color(red: 0.06, green: 0.45, blue: 0.52)
+    static let purple = Color(red: 0.42, green: 0.32, blue: 0.78)
+    static let purpleDark = Color(red: 0.30, green: 0.22, blue: 0.60)
+    static let white = Color.white
+    static let flower = Color(red: 1.0, green: 0.72, blue: 0.82)
+}
+
+/// Penny's coin colours: the classic gold, or a skin from the shop.
 struct PetSkin {
-    var base = gold, deep = goldDeep, light = goldLight, rim = goldDeep
-    /// Eyes and mouth, and the shine in her eyes.
-    var ink = Palette.ink, shine = Color.white
-    /// A little mark on her forehead.
-    var badge: String?
-    var badgeColor = goldLight
+    var base = Color(red: 0.99, green: 0.80, blue: 0.30)
+    var light = Color(red: 1.0, green: 0.94, blue: 0.62)
+    var deep = Color(red: 0.88, green: 0.60, blue: 0.14)
+    var outline = Color(red: 0.36, green: 0.22, blue: 0.06)
+    /// Eyes and mouth.
+    var ink = PetPalette.outline
+    /// A little mark on the forehead.
+    var badge: Character?
     var rainbow = false, sparkles = false
 
     init(_ item: PetItem?) {
         func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
         switch item?.id {
         case "pioneer":
-            base = rgb(0.16, 0.62, 0.5); deep = rgb(0.05, 0.36, 0.3); light = rgb(0.55, 0.88, 0.74); rim = gold
-            badge = "star.fill"
+            base = rgb(0.20, 0.66, 0.54); light = rgb(0.60, 0.90, 0.78); deep = rgb(0.08, 0.44, 0.36); outline = rgb(0.03, 0.22, 0.18); badge = "*"
         case "rose-gold":
-            base = rgb(0.96, 0.72, 0.66); deep = rgb(0.8, 0.47, 0.42); light = rgb(1, 0.89, 0.85); rim = rgb(0.84, 0.55, 0.5)
+            base = rgb(0.97, 0.72, 0.66); light = rgb(1, 0.90, 0.86); deep = rgb(0.82, 0.48, 0.43); outline = rgb(0.42, 0.18, 0.16)
         case "silver":
-            base = rgb(0.82, 0.84, 0.88); deep = rgb(0.56, 0.6, 0.66); light = rgb(0.97, 0.98, 0.99); rim = rgb(0.62, 0.66, 0.72)
+            base = rgb(0.80, 0.83, 0.88); light = rgb(0.97, 0.98, 0.99); deep = rgb(0.56, 0.60, 0.67); outline = rgb(0.24, 0.27, 0.32)
         case "matcha":
-            base = rgb(0.64, 0.8, 0.47); deep = rgb(0.38, 0.56, 0.27); light = rgb(0.87, 0.94, 0.74); rim = rgb(0.44, 0.62, 0.32)
+            base = rgb(0.64, 0.80, 0.47); light = rgb(0.87, 0.95, 0.74); deep = rgb(0.40, 0.58, 0.28); outline = rgb(0.17, 0.30, 0.12)
         case "sakura":
-            base = rgb(1, 0.77, 0.84); deep = rgb(0.9, 0.5, 0.63); light = rgb(1, 0.92, 0.95); rim = rgb(0.93, 0.58, 0.7)
-            badge = "camera.macro"; badgeColor = .white
+            base = rgb(1, 0.78, 0.85); light = rgb(1, 0.93, 0.95); deep = rgb(0.90, 0.52, 0.65); outline = rgb(0.45, 0.18, 0.28); badge = "f"
         case "midnight":
-            base = rgb(0.22, 0.26, 0.46); deep = rgb(0.1, 0.12, 0.26); light = rgb(0.48, 0.53, 0.8); rim = gold
-            ink = .white; shine = rgb(0.22, 0.26, 0.46); badge = "moon.stars.fill"; sparkles = true
+            base = rgb(0.24, 0.28, 0.50); light = rgb(0.46, 0.52, 0.80); deep = rgb(0.13, 0.15, 0.32); outline = rgb(0.05, 0.06, 0.16)
+            ink = .white; badge = "m"; sparkles = true
         case "rainbow":
-            base = rgb(1, 0.8, 0.86); deep = rgb(0.62, 0.48, 0.9); light = .white; rim = .white
-            rainbow = true
+            light = .white; deep = rgb(0.62, 0.48, 0.90); outline = rgb(0.30, 0.22, 0.45); rainbow = true
         default: break
         }
     }
 
-    var rainbowFill: AngularGradient {
-        AngularGradient(colors: [Color(red: 1, green: 0.62, blue: 0.62), Color(red: 1, green: 0.84, blue: 0.5), Color(red: 0.62, green: 0.9, blue: 0.62),
-                                 Color(red: 0.55, green: 0.8, blue: 1), Color(red: 0.78, green: 0.64, blue: 1), Color(red: 1, green: 0.62, blue: 0.62)], center: .center)
-    }
+    static let rainbowRows: [Color] = [
+        Color(red: 1, green: 0.62, blue: 0.62), Color(red: 1, green: 0.78, blue: 0.5), Color(red: 1, green: 0.92, blue: 0.5),
+        Color(red: 0.62, green: 0.9, blue: 0.62), Color(red: 0.55, green: 0.8, blue: 1), Color(red: 0.78, green: 0.64, blue: 1),
+    ]
 }
 
-/// The HowMuch pet: an egg that hatches into a little coin, grows a sprout, then turns golden.
-struct PetFigure: View {
+// MARK: - Sprite
+
+/// Penny drawn as pixel art on a 24×24 grid. Shapes are generated, so every stage, mood, skin and
+/// accessory lines up without a hand-drawn bitmap for each combination.
+struct PetSprite: View {
     let stage: PetProgress.Stage
     let mood: PetProgress.Mood
-    var size: CGFloat = 96
-    /// What Penny is wearing, by slot (backgrounds are drawn by `PetStage`).
+    /// What Penny is wearing, by slot (scenes are drawn by `PetScene`).
     var outfit: [PetSlot: PetItem] = [:]
-    @State private var bob = false
-    @State private var blink = false
-    @Environment(\.scenePhase) private var scenePhase
-    private var skin: PetSkin { PetSkin(outfit[.skin]) }
+    var animate = true
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    /// Penny settles down after a little while, so the screen isn't redrawn forever.
+    @State private var resting = false
+
+    private var moving: Bool {
+        animate && !resting && !reduceMotion && scenePhase == .active && !Self.automatedTest && !ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
 
     var body: some View {
-        ZStack {
-            switch stage {
-            case .egg: egg
-            case .hatchling: hatchling
-            case .coinling: coinling
-            case .golden: goldenCoin
+        TimelineView(.animation(minimumInterval: 1 / 12, paused: !moving)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let live = moving
+            // Blink for 0.15 s roughly every 3.5 s; bob gently (slower when down).
+            let blink = live && t.truncatingRemainder(dividingBy: 3.5) < 0.15
+            let slow = [.sad, .hungry].contains(mood)
+            let bob = live ? (sin(t * (slow ? 1.4 : 2.6)) > 0 ? 1 : 0) : 0
+            let wobble = stage == .egg && live ? (t.truncatingRemainder(dividingBy: 2.4) < 0.4 ? sin(t * 30) * 4 : 0) : 0
+            Canvas { ctx, size in
+                let cell = min(size.width, size.height) / CGFloat(PetPixels.grid)
+                let originX = (size.width - cell * CGFloat(PetPixels.grid)) / 2
+                let originY = (size.height - cell * CGFloat(PetPixels.grid)) / 2
+                for p in PetPixels.make(stage: stage, mood: mood, outfit: outfit, blink: blink, bob: bob) {
+                    let rect = CGRect(x: originX + CGFloat(p.x) * cell, y: originY + CGFloat(p.y) * cell, width: cell + 0.5, height: cell + 0.5)
+                    ctx.fill(Path(rect), with: .color(p.color))
+                }
             }
-            accessories
+            .rotationEffect(.degrees(wobble), anchor: .bottom)
         }
-        .frame(width: size, height: size)
-        .offset(y: bob ? -size * 0.03 : size * 0.02)
-        .onAppear {
-            guard !reduceMotion, !Self.automatedTest else { return }
-            // A few bobs, not forever: an endless animation keeps the screen redrawing and costs battery.
-            guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatCount(5, autoreverses: true)) { bob = true }
+        .aspectRatio(1, contentMode: .fit)
+        .task(id: animate) {
+            resting = false
+            try? await Task.sleep(for: .seconds(25))
+            resting = true
         }
-        .task {
-            guard !reduceMotion, !Self.automatedTest else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Double.random(in: 3...6)))
-                guard scenePhase == .active, !ProcessInfo.processInfo.isLowPowerModeEnabled else { continue }
-                withAnimation(.easeIn(duration: 0.07)) { blink = true }
-                try? await Task.sleep(for: .seconds(0.12))
-                withAnimation(.easeOut(duration: 0.09)) { blink = false }
-            }
-        }
-        .accessibilityElement().accessibilityLabel("\(stage.title), \(mood.rawValue)")
+        .accessibilityElement()
+        .accessibilityLabel("\(stage.title), feeling \(mood.label.lowercased())")
     }
 
     /// UI tests wait for the app to be idle, which a never-ending animation prevents.
-    private static var automatedTest: Bool {
+    static var automatedTest: Bool {
         #if DEBUG
         return CommandLine.arguments.contains("--preview") || CommandLine.arguments.contains("--ui-test-account")
         #else
         return false
         #endif
     }
+}
 
-    private var egg: some View {
-        ZStack {
-            Ellipse().fill(LinearGradient(colors: [.white, shell], startPoint: .top, endPoint: .bottom))
-                .overlay(Ellipse().stroke(jade.opacity(0.5), lineWidth: size * 0.025))
-                .frame(width: size * 0.68, height: size * 0.86)
-            ForEach(Array([(-0.14, -0.2), (0.15, 0.02), (-0.08, 0.24)].enumerated()), id: \.offset) { _, spot in
-                Circle().fill(skin.base).overlay(Circle().stroke(skin.deep, lineWidth: size * 0.012))
-                    .frame(width: size * 0.12).offset(x: size * spot.0, y: size * spot.1)
+struct PetPixel {
+    let x: Int
+    let y: Int
+    let color: Color
+}
+
+enum PetPixels {
+    static let grid = 24
+
+    private struct Shape { var cx: Double; var cy: Double; var rx: Double; var ry: Double }
+
+    static func make(stage: PetProgress.Stage, mood: PetProgress.Mood, outfit: [PetSlot: PetItem], blink: Bool, bob: Int) -> [PetPixel] {
+        let skin = PetSkin(outfit[.skin])
+        var canvas = [[Color?]](repeating: [Color?](repeating: nil, count: grid), count: grid)
+        func put(_ x: Int, _ y: Int, _ c: Color) {
+            guard x >= 0, y >= 0, x < grid, y < grid else { return }
+            canvas[y][x] = c
+        }
+        func stamp(_ rows: [String], x: Int, y: Int, _ palette: [Character: Color]) {
+            for (dy, row) in rows.enumerated() {
+                for (dx, ch) in row.enumerated() { if let c = palette[ch] { put(x + dx, y + dy, c) } }
             }
-            face(scale: 0.8).offset(y: size * 0.04)
-            if mood == .sleepy { zzz }
         }
-    }
 
-    private var hatchling: some View {
-        ZStack {
-            coin(scale: 0.62).offset(y: -size * 0.08)
-            ShellCup().fill(shell).overlay(ShellCup().stroke(jade.opacity(0.5), lineWidth: size * 0.025))
-                .frame(width: size * 0.74, height: size * 0.36).offset(y: size * 0.27)
-        }
-    }
-
-    private var coinling: some View {
-        ZStack {
-            HStack(spacing: size * 0.16) {
-                Capsule().fill(skin.deep).frame(width: size * 0.12, height: size * 0.08)
-                Capsule().fill(skin.deep).frame(width: size * 0.12, height: size * 0.08)
-            }.offset(y: size * 0.4)
-            if outfit[.hat] == nil { sprout.offset(y: -size * 0.43) }
-            coin(scale: 0.78)
-        }
-    }
-
-    private var goldenCoin: some View {
-        ZStack {
-            Circle().fill(skin.light.opacity(0.35)).frame(width: size).blur(radius: size * 0.06)
-            coin(scale: 0.8, shine: true)
-            if outfit[.hat] == nil {
-                Crown().fill(LinearGradient(colors: [skin.light, skin.base], startPoint: .top, endPoint: .bottom))
-                    .overlay(Crown().stroke(skin.deep, lineWidth: size * 0.015))
-                    .frame(width: size * 0.34, height: size * 0.18).offset(y: -size * 0.46)
+        if stage == .egg {
+            ellipse(Shape(cx: 12, cy: 13.5, rx: 6, ry: 7.5), into: &canvas, outline: PetPalette.outline) { x, y, d in
+                // Little gold coins peeking through the shell.
+                if [(9, 10), (14, 13), (10, 16), (15, 9), (12, 18)].contains(where: { $0 == (x, y) }) { return skin.base }
+                if [(10, 10), (15, 13), (11, 16)].contains(where: { $0 == (x, y) }) { return skin.deep }
+                if d < 0.45 && x < 11 && y < 11 { return PetPalette.white }
+                return y > 17 ? PetPalette.shellShade : PetPalette.shell
             }
-            Image(systemName: "sparkle").font(.system(size: size * 0.14)).foregroundStyle(skin.light).offset(x: size * 0.42, y: -size * 0.3)
-            Image(systemName: "sparkle").font(.system(size: size * 0.09)).foregroundStyle(skin.base).offset(x: -size * 0.44, y: size * 0.18)
+            return flatten(canvas)
         }
-    }
 
-    private func coin(scale: CGFloat, shine: Bool = false) -> some View {
-        ZStack {
+        let s: Shape = switch stage {
+        case .hatchling: Shape(cx: 12, cy: 15.5, rx: 5, ry: 4.8)
+        case .coinling: Shape(cx: 12, cy: 15, rx: 6.2, ry: 5.8)
+        default: Shape(cx: 12, cy: 14.5, rx: 7.6, ry: 7)
+        }
+        let lift = bob
+        let cy = s.cy - Double(lift)
+        var top = Int((cy - s.ry).rounded(.down))
+        let eyeY = Int(cy - s.ry * 0.15)
+        let eyeDX = Int((s.rx * 0.45).rounded())
+        let cx = Int(s.cx)
+
+        // Feet for bigger stages.
+        if stage >= .coinling {
+            let footY = Int(s.cy + s.ry)
+            for fx in [cx - eyeDX - 1, cx + eyeDX] { put(fx, footY, skin.outline); put(fx + 1, footY, skin.outline) }
+        }
+
+        // The coin body: highlight top-left, an inner milled ring, darker underneath.
+        let ringed = stage >= .coinling
+        ellipse(Shape(cx: s.cx, cy: cy, rx: s.rx, ry: s.ry), into: &canvas, outline: skin.outline) { x, y, d in
+            if ringed && d > 0.66 && d < 0.84 { return skin.deep }
+            if d < 0.4 && Double(x) < s.cx - s.rx * 0.2 && Double(y) < cy - s.ry * 0.2 { return skin.light }
             if skin.rainbow {
-                Circle().fill(skin.rainbowFill).overlay(Circle().fill(.white.opacity(0.25)))
-            } else {
-                Circle().fill(LinearGradient(colors: shine ? [skin.light, skin.base] : [skin.base, skin.deep.opacity(0.9)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                let row = Int((Double(y) - (cy - s.ry)) / (2 * s.ry) * Double(PetSkin.rainbowRows.count))
+                return PetSkin.rainbowRows[min(max(row, 0), PetSkin.rainbowRows.count - 1)]
             }
-            if skin.sparkles {
-                ForEach(Array([(-0.3, 0.22, 0.07), (0.32, 0.18, 0.05), (0.24, -0.3, 0.05), (-0.18, 0.34, 0.04)].enumerated()), id: \.offset) { _, s in
-                    Image(systemName: "sparkle").font(.system(size: size * scale * s.2)).foregroundStyle(.white.opacity(0.85))
-                        .offset(x: size * scale * s.0, y: size * scale * s.1)
-                }
-            }
-            Circle().stroke(skin.rim, lineWidth: size * 0.03)
-            Circle().inset(by: size * scale * 0.1).stroke(skin.light.opacity(0.8), lineWidth: size * 0.015)
-            Capsule().fill(.white.opacity(0.45)).frame(width: size * scale * 0.08, height: size * scale * 0.24)
-                .rotationEffect(.degrees(35)).offset(x: -size * scale * 0.28, y: -size * scale * 0.2)
-            face(scale: scale)
-            if let badge = skin.badge {
-                Image(systemName: badge).font(.system(size: size * scale * 0.16)).foregroundStyle(skin.badgeColor)
-                    .shadow(color: skin.deep.opacity(0.6), radius: 1)
-                    .offset(y: -size * scale * 0.3)
-            }
-        }.frame(width: size * scale, height: size * scale)
-    }
-
-    private func face(scale: CGFloat) -> some View {
-        let unit = size * scale
-        return ZStack {
-            HStack(spacing: unit * 0.17) { eye(unit, left: true); eye(unit, left: false) }.offset(y: -unit * 0.03)
-            HStack(spacing: unit * 0.38) {
-                Ellipse().fill(Color.pink.opacity(0.42)).frame(width: unit * 0.13, height: unit * 0.075)
-                Ellipse().fill(Color.pink.opacity(0.42)).frame(width: unit * 0.13, height: unit * 0.075)
-            }.blur(radius: unit * 0.008).offset(y: unit * 0.1)
-            Group {
-                if mood == .happy {
-                    CatMouth().stroke(skin.ink, style: StrokeStyle(lineWidth: unit * 0.03, lineCap: .round, lineJoin: .round))
-                        .frame(width: unit * 0.13, height: unit * 0.05)
-                } else {
-                    Mouth(smile: mood == .worried ? -0.6 : 0.2)
-                        .stroke(skin.ink, style: StrokeStyle(lineWidth: unit * 0.032, lineCap: .round))
-                        .frame(width: unit * 0.12, height: unit * 0.06)
-                }
-            }.offset(y: unit * 0.13)
-            if mood == .worried {
-                Image(systemName: "drop.fill").font(.system(size: unit * 0.12)).foregroundStyle(Color(red: 0.45, green: 0.7, blue: 0.95))
-                    .offset(x: unit * 0.3, y: -unit * 0.16)
+            if Double(y) > cy + s.ry * 0.5 { return skin.deep }
+            return skin.base
+        }
+        if let first = (0..<grid).first(where: { canvas[$0][cx] != nil }) { top = first }
+        if skin.sparkles {
+            for (dx, dy) in [(-3, 3), (4, 5), (2, -1), (-4, -2)] where canvas[safe: Int(cy) + dy]?[safe: cx + dx] != nil {
+                put(cx + dx, Int(cy) + dy, PetPalette.white)
             }
         }
-    }
 
-    /// Big shiny eyes that blink now and then; sleepy and worried looks for the other moods.
-    @ViewBuilder private func eye(_ unit: CGFloat, left: Bool) -> some View {
+        // Something on top: a sprout for a coinling, sparkles for a golden coin, a crown for a treasure.
+        let p: [Character: Color] = [
+            "o": PetPalette.outline, "y": PetPalette.gold, "Y": PetPalette.goldDark, "r": PetPalette.red,
+            "R": PetPalette.redDark, "p": PetPalette.pink, "j": PetPalette.jade, "w": PetPalette.white,
+            "k": Color.black, "b": PetPalette.tear, "l": PetPalette.leaf, "L": PetPalette.leafDark,
+            "f": PetPalette.flower, "v": PetPalette.purple, "V": PetPalette.purpleDark, "g": Color.gray.opacity(0.45),
+        ]
+        if outfit[.hat] == nil {
+            switch stage {
+            case .hatchling: stamp([".l", "L."], x: cx, y: top - 2, p)
+            case .coinling: stamp(["..ll", ".lL.", ".L.."], x: cx - 1, y: top - 3, p)
+            case .golden: stamp(["ll...ll", ".lL.Ll.", "...L..."], x: cx - 3, y: top - 3, p)
+            case .treasure: stamp(["y.y.y.y", "yoyoyoy", "yyyryyy", "YYYYYYY"], x: cx - 3, y: top - 3, p)
+            case .egg: break
+            }
+        }
+        if stage >= .golden {
+            stamp([".w.", "wyw", ".w."], x: cx - Int(s.rx) - 3, y: top + 1, p)
+            stamp(["w"], x: cx + Int(s.rx) + 1, y: top + 4, p)
+            if stage == .treasure { stamp([".y.", "yYy", ".y."], x: cx + Int(s.rx), y: Int(cy) + 3, p) }
+        }
+
+        // Forehead mark for special skins.
+        switch skin.badge {
+        case "*": stamp([".y.", "yyy", ".y."], x: cx - 1, y: top + 1, p)
+        case "f": stamp([".f.", "fyf", ".f."], x: cx - 1, y: top + 1, p)
+        case "m": stamp(["yy", "y."], x: cx - 1, y: top + 2, p)
+        default: break
+        }
+
+        // Face.
+        let ink = skin.ink
+        let lx = cx - eyeDX, rx = cx + eyeDX - 1
+        if blink || mood == .thriving {
+            for ex in [lx, rx] { put(ex - 1, eyeY + 1, ink); put(ex, eyeY, ink); put(ex + 1, eyeY + 1, ink) }
+        } else if mood == .sad || mood == .worried {
+            for ex in [lx, rx] { put(ex, eyeY + 1, ink); put(ex + 1, eyeY + 1, ink) }
+            if mood == .sad { put(lx, eyeY + 2, PetPalette.tear); put(lx, eyeY + 3, PetPalette.tear) }
+        } else {
+            let tall = stage >= .coinling
+            for ex in [lx, rx] {
+                put(ex, eyeY, ink)
+                if tall { put(ex, eyeY + 1, ink) }
+                if stage >= .golden { put(ex + 1, eyeY, ink); put(ex + 1, eyeY + 1, ink); put(ex, eyeY, ink == .white ? skin.deep : PetPalette.white) }
+            }
+        }
+        if mood == .worried {
+            // A bead of sweat by the head.
+            stamp([".b", "bb", "bb"], x: cx + Int(s.rx) - 1, y: eyeY - 3, p)
+        }
+        if mood != .sad && mood != .worried {
+            put(lx - 2, eyeY + 2, PetPalette.cheek); put(rx + 2 + (stage >= .golden ? 1 : 0), eyeY + 2, PetPalette.cheek)
+        }
+        let my = eyeY + 3
         switch mood {
-        case .happy, .worried:
-            ZStack {
-                Ellipse().fill(skin.ink).frame(width: unit * 0.1, height: unit * (mood == .happy ? 0.135 : 0.11))
-                Circle().fill(skin.shine).frame(width: unit * 0.042).offset(x: unit * 0.018, y: -unit * 0.03)
-                Circle().fill(skin.shine.opacity(0.8)).frame(width: unit * 0.018).offset(x: -unit * 0.016, y: unit * 0.028)
-            }
-            .scaleEffect(x: 1, y: blink ? 0.08 : 1)
-        case .sleepy:
-            Mouth(smile: 0.6).stroke(skin.ink, style: StrokeStyle(lineWidth: unit * 0.032, lineCap: .round)).frame(width: unit * 0.11, height: unit * 0.04)
+        case .thriving, .happy:
+            put(cx - 1, my, ink); put(cx, my + 1, ink); put(cx + 1, my, ink)
+            if stage >= .golden { put(cx - 2, my, ink); put(cx - 1, my + 1, ink); put(cx + 1, my + 1, ink) }
+        case .okay:
+            put(cx - 1, my, ink); put(cx, my, ink)
+        case .hungry:
+            put(cx - 1, my, ink); put(cx, my, ink); put(cx - 1, my + 1, ink); put(cx, my + 1, ink)
+        case .sad, .worried:
+            put(cx - 1, my + 1, ink); put(cx, my, ink); put(cx + 1, my + 1, ink)
         }
-    }
 
-    private var sprout: some View {
-        ZStack {
-            Capsule().fill(jade).frame(width: size * 0.03, height: size * 0.12).offset(y: size * 0.04)
-            Ellipse().fill(jade).frame(width: size * 0.15, height: size * 0.08).rotationEffect(.degrees(-30)).offset(x: -size * 0.07)
-            Ellipse().fill(jade.opacity(0.8)).frame(width: size * 0.15, height: size * 0.08).rotationEffect(.degrees(30)).offset(x: size * 0.07)
-        }
-    }
-
-    /// Where things sit on each stage, as fractions of `size`: top of the head, eye line, head width, neck.
-    private var anchors: (top: CGFloat, eyes: CGFloat, width: CGFloat, neck: CGFloat) {
-        switch stage {
-        case .egg: return (-0.43, 0.02, 0.62, 0.3)
-        case .hatchling: return (-0.39, -0.09, 0.62, 0.17)
-        case .coinling: return (-0.39, -0.016, 0.78, 0.36)
-        case .golden: return (-0.4, -0.016, 0.8, 0.37)
-        }
-    }
-
-    @ViewBuilder private var accessories: some View {
-        let a = anchors, w = size * a.width
-        if let neck = outfit[.neck] { PetAccessory(item: neck, width: w).offset(y: size * a.neck) }
-        if let face = outfit[.face] { PetAccessory(item: face, width: w).offset(y: size * a.eyes) }
-        // Hats are drawn bottom-aligned in a frame 0.6w tall, sitting slightly down over the head.
-        if let hat = outfit[.hat] { PetAccessory(item: hat, width: w).offset(y: size * a.top - w * 0.3 + w * 0.1) }
-    }
-
-    private var zzz: some View {
-        Text("z z").font(.system(size: size * 0.13, weight: .bold, design: .rounded)).foregroundStyle(jade.opacity(0.7))
-            .offset(x: size * 0.36, y: -size * 0.36)
-    }
-}
-
-/// A curve: `smile` 1 is a smile, -1 a frown (also used upside down for happy closed eyes).
-/// A little "ω" smile.
-private struct CatMouth: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addQuadCurve(to: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.15), control: CGPoint(x: rect.width * 0.25, y: rect.maxY * 1.6))
-        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY), control: CGPoint(x: rect.width * 0.75, y: rect.maxY * 1.6))
-        return path
-    }
-}
-
-private struct Mouth: Shape {
-    var smile: CGFloat
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let y = smile >= 0 ? rect.minY : rect.maxY
-        path.move(to: CGPoint(x: rect.minX, y: y))
-        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: y), control: CGPoint(x: rect.midX, y: y + rect.height * 2 * smile))
-        return path
-    }
-}
-
-/// The bottom half of a cracked eggshell.
-private struct ShellCup: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let teeth = 6
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.2))
-        for i in 1...teeth {
-            let x = rect.minX + rect.width * CGFloat(i) / CGFloat(teeth)
-            path.addLine(to: CGPoint(x: x - rect.width / CGFloat(teeth * 2), y: i % 2 == 0 ? rect.minY + rect.height * 0.2 : rect.minY))
-            path.addLine(to: CGPoint(x: x, y: rect.minY + rect.height * 0.2))
-        }
-        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.2), control: CGPoint(x: rect.midX, y: rect.maxY * 1.5))
-        return path
-    }
-}
-
-private struct Crown: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.3))
-        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.25, y: rect.minY + rect.height * 0.6))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.25, y: rect.minY + rect.height * 0.6))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + rect.height * 0.3))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// A hat, pair of glasses or neckwear, drawn to fit a head `width` wide.
-struct PetAccessory: View {
-    let item: PetItem
-    let width: CGFloat
-    private var w: CGFloat { width }
-    private let ink = Color(red: 0.1, green: 0.16, blue: 0.15)
-
-    var body: some View {
-        switch item.slot {
-        case .hat: hat.frame(width: w, height: w * 0.6, alignment: .bottom)
-        case .face: glasses.frame(width: w, height: w * 0.3)
-        case .neck: neckwear.frame(width: w, height: w * 0.3)
-        case .background, .skin: EmptyView()
-        }
-    }
-
-    @ViewBuilder private var hat: some View {
-        switch item.id {
-        case "party-hat":
-            VStack(spacing: -w * 0.03) {
-                Circle().fill(Color.yellow).frame(width: w * 0.11)
-                Triangle().fill(LinearGradient(colors: [Color(red: 1, green: 0.45, blue: 0.6), Color(red: 0.6, green: 0.4, blue: 0.95)], startPoint: .top, endPoint: .bottom))
-                    .overlay(Triangle().stroke(.white.opacity(0.7), style: StrokeStyle(lineWidth: w * 0.02, dash: [w * 0.05])))
-                    .frame(width: w * 0.36, height: w * 0.42)
-            }.rotationEffect(.degrees(-8))
-        case "beanie":
-            VStack(spacing: -w * 0.04) {
-                Circle().fill(.white).frame(width: w * 0.13)
-                ZStack(alignment: .bottom) {
-                    UnevenRoundedRectangle(topLeadingRadius: w * 0.36, topTrailingRadius: w * 0.36).fill(Color(red: 0.16, green: 0.55, blue: 0.62)).frame(width: w * 0.72, height: w * 0.34)
-                    Capsule().fill(Color(red: 0.1, green: 0.42, blue: 0.48)).frame(width: w * 0.78, height: w * 0.11)
+        // A cracked eggshell cup for hatchlings.
+        if stage == .hatchling {
+            let shellTop = my + 2
+            let halfWidths = [6, 6, 6, 5, 4]
+            for (i, half) in halfWidths.enumerated() {
+                let y = shellTop + i
+                for x in (cx - half)..<(cx + half) {
+                    if i == 0 { put(x, y, (x - cx) % 2 == 0 ? PetPalette.outline : PetPalette.shell); continue }
+                    let edge = i == halfWidths.count - 1 || x == cx - half || x == cx + half - 1
+                        || ((x < cx - halfWidths[i - 1] + 1 || x >= cx + halfWidths[i - 1] - 1) && i >= 3)
+                    put(x, y, edge ? PetPalette.outline : (i >= 3 ? PetPalette.shellShade : PetPalette.shell))
                 }
             }
-        case "cap":
-            ZStack(alignment: .bottom) {
-                UnevenRoundedRectangle(topLeadingRadius: w * 0.3, topTrailingRadius: w * 0.3).fill(jade).frame(width: w * 0.62, height: w * 0.27)
-                Circle().fill(jade.opacity(0.7)).frame(width: w * 0.07).offset(y: -w * 0.24)
-                Capsule().fill(Color(red: 0.12, green: 0.45, blue: 0.35)).frame(width: w * 0.48, height: w * 0.08).offset(x: w * 0.3, y: w * 0.02)
-            }
-        case "chef-hat":
-            VStack(spacing: -w * 0.06) {
-                HStack(spacing: -w * 0.1) { puff(0.24); puff(0.3); puff(0.24) }
-                RoundedRectangle(cornerRadius: w * 0.03).fill(.white).overlay(RoundedRectangle(cornerRadius: w * 0.03).stroke(.gray.opacity(0.35), lineWidth: w * 0.015))
-                    .frame(width: w * 0.5, height: w * 0.14)
-            }
-        case "wizard-hat":
-            ZStack(alignment: .bottom) {
-                Triangle().fill(Color(red: 0.36, green: 0.27, blue: 0.7)).frame(width: w * 0.44, height: w * 0.52).offset(y: -w * 0.05).rotationEffect(.degrees(6))
-                Ellipse().fill(Color(red: 0.3, green: 0.22, blue: 0.6)).frame(width: w * 0.86, height: w * 0.13)
-                Image(systemName: "star.fill").font(.system(size: w * 0.1)).foregroundStyle(.yellow).offset(x: -w * 0.02, y: -w * 0.24)
-                Image(systemName: "moon.fill").font(.system(size: w * 0.08)).foregroundStyle(.yellow.opacity(0.9)).offset(x: w * 0.06, y: -w * 0.36)
-            }
-        case "flower":
-            ZStack {
-                ForEach(0..<5, id: \.self) { i in
-                    Ellipse().fill(Color(red: 1, green: 0.55, blue: 0.7)).frame(width: w * 0.12, height: w * 0.2)
-                        .offset(y: -w * 0.08).rotationEffect(.degrees(Double(i) * 72))
+        }
+
+        // Accessories.
+        let neckY = Int(cy + s.ry * 0.45)
+        for slot in [PetSlot.neck, .face, .hat] {
+            guard let item = outfit[slot] else { continue }
+            switch item.id {
+            case "cap": stamp(["..oooo..", ".ojjjjo.", "ojjwjjjoooo", "oooooooooo."], x: cx - 4, y: top - 3, p)
+            case "party-hat": stamp(["...y...", "..oro..", "..oyo..", ".oryro.", ".oyryo.", ".ooooo."], x: cx - 3, y: top - 4, p)
+            case "beanie": stamp(["...w...", "..ojo..", ".ojjjo.", "ojjjjjo", "owwwwwo"], x: cx - 3, y: top - 4, p)
+            case "chef-hat": stamp([".ooooo.", "owwwwwo", "owwwwwo", "owgwgwo", ".owwwo.", ".ooooo."], x: cx - 3, y: top - 4, p)
+            case "wizard-hat": stamp(["....oo...", "...ovo...", "...ovvo..", "..ovyvo..", "..ovvvvo.", ".oVVVVVVo", "ooooooooo"], x: cx - 4, y: top - 6, p)
+            case "flower": stamp([".p.p.", "ppypp", ".p.p."], x: cx + 1, y: top - 2, p)
+            case "royal-crown": stamp(["y.y.y.y", "yoyoyoy", "yyyryyy", "YYYYYYY"], x: cx - 3, y: top - 3, p)
+            case "round-glasses": stamp(["ooo.ooo", "o.ooo.o", "ooo.ooo"], x: lx - 1, y: eyeY - 1, p)
+            case "sunglasses": stamp(["oooooooo", "okkookko", ".kk..kk."], x: lx - 2, y: eyeY - 1, p)
+            case "star-glasses": stamp([".p...p.", "ppp.ppp", ".p...p."], x: lx - 1, y: eyeY - 1, p)
+            case "scarf":
+                for x in (cx - Int(s.rx) + 1)...(cx + Int(s.rx) - 1) where neckY + 1 < grid && canvas[neckY][x] != nil {
+                    put(x, neckY, PetPalette.red); put(x, neckY + 1, PetPalette.redDark)
                 }
-                Circle().fill(Color.yellow).frame(width: w * 0.1)
-            }.offset(x: w * 0.26, y: w * 0.02)
-        case "royal-crown":
-            ZStack(alignment: .bottom) {
-                Crown().fill(LinearGradient(colors: [goldLight, gold], startPoint: .top, endPoint: .bottom))
-                    .overlay(Crown().stroke(goldDeep, lineWidth: w * 0.02)).frame(width: w * 0.56, height: w * 0.32)
-                HStack(spacing: w * 0.08) {
-                    Circle().fill(.red).frame(width: w * 0.07); Circle().fill(.blue).frame(width: w * 0.08); Circle().fill(.green).frame(width: w * 0.07)
-                }.offset(y: -w * 0.06)
+                stamp(["rR", "rR", "R."], x: cx + 2, y: neckY + 1, p)
+            case "bow-tie": stamp(["ro.or", "rrorr", "ro.or"], x: cx - 2, y: neckY, p)
+            case "medal": stamp(["j...j", ".j.j.", "..y..", ".yYy.", "..y.."], x: cx - 2, y: neckY, p)
+            default: break
             }
-        default: EmptyView()
+        }
+        return flatten(canvas)
+    }
+
+    /// Fills an ellipse with an outline ring; `fill` picks the inner colour per cell.
+    private static func ellipse(_ s: Shape, into canvas: inout [[Color?]], outline: Color, fill: (Int, Int, Double) -> Color) {
+        func inside(_ x: Int, _ y: Int) -> Double {
+            let dx = (Double(x) + 0.5 - s.cx) / s.rx, dy = (Double(y) + 0.5 - s.cy) / s.ry
+            return dx * dx + dy * dy
+        }
+        for y in 0..<grid {
+            for x in 0..<grid {
+                let d = inside(x, y)
+                guard d <= 1 else { continue }
+                let edge = inside(x - 1, y) > 1 || inside(x + 1, y) > 1 || inside(x, y - 1) > 1 || inside(x, y + 1) > 1
+                canvas[y][x] = edge ? outline : fill(x, y, d)
+            }
         }
     }
 
-    private func puff(_ scale: CGFloat) -> some View {
-        Circle().fill(.white).overlay(Circle().stroke(.gray.opacity(0.25), lineWidth: w * 0.012)).frame(width: w * scale)
-    }
-
-    @ViewBuilder private var glasses: some View {
-        switch item.id {
-        case "round-glasses":
-            HStack(spacing: w * 0.06) {
-                Circle().stroke(ink, lineWidth: w * 0.03).frame(width: w * 0.22)
-                Circle().stroke(ink, lineWidth: w * 0.03).frame(width: w * 0.22)
-            }.overlay(Capsule().fill(ink).frame(width: w * 0.08, height: w * 0.025))
-        case "sunglasses":
-            HStack(spacing: w * 0.05) {
-                lens; lens
-            }.overlay(Capsule().fill(ink).frame(width: w * 0.08, height: w * 0.03))
-        case "star-glasses":
-            HStack(spacing: w * 0.0) {
-                Image(systemName: "star.fill").font(.system(size: w * 0.3)).foregroundStyle(Color(red: 1, green: 0.4, blue: 0.65))
-                Image(systemName: "star.fill").font(.system(size: w * 0.3)).foregroundStyle(Color(red: 1, green: 0.4, blue: 0.65))
-            }
-        default: EmptyView()
+    private static func flatten(_ canvas: [[Color?]]) -> [PetPixel] {
+        var result: [PetPixel] = []
+        for (y, row) in canvas.enumerated() {
+            for (x, c) in row.enumerated() { if let c { result.append(PetPixel(x: x, y: y, color: c)) } }
         }
-    }
-
-    private var lens: some View {
-        RoundedRectangle(cornerRadius: w * 0.07).fill(ink).frame(width: w * 0.27, height: w * 0.17)
-            .overlay(Capsule().fill(.white.opacity(0.35)).frame(width: w * 0.04, height: w * 0.1).rotationEffect(.degrees(30)).offset(x: -w * 0.06))
-    }
-
-    @ViewBuilder private var neckwear: some View {
-        switch item.id {
-        case "bow-tie":
-            HStack(spacing: -w * 0.02) {
-                Triangle().fill(Color(red: 0.86, green: 0.2, blue: 0.27)).frame(width: w * 0.16, height: w * 0.18).rotationEffect(.degrees(90))
-                Circle().fill(Color(red: 0.66, green: 0.12, blue: 0.2)).frame(width: w * 0.08)
-                Triangle().fill(Color(red: 0.86, green: 0.2, blue: 0.27)).frame(width: w * 0.16, height: w * 0.18).rotationEffect(.degrees(-90))
-            }
-        case "scarf":
-            ZStack {
-                Capsule().fill(Color(red: 0.88, green: 0.3, blue: 0.25)).frame(width: w * 0.66, height: w * 0.13)
-                RoundedRectangle(cornerRadius: w * 0.03).fill(Color(red: 0.78, green: 0.24, blue: 0.2)).frame(width: w * 0.12, height: w * 0.24)
-                    .rotationEffect(.degrees(12)).offset(x: w * 0.16, y: w * 0.12)
-            }
-        case "medal":
-            ZStack {
-                Capsule().fill(Color(red: 0.25, green: 0.45, blue: 0.85)).frame(width: w * 0.07, height: w * 0.24).rotationEffect(.degrees(25)).offset(x: -w * 0.05, y: -w * 0.04)
-                Capsule().fill(Color(red: 0.25, green: 0.45, blue: 0.85)).frame(width: w * 0.07, height: w * 0.24).rotationEffect(.degrees(-25)).offset(x: w * 0.05, y: -w * 0.04)
-                Circle().fill(LinearGradient(colors: [goldLight, goldDeep], startPoint: .top, endPoint: .bottom)).frame(width: w * 0.16).offset(y: w * 0.1)
-                Image(systemName: "star.fill").font(.system(size: w * 0.07)).foregroundStyle(.white).offset(y: w * 0.1)
-            }
-        default: EmptyView()
-        }
+        return result
     }
 }
 
-private struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
+private extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
 
-/// The scene behind Penny.
-struct PetBackdrop: View {
+// MARK: - Scene
+
+/// Penny's surroundings: a mint room, or a scene bought in the shop.
+struct PetScene: View {
     let item: PetItem?
+
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            ZStack {
+            let ground = geo.size.height * 0.78
+            ZStack(alignment: .top) {
+                LinearGradient(colors: sky, startPoint: .top, endPoint: .bottom)
                 switch item?.id {
-                case "sunset":
-                    LinearGradient(colors: [Color(red: 1, green: 0.78, blue: 0.45), Color(red: 1, green: 0.55, blue: 0.55), Color(red: 0.6, green: 0.45, blue: 0.75)], startPoint: .bottom, endPoint: .top)
-                    Circle().fill(Color(red: 1, green: 0.9, blue: 0.55)).frame(width: w * 0.45).offset(y: h * 0.38)
                 case "night-sky":
-                    LinearGradient(colors: [Color(red: 0.08, green: 0.12, blue: 0.3), Color(red: 0.2, green: 0.18, blue: 0.45)], startPoint: .top, endPoint: .bottom)
-                    ForEach(Array([(0.12, 0.15), (0.8, 0.12), (0.25, 0.7), (0.88, 0.62), (0.55, 0.08), (0.08, 0.45), (0.7, 0.85)].enumerated()), id: \.offset) { _, star in
-                        Circle().fill(.white.opacity(0.85)).frame(width: w * 0.025).position(x: w * star.0, y: h * star.1)
+                    ForEach(0..<14, id: \.self) { i in
+                        Rectangle().fill(.white.opacity(0.85)).frame(width: 3, height: 3)
+                            .position(x: geo.size.width * CGFloat((i * 37) % 100) / 100, y: ground * CGFloat((i * 53) % 70 + 5) / 100)
                     }
-                    Image(systemName: "moon.fill").font(.system(size: w * 0.12)).foregroundStyle(Color(red: 1, green: 0.95, blue: 0.75)).position(x: w * 0.82, y: h * 0.25)
+                    Rectangle().fill(Color(red: 1, green: 0.95, blue: 0.75)).frame(width: 14, height: 14).position(x: geo.size.width * 0.84, y: ground * 0.22)
                 case "beach":
-                    LinearGradient(colors: [Color(red: 0.55, green: 0.82, blue: 0.98), Color(red: 0.8, green: 0.93, blue: 1)], startPoint: .top, endPoint: .bottom)
-                    Rectangle().fill(Color(red: 0.98, green: 0.88, blue: 0.66)).frame(height: h * 0.3).frame(maxHeight: .infinity, alignment: .bottom)
-                    Capsule().fill(Color(red: 0.4, green: 0.72, blue: 0.9).opacity(0.6)).frame(width: w * 1.2, height: h * 0.08).position(x: w * 0.5, y: h * 0.7)
-                    Circle().fill(Color.yellow.opacity(0.9)).frame(width: w * 0.16).position(x: w * 0.15, y: h * 0.2)
+                    Rectangle().fill(Color(red: 1, green: 0.85, blue: 0.4)).frame(width: 30, height: 30).position(x: geo.size.width * 0.82, y: ground * 0.28)
+                    Rectangle().fill(Color(red: 0.4, green: 0.72, blue: 0.9).opacity(0.7)).frame(height: 8).position(x: geo.size.width / 2, y: ground - 4)
+                case "sunset":
+                    Rectangle().fill(Color(red: 1, green: 0.88, blue: 0.5)).frame(width: 40, height: 20).position(x: geo.size.width * 0.5, y: ground - 10)
                 case "confetti":
-                    Color(red: 1, green: 0.98, blue: 0.93)
-                    ForEach(0..<18, id: \.self) { i in
+                    ForEach(0..<16, id: \.self) { i in
                         let colors: [Color] = [.pink, .orange, .yellow, .green, .blue, .purple]
-                        Capsule().fill(colors[i % colors.count].opacity(0.7)).frame(width: w * 0.05, height: w * 0.018)
-                            .rotationEffect(.degrees(Double(i * 37)))
-                            .position(x: w * CGFloat((i * 53) % 100) / 100, y: h * CGFloat((i * 31 + 11) % 100) / 100)
+                        Rectangle().fill(colors[i % colors.count].opacity(0.75)).frame(width: 5, height: 5)
+                            .position(x: geo.size.width * CGFloat((i * 29 + 7) % 100) / 100, y: ground * CGFloat((i * 41) % 80 + 6) / 100)
                     }
                 default:
-                    LinearGradient(colors: [Palette.mint, .white], startPoint: .top, endPoint: .bottom)
+                    // A little window in the mint room.
+                    let pane = Color.white.opacity(0.75), frame = Color(red: 0.72, green: 0.86, blue: 0.80)
+                    VStack(spacing: 2) {
+                        HStack(spacing: 2) { pane.frame(width: 11, height: 9); pane.frame(width: 11, height: 9) }
+                        HStack(spacing: 2) { pane.frame(width: 11, height: 9); pane.frame(width: 11, height: 9) }
+                    }
+                    .padding(2).background(frame).position(x: geo.size.width * 0.18, y: ground * 0.32)
                 }
+                Rectangle().fill(floor).frame(height: geo.size.height - ground).frame(maxHeight: .infinity, alignment: .bottom)
             }
+        }
+    }
+
+    private var sky: [Color] {
+        switch item?.id {
+        case "sunset": [Color(red: 0.6, green: 0.45, blue: 0.75), Color(red: 1, green: 0.6, blue: 0.55), Color(red: 1, green: 0.8, blue: 0.5)]
+        case "night-sky": [Color(red: 0.08, green: 0.10, blue: 0.25), Color(red: 0.20, green: 0.22, blue: 0.42)]
+        case "beach": [Color(red: 0.55, green: 0.82, blue: 0.97), Color(red: 0.80, green: 0.93, blue: 0.99)]
+        case "confetti": [Color(red: 1, green: 0.97, blue: 0.9), Color(red: 1, green: 0.99, blue: 0.95)]
+        default: [Palette.mint, Color(red: 0.95, green: 0.98, blue: 0.96)]
+        }
+    }
+
+    private var floor: Color {
+        switch item?.id {
+        case "sunset": Color(red: 0.55, green: 0.42, blue: 0.5)
+        case "night-sky": Color(red: 0.18, green: 0.30, blue: 0.28)
+        case "beach": Color(red: 0.96, green: 0.86, blue: 0.62)
+        case "confetti": Color(red: 0.98, green: 0.85, blue: 0.75)
+        default: Color(red: 0.72, green: 0.86, blue: 0.80)
         }
     }
 }
 
-/// Penny on her backdrop. Tap her for a hop, some hearts and a word or two.
+// MARK: - Shared pieces
+
+struct CoinLabel: View {
+    let amount: Int
+    var font: Font = .subheadline.weight(.bold)
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "circle.hexagongrid.circle.fill").symbolRenderingMode(.palette)
+                .foregroundStyle(PetPalette.goldDark, PetPalette.gold)
+            Text("\(amount)").monospacedDigit().foregroundStyle(amount < 0 ? AnyShapeStyle(Color.red) : AnyShapeStyle(Palette.ink))
+        }
+        .font(font)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(amount) coins")
+    }
+}
+
+/// Penny in her scene. Tap her for a hop, some hearts and a word or two.
 struct PetStage: View {
     let pet: PetProgress
     let outfit: [PetSlot: PetItem]
     let name: String
     var size: CGFloat = 96
     var corner: CGFloat = 18
+    /// Penny's page: the scene fills the width and is taller, with room for her speech bubble underneath.
+    var wide = false
     @State private var hop = false
-    @State private var hearts = false
+    @State private var hearts: [UUID] = []
     @State private var line: String?
 
     var body: some View {
         ZStack {
-            PetBackdrop(item: outfit[.background])
-            PetFigure(stage: pet.stage, mood: pet.mood, size: size, outfit: outfit.filter { $0.key != .background })
-                .offset(y: hop ? -size * 0.14 : 0)
-            if hearts {
-                ForEach(0..<3, id: \.self) { i in
-                    Image(systemName: "heart.fill").font(.system(size: size * 0.12)).foregroundStyle(.pink)
-                        .offset(x: size * CGFloat(i - 1) * 0.28, y: -size * 0.5)
-                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
-                }
-            }
+            PetScene(item: outfit[.background])
+            PetSprite(stage: pet.stage, mood: pet.mood, outfit: outfit.filter { $0.key != .background })
+                .frame(width: size, height: size)
+                .offset(y: (hop ? -size * 0.12 : size * 0.06) - (wide ? size * 0.16 : 0))
+            ForEach(Array(hearts.enumerated()), id: \.element) { index, _ in FloatingHeart(offset: CGFloat(index % 3 - 1) * size * 0.25, size: size) }
             if let line {
-                Text(line).font(.system(size: max(11, size * 0.1), weight: .semibold, design: .rounded)).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 10).padding(.vertical, 6).background(.white, in: Capsule())
-                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
-                    .frame(maxHeight: .infinity, alignment: .top).padding(.top, 6)
+                Text(line).font(.system(size: max(11, size * 0.09), weight: .semibold, design: .rounded)).foregroundStyle(PetPalette.outline)
+                    .padding(.horizontal, 10).padding(.vertical, 6).background(.white.opacity(0.92), in: Capsule())
+                    .frame(maxHeight: .infinity, alignment: .top).padding(.top, 8)
                     .transition(.scale.combined(with: .opacity))
             }
         }
-        .frame(width: size * 1.5, height: size * 1.35)
+        .frame(maxWidth: wide ? .infinity : size * 1.5).frame(width: wide ? nil : size * 1.5, height: size * (wide ? 1.6 : 1.35))
         .clipShape(RoundedRectangle(cornerRadius: corner))
         .contentShape(Rectangle())
         .onTapGesture { react() }
+        .sensoryFeedback(.impact(weight: .light), trigger: hearts.count)
         .accessibilityAddTraits(.isButton).accessibilityHint("Tap to play with \(name)")
     }
 
     private func react() {
         let lines: [String]
         switch pet.mood {
-        case .happy: lines = ["Ka-ching!", "Another shift, another coin!", "You're doing great!", "Wheee!", "Payday vibes!"]
-        case .sleepy: lines = ["Five more minutes…", "Wake me for the next shift", "Yawn…"]
+        case .thriving: lines = ["On a roll!", "Ka-ching!", "Unstoppable!", "Payday vibes!"]
+        case .happy: lines = ["Ka-ching!", "Another shift, another coin!", "You're doing great!", "Wheee!"]
+        case .okay: lines = ["Got a shift for me?", "A little peckish…", "Feed me shifts!"]
+        case .hungry: lines = ["So hungry…", "Book a shift?", "Tummy rumbling…"]
+        case .sad: lines = ["I missed you!", "Where did you go?", "Let's work again soon"]
         case .worried: lines = ["Can we chase that pay?", "Where's our money?", "Mark it paid soon?"]
         }
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) { hop = true; hearts = true; line = lines.randomElement() }
+        let id = UUID()
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) { hop = true; hearts.append(id); line = lines.randomElement() }
         Task {
             try? await Task.sleep(for: .milliseconds(260))
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { hop = false }
-            try? await Task.sleep(for: .seconds(1.6))
-            withAnimation(.easeOut(duration: 0.3)) { hearts = false; line = nil }
+            try? await Task.sleep(for: .seconds(1.4))
+            withAnimation(.easeOut(duration: 0.3)) { hearts.removeAll { $0 == id }; if hearts.isEmpty { line = nil } }
         }
     }
 }
+
+private struct FloatingHeart: View {
+    let offset: CGFloat
+    let size: CGFloat
+    @State private var rise = false
+
+    var body: some View {
+        Image(systemName: "heart.fill").font(.system(size: max(14, size * 0.14))).foregroundStyle(PetPalette.pink)
+            .offset(x: offset, y: rise ? -size * 0.75 : -size * 0.25)
+            .opacity(rise ? 0 : 1)
+            .onAppear { withAnimation(.easeOut(duration: 1.1)) { rise = true } }
+            .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Storage
 
 /// Where Penny lived before she synced with the account; moved into the account on first open.
 enum PetLegacyStorage {
@@ -551,156 +507,315 @@ func petOutfit(_ closet: PetCloset, _ pet: PetProgress) -> [PetSlot: PetItem] {
     Dictionary(uniqueKeysWithValues: PetSlot.allCases.compactMap { slot in closet.wearing(slot, pet).map { (slot, $0) } })
 }
 
-/// Overview card: Penny in her outfit, her level and a nudge.
+extension PetProgress.Stage: @retroactive Identifiable { public var id: Int { rawValue } }
+
+private func nextStageLine(_ pet: PetProgress) -> String? {
+    guard let toNext = pet.xpToNext, let next = pet.next else { return nil }
+    return "\(toNext) XP to \(next == .hatchling ? "hatch" : "become a \(next.title.lowercased())")"
+}
+
+// MARK: - Overview card
+
+/// Overview card: Penny in her scene, her streak and coins, and progress to the next stage.
 struct PetCard: View {
     @EnvironmentObject private var store: TrackerStore
     let now: Date
+    @State private var celebrate: PetProgress.Stage?
+    @State private var gained = 0
+
     var body: some View {
         let pet = store.petProgress(now: now)
         let closet = store.petCloset
         let name = store.petPreferences.displayName
-        Card {
-            HStack(alignment: .center, spacing: 14) {
-                PetStage(pet: pet, outfit: petOutfit(closet, pet), name: name, size: 72, corner: 16)
-                NavigationLink { PetDetailView() } label: {
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            Text(name).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
-                            Text("Lv \(pet.level)").font(.caption2.weight(.bold)).foregroundStyle(Palette.teal)
-                                .padding(.horizontal, 7).padding(.vertical, 3).background(Palette.mint, in: Capsule())
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+        let balance = closet.balance(pet)
+        NavigationLink { PetDetailView() } label: {
+            VStack(spacing: 0) {
+                ZStack(alignment: .topTrailing) {
+                    PetScene(item: petOutfit(closet, pet)[.background])
+                    PetSprite(stage: pet.stage, mood: pet.mood, outfit: petOutfit(closet, pet).filter { $0.key != .background })
+                        .frame(width: 150, height: 150).frame(maxWidth: .infinity).padding(.top, 10)
+                    if pet.streakWeeks > 0 {
+                        Label("\(pet.streakWeeks) wk", systemImage: "flame.fill").font(.caption.weight(.bold)).foregroundStyle(.orange)
+                            .padding(.horizontal, 10).padding(.vertical, 6).background(.white.opacity(0.88), in: Capsule()).padding(12)
+                            .accessibilityLabel("\(pet.streakWeeks)-week streak")
+                    }
+                    if gained > 0 {
+                        Text("+\(gained)").font(.headline.weight(.heavy)).foregroundStyle(PetPalette.goldDark)
+                            .padding(.horizontal, 10).padding(.vertical, 6).background(.white, in: Capsule())
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .frame(height: 170).clipped()
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(name).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
+                            Text(pet.stage == .egg ? "Work shifts to hatch me" : "\(pet.stage.title) · Lv \(pet.level) · \(pet.mood.label)")
+                                .font(.caption).foregroundStyle(Palette.muted)
                         }
-                        ProgressView(value: pet.levelProgress).tint(Palette.teal)
-                        HStack(spacing: 12) {
-                            Label("\(closet.balance(pet))", systemImage: "dollarsign.circle.fill").foregroundStyle(goldDeep)
-                            Label("\(pet.streakWeeks) wk", systemImage: "flame.fill").foregroundStyle(.orange)
-                            Label("\(pet.achievements.filter(\.earned).count)", systemImage: "rosette").foregroundStyle(Palette.teal)
-                        }.font(.caption.weight(.semibold))
+                        Spacer()
+                        CoinLabel(amount: balance)
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    }
+                    ProgressView(value: pet.progress).tint(PetPalette.leaf)
+                    if let line = nextStageLine(pet) { Text(line).font(.caption2).foregroundStyle(Palette.muted) }
+                    if pet.mood == .worried || pet.mood == .hungry || pet.mood == .sad {
                         Text(pet.message(name: name, currency: store.data.rules.currency)).font(.caption).foregroundStyle(Palette.muted)
                             .fixedSize(horizontal: false, vertical: true)
-                    }.contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityIdentifier("pet.card")
+                    }
+                }
+                .padding(16)
+            }
+            .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 22))
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Palette.line.opacity(0.7), lineWidth: 0.6).allowsHitTesting(false))
+            .contentShape(RoundedRectangle(cornerRadius: 22))
+        }
+        .buttonStyle(.plain).accessibilityIdentifier("pet.card")
+        .onAppear { check(pet, balance) }
+        .onChange(of: [pet.xp, balance]) { check(pet, balance) }
+        .sheet(item: $celebrate) { stage in EvolutionSheet(stage: stage, name: name, outfit: petOutfit(closet, pet)) }
+    }
+
+    /// Celebrates a new stage and shows coins gained since the last look, going by the balance you can
+    /// spend (so buying something, or coins moving on another device, never shows a misleading "+N").
+    private func check(_ pet: PetProgress, _ balance: Int) {
+        let defaults = UserDefaults.standard
+        let stageKey = "pet.seenStage.\(store.accountID)", balanceKey = "pet.seenBalance.\(store.accountID)"
+        let seenStage = defaults.object(forKey: stageKey) as? Int
+        let seenBalance = defaults.object(forKey: balanceKey) as? Int
+        defaults.set(pet.stage.rawValue, forKey: stageKey)
+        defaults.set(balance, forKey: balanceKey)
+        // The first look on this iPhone (or the account's data still loading) only sets the starting point.
+        guard !PetSprite.automatedTest, store.isWritable, let seenStage, let seenBalance else { return }
+        if pet.stage.rawValue > seenStage { celebrate = pet.stage }
+        if balance > seenBalance {
+            withAnimation(.spring) { gained = balance - seenBalance }
+            Task {
+                try? await Task.sleep(for: .seconds(2.5))
+                withAnimation { gained = 0 }
             }
         }
     }
 }
 
+struct EvolutionSheet: View {
+    let stage: PetProgress.Stage
+    let name: String
+    var outfit: [PetSlot: PetItem] = [:]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            Text(stage == .hatchling ? "\(name) hatched!" : "\(name) evolved!")
+                .font(.system(.largeTitle, design: .rounded, weight: .heavy)).foregroundStyle(Palette.ink)
+            PetSprite(stage: stage, mood: .thriving, outfit: outfit.filter { $0.key != .background }).frame(width: 200, height: 200)
+            Text("\(name) is now a \(stage.title.lowercased()).").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+            Text("Keep working shifts and getting paid to help \(name) grow. New items are now in the shop.")
+                .multilineTextAlignment(.center).foregroundStyle(Palette.muted).padding(.horizontal, 32)
+            Spacer()
+            Button { dismiss() } label: { Text("Yay!") }.primaryButton()
+                .padding(.horizontal, 24).padding(.bottom, 12)
+        }
+        .background { AppBackdrop() }
+        .sensoryFeedback(.success, trigger: stage)
+        .presentationDetents([.large])
+    }
+}
+
+// MARK: - Penny's page
+
+/// Penny's page: stats, this week's missions, the shop and wardrobe, badges and the rules.
 struct PetDetailView: View {
     @EnvironmentObject private var store: TrackerStore
     @State private var name = ""
     @State private var slot: PetSlot = .hat
     @State private var buying: PetItem?
     @State private var notice: String?
+    @State private var purchased = 0
     @FocusState private var naming: Bool
 
     private var displayName: String { store.petPreferences.displayName }
 
-    /// Every wardrobe slot; Pioneer-only items are filtered out of the grid for everyone else.
-    private func slots(_ pet: PetProgress) -> [PetSlot] {
-        PetSlot.allCases
-    }
     var body: some View {
         let pet = store.petProgress()
         let closet = store.petCloset
+        let balance = closet.balance(pet)
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Card {
-                    VStack(spacing: 12) {
-                        PetStage(pet: pet, outfit: petOutfit(closet, pet), name: displayName, size: 150, corner: 22)
-                        HStack(spacing: 6) {
-                            // The field hugs the name, with a pencil beside it, so renaming is easy to find.
-                            Text(name.isEmpty ? "Penny" : name).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(1)
-                                .padding(.horizontal, 2).hidden()
-                                .overlay {
-                                    TextField("Penny", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
-                                        .submitLabel(.done).focused($naming).accessibilityIdentifier("pet.name")
-                                        .onSubmit(saveName)
-                                        .onChange(of: naming) { _, focused in if !focused { saveName() } }
-                                }
-                            if !naming {
-                                Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted)
-                                    .onTapGesture { naming = true }.accessibilityLabel("Rename")
-                            }
-                        }.foregroundStyle(Palette.ink)
-                        Text("Level \(pet.level) · \(pet.stage.title)").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.teal)
-                        ProgressView(value: pet.levelProgress).tint(Palette.teal)
-                        Text("\(pet.xpToNextLevel) XP to level \(pet.level + 1) · tap \(displayName) to play").font(.caption).foregroundStyle(Palette.muted)
-                    }.frame(maxWidth: .infinity)
-                }
-                HStack(spacing: 12) {
-                    stat("\(closet.balance(pet))", "Coins", "dollarsign.circle.fill", goldDeep)
-                    stat("\(pet.streakWeeks)", "Week streak", "flame.fill", .orange)
-                    stat("\(pet.achievements.filter(\.earned).count)/\(pet.achievements.count)", "Badges", "rosette", Palette.teal)
-                }
-                SectionHeading(title: "Wardrobe", detail: "\(closet.balance(pet)) coins to spend")
-                PillPicker(values: slots(pet).map(\.title), selection: Binding(get: { slot.title }, set: { title in slot = PetSlot.allCases.first { $0.title == title } ?? .hat }))
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    ForEach(PetItem.catalog.filter { $0.slot == slot && (!$0.pioneerOnly || closet.owns($0, pet)) }) { item in itemTile(item, pet, closet) }
-                }
+                stage(pet, closet)
+                nameRow
+                if balance < 0 { owedNote(balance) }
+                statsCard(pet)
+                missions(pet)
+                shop(pet, closet)
                 SectionHeading(title: "Badges", detail: "+\(PetProgress.coinsPerAchievement) coins each")
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(pet.achievements) { badge($0) }
                 }
-                SectionHeading(title: "How \(displayName) grows")
-                Card {
-                    Label("+\(PetProgress.xpPerWorkedShift) XP and \(PetProgress.coinsPerWorkedShift) coins for every shift you work", systemImage: "briefcase.fill")
-                    Label("+\(PetProgress.xpPerPaidShift) XP and \(PetProgress.coinsPerPaidShift) coins when a shift is marked paid", systemImage: "checkmark.seal.fill")
-                    Label("A new level every \(PetProgress.xpPerLevel) XP, with no limit", systemImage: "arrow.up.circle.fill")
-                    Label("Badges add \(PetProgress.coinsPerAchievement) coins and unlock special outfits", systemImage: "rosette")
-                    Label("Overdue pay makes \(displayName) worried until it's paid", systemImage: "exclamationmark.bubble.fill")
-                }.font(.subheadline).foregroundStyle(Palette.ink)
+                howItWorks
             }.padding(20)
         }
+        .scrollIndicators(.hidden)
         .detailStyle("Your pet")
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { CoinLabel(amount: balance) } }
         .onAppear { name = displayName }
         .onDisappear(perform: saveName)
+        .sensoryFeedback(.success, trigger: purchased)
         .confirmationDialog(buying.map { "Buy \($0.name) for \($0.requirement)?" } ?? "", isPresented: Binding(get: { buying != nil }, set: { if !$0 { buying = nil } }), titleVisibility: .visible) {
             if let item = buying { Button("Buy \(item.name)") { buy(item, pet) } }
         }
         .alert(notice ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) { Button("OK", role: .cancel) {} }
     }
 
+    private func stage(_ pet: PetProgress, _ closet: PetCloset) -> some View {
+        ZStack(alignment: .bottom) {
+            PetStage(pet: pet, outfit: petOutfit(closet, pet), name: displayName, size: 200, corner: 24, wide: true)
+            Text(pet.message(name: displayName, currency: store.data.rules.currency))
+                .font(.footnote.weight(.semibold)).foregroundStyle(PetPalette.outline).multilineTextAlignment(.center)
+                .padding(.horizontal, 14).padding(.vertical, 8).background(.white.opacity(0.92), in: Capsule())
+                .padding(.horizontal, 14).padding(.bottom, 12).allowsHitTesting(false)
+        }
+    }
+
+    private var nameRow: some View {
+        HStack(spacing: 6) {
+            // The field hugs the name, with a pencil beside it, so renaming is easy to find.
+            Text(name.isEmpty ? "Penny" : name).font(.system(.title2, design: .rounded, weight: .bold)).lineLimit(1)
+                .padding(.horizontal, 2).hidden()
+                .overlay {
+                    TextField("Penny", text: $name).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
+                        .submitLabel(.done).focused($naming).accessibilityIdentifier("pet.name")
+                        .onSubmit(saveName)
+                        .onChange(of: naming) { _, focused in if !focused { saveName() } }
+                }
+            if !naming {
+                Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted)
+                    .onTapGesture { naming = true }.accessibilityLabel("Rename")
+            }
+        }.foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
+    }
+
+    /// Shown instead of quietly showing 0 when coins were taken back after they were spent.
+    private func owedNote(_ balance: Int) -> some View {
+        Card {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: "info.circle.fill").foregroundStyle(.orange)
+                Text("You're \(-balance) coins short. Some coins were taken back because shifts were deleted or marked unpaid after you'd spent them. Keep working shifts to earn them back.")
+                    .font(.footnote).foregroundStyle(Palette.muted)
+            }
+        }
+    }
+
+    private func statsCard(_ pet: PetProgress) -> some View {
+        Card {
+            HStack {
+                Text("\(pet.stage.title) · Level \(pet.level)").font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
+                Spacer()
+                Text("\(pet.xp) XP").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
+            }
+            ProgressView(value: pet.progress).tint(PetPalette.leaf)
+            if let line = nextStageLine(pet) { Text(line).font(.caption).foregroundStyle(Palette.muted) }
+            HStack(spacing: 8) {
+                tile("Streak", "\(pet.streakWeeks) wk", "flame.fill", .orange)
+                tile("Best", "\(pet.bestStreakWeeks) wk", "trophy.fill", PetPalette.goldDark)
+                tile("Days worked", "\(pet.daysWorked)", "calendar", Palette.teal)
+            }
+        }
+    }
+
+    private func tile(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: symbol).font(.callout).foregroundStyle(tint)
+            Text(value).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(title).font(.caption2).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 10)
+        .background(Palette.mint.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func missions(_ pet: PetProgress) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading(title: "This week's missions", detail: "Coins add up automatically")
+            Card {
+                ForEach(pet.missions) { mission in
+                    HStack(spacing: 12) {
+                        Image(systemName: mission.done ? "checkmark.circle.fill" : mission.symbol)
+                            .font(.title3).foregroundStyle(mission.done ? PetPalette.leaf : Palette.muted).frame(width: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(mission.title).font(.subheadline).strikethrough(mission.done, color: Palette.muted)
+                                .foregroundStyle(mission.done ? Palette.muted : Palette.ink)
+                            if let detail = mission.detail { Text(detail).font(.caption).foregroundStyle(Palette.muted) }
+                        }
+                        Spacer()
+                        CoinLabel(amount: mission.reward, font: .caption.weight(.bold))
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+
+    private func shop(_ pet: PetProgress, _ closet: PetCloset) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading(title: "Shop & wardrobe", detail: "Tap to buy or wear")
+            PillPicker(values: PetSlot.allCases.map(\.title), selection: Binding(get: { slot.title }, set: { title in slot = PetSlot.allCases.first { $0.title == title } ?? .hat }))
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(PetItem.catalog.filter { $0.slot == slot && (!$0.pioneerOnly || closet.owns($0, pet)) }) { item in itemTile(item, pet, closet) }
+            }
+        }
+    }
+
     private func itemTile(_ item: PetItem, _ pet: PetProgress, _ closet: PetCloset) -> some View {
         let owned = closet.owns(item, pet)
+        let locked = closet.locked(item, pet)
         let wearing = closet.wearing(item.slot, pet)?.id == item.id
-        var preview = petOutfit(closet, pet); preview[item.slot] = item
+        var preview = petOutfit(closet, pet).filter { $0.key == .skin && item.slot != .skin }
+        if item.slot != .background { preview[item.slot] = item }
         return Button { tap(item, pet, closet) } label: {
-            VStack(spacing: 6) {
-                PetStage(pet: pet, outfit: preview, name: displayName, size: 52, corner: 12).allowsHitTesting(false)
-                    .opacity(owned || isCoinItem(item) ? 1 : 0.55)
+            VStack(spacing: 8) {
+                ZStack {
+                    PetScene(item: item.slot == .background ? item : nil)
+                    PetSprite(stage: max(pet.stage, .coinling), mood: .happy, outfit: preview, animate: false)
+                        .frame(width: 84, height: 84).opacity(locked ? 0.35 : 1)
+                    if locked { Image(systemName: "lock.fill").font(.title2).foregroundStyle(Palette.muted) }
+                }
+                .frame(height: 96).clipShape(RoundedRectangle(cornerRadius: 14))
                 Text(item.name).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
                 Group {
-                    if wearing { Label("Wearing", systemImage: "checkmark.circle.fill").foregroundStyle(Palette.teal) }
-                    else if owned { Text("Owned").foregroundStyle(Palette.muted) }
-                    else if isCoinItem(item) { Label(item.requirement, systemImage: "dollarsign.circle.fill").foregroundStyle(goldDeep) }
-                    else { Label(item.requirement, systemImage: "lock.fill").foregroundStyle(Palette.muted) }
+                    if wearing { Label("Wearing", systemImage: "checkmark").foregroundStyle(PetPalette.leaf) }
+                    else if owned { Text("Owned · tap to wear").foregroundStyle(Palette.muted) }
+                    else if locked { Text("Unlocks at \(item.stage.title)").foregroundStyle(Palette.muted) }
+                    else if let price = item.price { CoinLabel(amount: price, font: .caption.weight(.bold)) }
+                    else { Label(item.requirement, systemImage: "rosette").foregroundStyle(Palette.muted) }
                 }.font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .padding(8).frame(maxWidth: .infinity)
-            .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(wearing ? Palette.teal : Palette.line.opacity(0.7), lineWidth: wearing ? 2 : 0.6))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .padding(10).frame(maxWidth: .infinity)
+            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(wearing ? PetPalette.leaf : Palette.line.opacity(0.7), lineWidth: wearing ? 2 : 0.6))
+            .contentShape(RoundedRectangle(cornerRadius: 18))
         }.buttonStyle(.plain).accessibilityIdentifier("pet.item." + item.id)
     }
 
-    private func isCoinItem(_ item: PetItem) -> Bool { if case .coins = item.unlock { return true }; return false }
-
     private func tap(_ item: PetItem, _ pet: PetProgress, _ closet: PetCloset) {
         if closet.owns(item, pet) { store.savePet { var updated = $0.closet ?? PetCloset(); try? updated.toggle(item, pet); $0.closet = updated }; return }
+        if closet.locked(item, pet) { notice = "\(item.name) is for sale once \(displayName) becomes a \(item.stage.title.lowercased()). \(displayName) is a \(pet.stage.title.lowercased()) now."; return }
         switch item.unlock {
         case .coins(let price):
-            if closet.balance(pet) >= price { buying = item }
-            else { notice = "\(item.name) costs \(price) coins. Earn \(price - closet.balance(pet)) more by working shifts and getting paid." }
-        case .level(let level): notice = "\(item.name) unlocks at level \(level). \(displayName) is level \(pet.level)."
-        case .achievement: notice = "\(item.name) unlocks with the \(item.requirement.replacingOccurrences(of: "Badge: ", with: "")) badge."
+            let balance = closet.balance(pet)
+            if balance >= price { buying = item }
+            else { notice = "\(item.name) costs \(price) coins. Earn \(price - max(0, balance)) more by working shifts and finishing missions." }
+        case .achievement: notice = "\(item.name) comes with the \(item.requirement.replacingOccurrences(of: "Badge: ", with: "")) badge."
         case .free: break
         }
     }
 
     private func buy(_ item: PetItem, _ pet: PetProgress) {
         var closet = store.petCloset
-        do { try closet.buy(item, pet); store.savePet { $0.closet = closet } }
+        do { try closet.buy(item, pet); store.savePet { $0.closet = closet }; purchased += 1 }
         catch { notice = "Not enough coins for \(item.name)." }
         buying = nil
     }
@@ -718,8 +833,8 @@ struct PetDetailView: View {
                 .frame(width: 38, height: 38).background(achievement.earned ? Palette.teal : Palette.mint, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(achievement.title).font(.caption.weight(.bold)).foregroundStyle(Palette.ink)
-                if achievement.earned { Text(achievement.detail).font(.caption2).foregroundStyle(Palette.muted).lineLimit(2) }
-                else { ProgressView(value: achievement.progress).tint(Palette.teal); Text(achievement.detail).font(.caption2).foregroundStyle(Palette.muted).lineLimit(2) }
+                if !achievement.earned { ProgressView(value: achievement.progress).tint(Palette.teal) }
+                Text(achievement.detail).font(.caption2).foregroundStyle(Palette.muted).lineLimit(2)
             }
             Spacer(minLength: 0)
         }
@@ -728,10 +843,25 @@ struct PetDetailView: View {
         .accessibilityElement(children: .combine).accessibilityLabel("\(achievement.title), \(achievement.earned ? "earned" : "not earned yet")")
     }
 
-    private func stat(_ value: String, _ title: String, _ symbol: String, _ tint: Color) -> some View {
-        Card {
-            Label(value, systemImage: symbol).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.7)
-            Text(title).font(.caption).foregroundStyle(Palette.muted)
+    private var howItWorks: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading(title: "How \(displayName) grows")
+            Card {
+                rule("briefcase", "+\(PetProgress.xpPerWorkedShift) XP and \(PetProgress.coinsPerWorkedShift) coins for every shift you work, +\(PetProgress.xpPerWorkedDay) XP for each day you work")
+                rule("checkmark.seal", "+\(PetProgress.xpPerPaidShift) XP and \(PetProgress.coinsPerPaidShift) coins when a shift is marked paid")
+                rule("list.number", "+\(PetProgress.coinsBusyWeek) coins for a week with \(PetProgress.busyWeekShifts) or more shifts")
+                rule("flame", "+\(PetProgress.coinsStreakMilestone) coins for every \(PetProgress.streakMilestone) weeks in a row with a shift")
+                rule("rosette", "Badges add \(PetProgress.coinsPerAchievement) coins, and some unlock special outfits")
+                rule("cart", "The shop opens up as \(displayName) grows: egg, hatchling, coinling, golden coin, treasure")
+                rule("heart", "Go a couple of weeks without a shift and \(displayName) gets hungry. Overdue pay makes \(displayName) worried")
+            }
+        }
+    }
+
+    private func rule(_ symbol: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: symbol).foregroundStyle(Palette.teal).frame(width: 22)
+            Text(text).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

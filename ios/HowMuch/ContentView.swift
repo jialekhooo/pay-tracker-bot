@@ -140,6 +140,7 @@ struct DashboardView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { clock in
             ScreenShell(title: "Overview", subtitle: "Your work. Your worth.") {
+                PetCard(now: clock.date)
                 PillPicker(values: ["All time", "By month"], selection: $period, onDark: false)
                 if period == "By month" {
                     PeriodNavigator(label: month.formatted(.dateTime.month(.wide).year()), dark: false,
@@ -158,7 +159,6 @@ struct DashboardView: View {
                         GlanceCard(title: "Left to earn this month", value: money(next.reduce(0) { $0 + $1.pay - $1.earned(at: clock.date) }, currency), symbol: "arrow.up.right")
                     }.accessibilityIdentifier("overview.upcoming")
                 }.buttonStyle(.plain)
-                PetCard(now: clock.date)
                 // Today first: what's on now or later today (including an overnight shift that started yesterday).
                 let todayShifts = store.data.shifts.filter { $0.day == Shift.dayString(clock.date) || ($0.startDate <= clock.date && clock.date < $0.endDate) }
                     .sorted { $0.startDate < $1.startDate }

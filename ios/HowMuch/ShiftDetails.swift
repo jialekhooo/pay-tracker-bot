@@ -72,7 +72,9 @@ struct ShiftDetailView: View {
                                     Label("Undo last change", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
                                 }.buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.teal)
                             }
-                            Button("Delete shift", role: .destructive) { deleting = true }.rowAction().padding(.horizontal, 16)
+                            Button(role: .destructive) { deleting = true } label: {
+                                Label("Delete shift", systemImage: "trash").frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
+                            }.buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(.red)
                         }
                     }.padding(20)
                 }.detailStyle(shift.event)
