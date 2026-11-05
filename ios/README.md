@@ -158,3 +158,5 @@ Build 38: Connect Gmail, Outlook or iCloud Mail is back in Pay-in tracking for e
 Build 39: Pay-in tracking shows Gmail's forwarding confirmation code and link for the HowMuch address.
 
 Build 40: Settings is tidied into small labelled groups with one-line rows.
+
+Build 41: A personal Profile page with work stats, and a Pioneer badge and Penny skin for accounts made before launch.
