@@ -48,6 +48,23 @@ struct PaymentDetectionView: View {
                             Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = address; copied = true }
                                 .labelStyle(.iconOnly).accessibilityLabel("Copy forwarding address")
                         }.accessibilityIdentifier("payin.forwarding.address")
+                        if let confirmation = payIn?.forwarding.confirmation {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Gmail asked to confirm forwarding\(confirmation.account.map { " from \($0)" } ?? "")", systemImage: "checkmark.shield")
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.teal)
+                                if let code = confirmation.code {
+                                    HStack {
+                                        Text(code).font(.title3.monospacedDigit().weight(.bold)).textSelection(.enabled).accessibilityIdentifier("payin.forwarding.code")
+                                        Spacer()
+                                        Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = code }.labelStyle(.iconOnly)
+                                    }
+                                }
+                                if let link = confirmation.link.flatMap(URL.init(string:)), link.host?.hasSuffix("google.com") == true {
+                                    Link(destination: link) { Label("Confirm forwarding in Gmail", systemImage: "arrow.up.right.square") }
+                                }
+                                Text("Enter the code in Gmail's forwarding settings, or open the link. Then add a filter to forward DBS alerts.").font(.caption).foregroundStyle(Palette.muted)
+                            }.padding(.vertical, 4)
+                        }
                         NavigationLink { EmailForwardingGuide(address: address) } label: { Label("How to forward bank emails", systemImage: "envelope.arrow.triangle.branch") }
                         Text("Forward DBS \u{201C}You\u{2019}ve received a transfer\u{201D} alerts to this private address, by hand or with a mail rule. Forwarded emails always wait for you to check them below.").font(.caption).foregroundStyle(Palette.muted)
                     } else {
@@ -251,7 +268,8 @@ private struct DetectionReceipt: Decodable, Identifiable {
 }
 
 private struct PayInStatus: Decodable {
-    struct Forwarding: Decodable { let available: Bool; let address: String? }
+    struct Confirmation: Decodable { let code: String?; let link: String?; let account: String? }
+    struct Forwarding: Decodable { let available: Bool; let address: String?; let confirmation: Confirmation? }
     let notificationsAuto: Bool
     let forwarding: Forwarding
 }
@@ -310,7 +328,7 @@ struct EmailForwardingGuide: View {
                 Text("Open a DBS \u{201C}You\u{2019}ve received a transfer\u{201D} email, tap Forward, and send it to your address. It appears in Pay-in tracking within a minute.").font(.subheadline)
             }
             Section("Forward automatically (Gmail)") {
-                Text("On a computer, open Gmail Settings → Forwarding and POP/IMAP → Add a forwarding address, and enter your HowMuch address. Gmail sends a confirmation code, which appears in Pay-in tracking.").font(.subheadline)
+                Text("On a computer, open Gmail Settings → Forwarding and POP/IMAP → Add a forwarding address, and enter your HowMuch address exactly (it starts with pay+). Gmail sends a confirmation code, which appears in Pay-in tracking within a minute (tap Refresh at the bottom).").font(.subheadline)
                 Text("Then create a filter: From ibanking.alert@dbs.com, Subject \u{201C}You\u{2019}ve received a transfer\u{201D} → Forward it to your HowMuch address.").font(.subheadline)
             }
         }.detailStyle("Email forwarding")

@@ -16,9 +16,11 @@ from __future__ import annotations
 import email
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
+import time
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from email import policy
@@ -41,6 +43,9 @@ AMOUNT = r"(?:SGD|S\$|\$)\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)"
 
 def ensure_schema(db) -> None:
     db.executescript(SCHEMA)
+    columns = {r[1] for r in db.execute("PRAGMA table_info(pay_in_settings)")}
+    if "forward_confirmation" not in columns:
+        db.execute("ALTER TABLE pay_in_settings ADD COLUMN forward_confirmation TEXT")
 
 
 def inbound_domain() -> str:
@@ -67,8 +72,37 @@ def forwarding_address(store: PaymentStore, user_id: int) -> str | None:
 
 
 def pay_in_status(store: PaymentStore, user_id: int) -> dict:
-    return {"notifications_auto": bool(settings(store, user_id)["notifications_auto"]),
-            "forwarding": {"available": bool(inbound_domain()), "address": forwarding_address(store, user_id)}}
+    current = settings(store, user_id)
+    confirmation = None
+    if current.get("forward_confirmation"):
+        saved = json.loads(current["forward_confirmation"])
+        # Gmail's codes stop working after a while; don't show stale ones.
+        if time.time() - saved.get("received", 0) < 7 * 24 * 3600:
+            confirmation = {k: saved.get(k) for k in ("code", "link", "account")}
+    return {"notifications_auto": bool(current["notifications_auto"]),
+            "forwarding": {"available": bool(inbound_domain()), "address": forwarding_address(store, user_id),
+                           "confirmation": confirmation}}
+
+
+GMAIL_CONFIRM_SENDER = "forwarding-noreply@google.com"
+
+
+def gmail_forwarding_confirmation(raw: bytes) -> dict | None:
+    """Gmail's "Forwarding Confirmation" email: the code and link that switch on auto-forwarding."""
+    message = email.message_from_bytes(raw, policy=policy.default)
+    if GMAIL_CONFIRM_SENDER not in str(message.get("From", "")).casefold():
+        return None
+    subject = str(message.get("Subject", ""))
+    if "forwarding confirmation" not in subject.casefold():
+        return None
+    text = _plain_text(message)
+    code = re.search(r"Confirmation code:\s*(\d{6,12})", text, re.I)
+    link = re.search(r"https://mail(?:-settings)?\.google\.com/mail/[^\s<>\")]+", text)
+    account = re.search(r"from\s+([^\s()]+@[^\s()]+)", subject, re.I)
+    if not code and not link:
+        return None
+    return {"code": code[1] if code else None, "link": link[0] if link else None,
+            "account": account[1] if account else None}
 
 
 def _key(value: str) -> str:
@@ -209,7 +243,16 @@ async def inbound_email(secret: str, request: Request) -> dict:
     store = PaymentStore(request.app.state.storage)
     ensure_schema(store.db)
     row = store.db.execute("SELECT user_id FROM pay_in_settings WHERE forward_token=?", (token,)).fetchone() if token else None
-    if not row or not parsed:
+    if not row:
+        return {"status": "ignored"}
+    confirmation = gmail_forwarding_confirmation(raw)
+    if confirmation:
+        # Keep it so Pay-in tracking can show the code and link needed to finish Gmail's setup.
+        with store.db:
+            store.db.execute("UPDATE pay_in_settings SET forward_confirmation=? WHERE user_id=?",
+                             (json.dumps({**confirmation, "received": int(time.time())}), row["user_id"]))
+        return {"status": "confirmation"}
+    if not parsed:
         return {"status": "ignored"}
     user_id = row["user_id"]
     if not store.accepts_payer(user_id, parsed["payer"]):

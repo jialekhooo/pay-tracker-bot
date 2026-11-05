@@ -97,4 +97,26 @@ def test_forwarding_is_unavailable_without_an_inbound_domain(setup, monkeypatch)
     monkeypatch.delenv('HOWMUCH_INBOUND_DOMAIN', raising=False)
     session = finished_roadshow(setup)
     status = setup.client.get('/v1/payment-detection/pay-in', headers=headers(session)).json()
-    assert status['forwarding'] == {'available': False, 'address': None}
+    assert status['forwarding'] == {'available': False, 'address': None, 'confirmation': None}
+
+
+def test_gmail_forwarding_confirmation_shows_in_pay_in_tracking(setup, monkeypatch):
+    monkeypatch.setenv('HOWMUCH_INBOUND_DOMAIN', 'in.howmuch.test')
+    monkeypatch.setenv('HOWMUCH_INBOUND_SECRET', 'hook-secret')
+    session = finished_roadshow(setup)
+    address = setup.client.get('/v1/payment-detection/pay-in', headers=headers(session)).json()['forwarding']['address']
+    message = EmailMessage()
+    message['From'], message['To'] = 'Gmail Team <forwarding-noreply@google.com>', address
+    message['Subject'] = '(#123456789) Gmail Forwarding Confirmation - Receive Mail from jane@gmail.com'
+    message.set_content('jane@gmail.com has requested to automatically forward mail to your email address.\n'
+                        'Confirmation code: 123456789\n\nTo allow jane@gmail.com to automatically forward mail to your address, '
+                        'please click the link below to confirm the request:\n\n'
+                        'https://mail-settings.google.com/mail/vf-%5BANGjdJ8abc%5D-xyz\n')
+    assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(message)).json()['status'] == 'confirmation'
+    forwarding = setup.client.get('/v1/payment-detection/pay-in', headers=headers(session)).json()['forwarding']
+    assert forwarding['confirmation'] == {'code': '123456789', 'link': 'https://mail-settings.google.com/mail/vf-%5BANGjdJ8abc%5D-xyz',
+                                          'account': 'jane@gmail.com'}
+    # A look-alike from anyone else is ignored.
+    fake = EmailMessage(); fake['From'], fake['To'] = 'someone@example.com', address
+    fake['Subject'] = 'Gmail Forwarding Confirmation'; fake.set_content('Confirmation code: 999999999')
+    assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(fake)).json()['status'] == 'ignored'
