@@ -231,9 +231,11 @@ private struct PrimaryActionButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(.subheadline, design: .rounded, weight: .semibold))
-            .foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 20)
-            .padding(.vertical, 14).background(Palette.teal, in: RoundedRectangle(cornerRadius: 14))
-            .contentShape(Rectangle()).opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
+            .foregroundStyle(.white).padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 48)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+            // Teal-tinted Liquid Glass, like the + button, so the main action keeps its emphasis without a flat slab.
+            .glassChrome(in: RoundedRectangle(cornerRadius: 16), tint: Palette.teal)
+            .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
     }
 }
 private struct RowActionButtonStyle: ButtonStyle {

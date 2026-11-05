@@ -59,7 +59,7 @@ struct WorkCalendarView: View {
             SectionHeading(title: selected.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)), detail: counted(selectedShifts.count, "shift"))
             if selectedShifts.isEmpty { EmptyCard(title: "A day with possibilities", message: "No shifts booked for this date.") }
             else { ShiftCards(shifts: selectedShifts) }
-            Button("Add shift on this day", systemImage: "plus") { adding = true }.primaryButton().accessibilityIdentifier("calendar.add")
+            Button("Add shift on this day", systemImage: "plus") { adding = true }.glassAction().accessibilityIdentifier("calendar.add")
         }.sheet(isPresented: $adding) { ShiftEditor(initialDay: selected) }
     }
     private func move(_ amount: Int) {
