@@ -4,8 +4,18 @@ import HowMuchCore
 
 struct WidgetsSettingsView: View {
     @EnvironmentObject private var store: TrackerStore
-    @State private var showPay = false
-    @State private var showLocation = true
+    var body: some View { AccountWidgetPreviews(accountID: store.accountID).id(store.accountID) }
+}
+
+private struct AccountWidgetPreviews: View {
+    @EnvironmentObject private var store: TrackerStore
+    @AppStorage private var showPay: Bool
+    @AppStorage private var showLocation: Bool
+    init(accountID: String) {
+        let prefix = "howmuch.widgetPreviews." + accountID.lowercased()
+        _showPay = AppStorage(wrappedValue: false, prefix + ".showPay")
+        _showLocation = AppStorage(wrappedValue: true, prefix + ".showLocation")
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -16,8 +26,8 @@ struct WidgetsSettingsView: View {
                 }
                 Card {
                     Toggle("Preview pay amounts", isOn: $showPay).accessibilityIdentifier("widgets.previewPay")
-                    Toggle("Preview locations", isOn: $showLocation)
-                    Text("These switches change the previews below. Each installed widget has its own options.").font(.caption).foregroundStyle(Palette.muted)
+                    Toggle("Preview locations", isOn: $showLocation).accessibilityIdentifier("widgets.previewLocation")
+                    Text("Preview choices save automatically for this account on this iPhone. Each installed widget has its own options.").font(.caption).foregroundStyle(Palette.muted)
                 }
                 preview("Work Calendar", .calendar, height: 172)
                 preview("Next Shift", .nextShift, height: 158)

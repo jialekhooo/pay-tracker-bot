@@ -791,7 +791,9 @@ final class HowMuchUITests: XCTestCase {
         tapTrailingArea(app.staticTexts["Widgets"], in: app)
         XCTAssertTrue(app.navigationBars["Widgets"].waitForExistence(timeout: 5))
         let pay = app.switches["widgets.previewPay"]
-        XCTAssertTrue(pay.exists); XCTAssertEqual(pay.value as? String, "0")
+        XCTAssertTrue(pay.exists)
+        if pay.value as? String == "1" { pay.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+        XCTAssertEqual(pay.value as? String, "0")
         pay.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(pay.value as? String, "1")
         attach("Next Shift widget preview", app: app)
         tapTrailingArea(app.buttons["widgets.refresh"], in: app)
@@ -803,6 +805,42 @@ final class HowMuchUITests: XCTestCase {
         app.open(URL(string: "howmuch://widget/earnings?account=00000000-0000-4000-8000-000000000002")!)
         XCTAssertFalse(app.buttons["nav.earnings"].isSelected)
     }
+    @MainActor
+    func testWidgetPreviewOptionsSurviveReopeningAndAppRelaunch() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-widgets"]; app.launch()
+        func openWidgets() {
+            app.buttons["nav.settings"].tap()
+            tapTrailingArea(app.staticTexts["Widgets"], in: app)
+            XCTAssertTrue(app.navigationBars["Widgets"].waitForExistence(timeout: 5))
+        }
+        openWidgets()
+        let pay = app.switches["widgets.previewPay"]
+        let location = app.switches["widgets.previewLocation"]
+        if pay.value as? String != "1" { pay.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+        if location.value as? String != "0" { location.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+        app.navigationBars.buttons.firstMatch.tap()
+        tapTrailingArea(app.staticTexts["Widgets"], in: app)
+        XCTAssertEqual(pay.value as? String, "1"); XCTAssertEqual(location.value as? String, "0")
+        app.terminate(); app.launch(); openWidgets()
+        XCTAssertEqual(pay.value as? String, "1"); XCTAssertEqual(location.value as? String, "0")
+        attach("Saved widget preview preferences after relaunch", app: app)
+        pay.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        location.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        app.terminate(); app.launch(); openWidgets()
+        XCTAssertEqual(pay.value as? String, "0"); XCTAssertEqual(location.value as? String, "1")
+    }
+    @MainActor
+    func testNotificationDeliveryShowsOneStatusAndRelevantActions() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.settings"].tap(); tapTrailingArea(app.staticTexts["Job notifications"], in: app)
+        let fallback = app.descendants(matching: .any).matching(identifier: "notifications.deliveryStatus").firstMatch
+        reveal(fallback, in: app); XCTAssertTrue(fallback.exists)
+        XCTAssertFalse(app.staticTexts["Push notifications are registered for this account."].exists)
+        XCTAssertFalse(app.buttons["Enable notifications on this iPhone"].exists)
+        XCTAssertTrue(app.buttons["Open iPhone notification settings"].exists)
+        attach("Clean notification delivery section", app: app)
+    }
+
     @MainActor
     func testCalendarListsShiftContinuingFromYesterday() {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-overnight-calendar"]; app.launch()

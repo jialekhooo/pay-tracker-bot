@@ -11,7 +11,7 @@ struct JobNotificationSettingsView: View {
     @State private var options = JobNotificationOptions()
     @State private var dayBefore = Date()
     @State private var paymentTime = Date()
-    @State private var permission = ""
+    @State private var authorization: UNAuthorizationStatus = .notDetermined
     @State private var saved = false
     @State private var testMessage = ""
     @State private var testing = false
@@ -53,15 +53,27 @@ struct JobNotificationSettingsView: View {
                 Text("Touch and hold a reminder to open its job or review a payment. Notifications are grouped by job.").font(.caption).foregroundStyle(Palette.muted)
             }
             Section("Delivery") {
-                Text(permission).font(.subheadline)
-                Text(store.usesRemotePush ? "Server push is registered for this account, including when HowMuch is closed." : "iPhone reminders are used while remote push is being configured. Up to 60 upcoming alerts are refreshed whenever the app opens or jobs change.").font(.caption).foregroundStyle(Palette.muted)
-                if !auth.pushMessage.isEmpty { Text(auth.pushMessage).font(.caption).foregroundStyle(Palette.muted) }
-                if let error = push.registrationError { Text(error).font(.caption).foregroundStyle(Palette.muted) }
-                Button("Enable notifications on this iPhone", systemImage: "bell.badge") { Task { await auth.enableNotifications(); await readPermission() } }.rowAction()
-                Button("Send test notification", systemImage: "paperplane") { Task { await sendTest() } }.rowAction().disabled(testing).accessibilityIdentifier("notifications.test")
+                Label(deliveryTitle, systemImage: notificationsAllowed ? "checkmark.circle.fill" : "bell.slash")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(notificationsAllowed ? Palette.teal : Palette.ink)
+                    .accessibilityIdentifier("notifications.deliveryStatus")
+                Text(deliveryDetail).font(.caption).foregroundStyle(Palette.muted)
+                if let error = push.registrationError {
+                    Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+                } else if auth.pushMessage.hasPrefix("Couldn’t") {
+                    Label(auth.pushMessage, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+                }
+                if authorization == .notDetermined {
+                    Button("Enable notifications", systemImage: "bell.badge") { Task { await auth.enableNotifications(); await readPermission() } }.rowAction().accessibilityIdentifier("notifications.enable")
+                } else if notificationsAllowed && (push.registrationError != nil || auth.pushMessage.hasPrefix("Couldn’t")) {
+                    Button("Retry notification connection", systemImage: "arrow.clockwise") { Task { await auth.registerPushIfAllowed(); await readPermission() } }.rowAction()
+                }
+                if notificationsAllowed {
+                    Button("Send test notification", systemImage: "paperplane") { Task { await sendTest() } }.rowAction().disabled(testing).accessibilityIdentifier("notifications.test")
+                }
                 if !testMessage.isEmpty { Text(testMessage).font(.caption).foregroundStyle(Palette.muted) }
-                Button("Open iPhone notification settings") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }.rowAction()
+                Button("Open iPhone notification settings", systemImage: "gearshape") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }.rowAction()
             }
+
             Button("Save notification preferences") {
                 options.dayBeforeMinute = minute(dayBefore); options.dueMinute = minute(paymentTime)
                 if store.updatePreferences({ $0.notifications = options }) {
@@ -96,7 +108,7 @@ struct JobNotificationSettingsView: View {
         let center = UNUserNotificationCenter.current()
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional else {
-            testMessage = "Enable notifications above first, then send a test."; return
+            testMessage = "Allow notifications in iPhone Settings, then try again."; return
         }
         let content = UNMutableNotificationContent()
         content.title = "HowMuch reminders are ready"
@@ -110,14 +122,20 @@ struct JobNotificationSettingsView: View {
     }
     private func minute(_ value: Date) -> Int { Calendar.current.component(.hour, from: value) * 60 + Calendar.current.component(.minute, from: value) }
     private func time(_ value: Int) -> Date { Calendar.current.date(bySettingHour: value / 60, minute: value % 60, second: 0, of: Date())! }
-    private func readPermission() async {
-        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        switch status {
-        case .authorized, .provisional: permission = "Notifications allowed on this iPhone"
-        case .denied: permission = "Notifications are off in iPhone Settings"
-        default: permission = "Choose whether this iPhone can send you job alerts"
-        }
+    private var notificationsAllowed: Bool { authorization == .authorized || authorization == .provisional || authorization == .ephemeral }
+    private var deliveryTitle: String {
+        if notificationsAllowed { return "Notifications are on" }
+        return authorization == .denied ? "Notifications are off" : "Allow notifications on this iPhone"
     }
+    private var deliveryDetail: String {
+        if authorization == .denied { return "Turn on notifications in iPhone Settings to receive job reminders." }
+        if !notificationsAllowed { return "Enable alerts to receive your saved job reminders." }
+        return store.usesRemotePush ? "Job reminders can arrive while HowMuch is closed." : "Open HowMuch regularly to keep this iPhone’s reminders up to date."
+    }
+    private func readPermission() async {
+        authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
 }
 
 struct TravelEstimate: Decodable {
