@@ -164,3 +164,5 @@ Build 41: A personal Profile page with work stats, and a Pioneer badge and Penny
 Build 42: Simpler Record pay received shortcut and an iOS 27 step-by-step bank notification guide.
 
 Build 43: Bank notification setup is a step-by-step wizard (built like SmartSpend's) with drawn iOS 27 Shortcuts screens and a live check.
+
+Build 44: Calendar sync (live feed for Apple, Google and TimeTree), Gmail code clears once confirmed, bank alerts screened on the iPhone with a linked status, 10-step wizard.
