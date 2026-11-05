@@ -45,11 +45,14 @@ struct SettingsView: View {
             Card {
                 settingsRow("Account & sync", store.syncMessage, "person.crop.circle.badge.checkmark") { AccountSettingsView() }
                 Divider()
+                // Gmail access is awaiting Google's verification, so App Store builds leave payment detection out for now.
+                #if DEBUG
                 settingsRow("Payment detection", "DBS alerts · connect your email", "creditcard") { PaymentDetectionView() }
+                #endif
             }
             Text("Your Apple account owns these records. Telegram is only an optional source for importing previous shifts.")
                 .font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 3)
-            HStack { Text("HOWMUCH").font(.system(size: 10, weight: .bold)).tracking(2); Spacer(); Text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")) · iOS beta").font(.caption2) }.foregroundStyle(Palette.muted).padding(.vertical, 10)
+            HStack { Text("HOWMUCH").font(.system(size: 10, weight: .bold)).tracking(2); Spacer(); Text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))").font(.caption2) }.foregroundStyle(Palette.muted).padding(.vertical, 10)
         }
     }
     private func settingsRow<Destination: View>(_ title: String, _ subtitle: String, _ icon: String, @ViewBuilder destination: () -> Destination) -> some View {
@@ -216,7 +219,7 @@ struct DataToolsView: View {
             if store.hasLegacyImport {
                 Section("Earlier iPhone records") {
                     Button("Import earlier iPhone records") { legacyImport = true }.rowAction()
-                    Text("Move the unassigned records from the earlier beta into this Apple account. This does not connect to Telegram or alter its data.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Move the unassigned records from the earlier version of HowMuch into this Apple account. This does not connect to Telegram or alter its data.").font(.caption).foregroundStyle(Palette.muted)
                 }
             }
             Section("Full backups") {
@@ -241,7 +244,7 @@ struct DataToolsView: View {
                 Button("Restore \(counted(pending?.shifts.count ?? 0, "shift"))", role: .destructive) { if let pending, store.update({ $0 = pending }) { message = "Archive restored." }; pending = nil }
                 Button("Cancel", role: .cancel) { pending = nil }
             }
-            .confirmationDialog("Import the earlier beta’s work records into this Apple account?", isPresented: $legacyImport, titleVisibility: .visible) {
+            .confirmationDialog("Import the earlier version’s work records into this Apple account?", isPresented: $legacyImport, titleVisibility: .visible) {
                 Button("Import into my account") { do { try store.importEarlierPhoneRecords(); message = "Earlier iPhone records imported." } catch { store.error = error.localizedDescription } }
             }
             .alert("Your data", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) { Button("OK") { message = nil } } message: { Text(message ?? "") }

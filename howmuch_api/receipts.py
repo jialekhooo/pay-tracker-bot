@@ -41,7 +41,7 @@ async def upload(receipt_id:uuid.UUID,request:Request,authorization:str|None=Hea
     if db.execute('SELECT 1 FROM receipt_photos WHERE account_id=? AND receipt_id=?',(account['account_id'],str(receipt_id))).fetchone():
         raise HTTPException(409,'This attachment already exists. Choose a new photo to replace it.')
     used=db.execute('SELECT COALESCE(sum(byte_count),0) FROM receipt_photos WHERE account_id=?',(account['account_id'],)).fetchone()[0]
-    if used+size>100_000_000:raise HTTPException(413,'Receipt storage for this beta account is full. Contact beta support.')
+    if used+size>100_000_000:raise HTTPException(413,'Receipt storage for this account is full. Remove some receipt photos or contact support.')
     encoded=encryption().encrypt(data)
     with db:db.execute('INSERT INTO receipt_photos VALUES(?,?,?,?,?)',(account['account_id'],str(receipt_id),encoded,size,int(time.time())))
     return {'receiptID':str(receipt_id)}
