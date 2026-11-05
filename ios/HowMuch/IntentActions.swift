@@ -120,6 +120,7 @@ extension IntentActions {
         if let amount, amount > 0 { body["amount"] = String(format: "%.2f", amount) }
         let data = try await account.api.request("/v1/payment-detection/notification", method: "POST", body: JSONSerialization.data(withJSONObject: body))
         let result = try JSONDecoder().decode(PayInResult.self, from: data)
+        PayInLog.record(result.message)
         guard result.status != "ignored" else { return result.message }
         // Bring the paid flags into the phone's records straight away.
         if result.status == "auto_paid" { await account.synchronize() }

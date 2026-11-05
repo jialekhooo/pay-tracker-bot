@@ -27,13 +27,14 @@ struct PaymentDetectionView: View {
         return auth.isDemo
         #endif
     }
+    @State private var settingUpBank = false
     var body: some View {
         Form {
             if previewOnly {
                 Section { Text("Sign in to your own Apple account to track pay coming in. The preview doesn't read any notifications or email.").foregroundStyle(Palette.muted) }
             } else if let status {
                 Section("Bank app notifications") {
-                    NavigationLink { BankNotificationsGuide() } label: { Label("Set up bank notifications", systemImage: "bell.badge") }
+                    Button { settingUpBank = true } label: { Label("Set up bank notifications", systemImage: "bell.badge") }
                         .accessibilityIdentifier("payin.notifications.setup")
                     Toggle("Mark matching pay as paid", isOn: Binding(get: { payIn?.notificationsAuto ?? false },
                                                                        set: { enabled in Task { await setPayIn(enabled) } }))
@@ -135,6 +136,7 @@ struct PaymentDetectionView: View {
             if !message.isEmpty { Section { Text(message).font(.caption).foregroundStyle(Palette.muted) } }
             if !previewOnly { Button("Refresh") { Task { await load() } }.rowAction().disabled(busy) }
         }.detailStyle("Pay-in tracking")
+            .sheet(isPresented: $settingUpBank) { BankSetupWizard() }
             .task { if !previewOnly { await load() } }
             .onChange(of: scenePhase) { _, value in if value == .active && !previewOnly { Task { await load() } } }
             .confirmationDialog("Disconnect email for this HowMuch account?", isPresented: $disconnect, titleVisibility: .visible) {
@@ -275,99 +277,6 @@ private struct PayInStatus: Decodable {
 }
 
 /// Step-by-step setup for the iOS 27 Shortcuts automation that runs on bank app notifications.
-struct BankNotificationsGuide: View {
-    @State private var copied = false
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("When your bank app says money came in, HowMuch marks the matching job paid. It takes one automation in the Shortcuts app, about two minutes with the pictures below.")
-                    .font(.subheadline).foregroundStyle(Palette.muted)
-
-                group("Before you start", [
-                    ("building.2", "Save who pays you", "On a job, set Paid by to the company name as your bank shows it, e.g. REFIX PTE. LTD."),
-                    ("bell.badge", "Allow your bank's notifications", "In your bank app, turn on alerts for incoming transfers and PayNow."),
-                ])
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Create the automation (iOS 27)").font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
-                    Text("Follow the pictures. It's the same on every iPhone with iOS 27.").font(.caption).foregroundStyle(Palette.muted)
-                }
-                ForEach(Array(Self.photoSteps.enumerated()), id: \.offset) { index, step in
-                    photoStep(index + 1, step)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Filter word").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted)
-                    HStack {
-                        Text("received").font(.body.monospaced())
-                        Spacer()
-                        Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = "received"; copied = true }
-                            .font(.subheadline.weight(.semibold)).buttonStyle(.borderless)
-                    }
-                }.padding(14).background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 16))
-
-                group("What happens next", [
-                    ("checkmark.seal", "Pay comes in", "You get a HowMuch notification, and the payment shows in Pay-in tracking to check."),
-                    ("wand.and.stars", "Hands-free", "Turn on Mark matching pay as paid in Pay-in tracking, and exact matches from saved payers are marked paid for you."),
-                ])
-
-                Link(destination: URL(string: "shortcuts://")!) { Text("Open Shortcuts").frame(maxWidth: .infinity) }.primaryButton()
-                Text("Needs iOS 27. If your bank words its alerts differently, the payment still shows up in Pay-in tracking for you to check.")
-                    .font(.caption).foregroundStyle(Palette.muted)
-            }.padding(.horizontal, 20).padding(.vertical, 12)
-        }.detailStyle("Bank notifications")
-    }
-    /// Real iOS 27 Shortcuts screens, in order (image, title, what to do).
-    static let photoSteps: [(String, String, String)] = [
-        ("BankGuide1", "Open Shortcuts, then Automation", "In the Library list, tap Automation."),
-        ("BankGuide2", "Tap +", "The + button is at the bottom of the screen."),
-        ("BankGuide3", "Tap Edit", "If you see Describe a Shortcut, tap Edit at the top right to build it yourself."),
-        ("BankGuide4", "Tap Automation", "In the action list at the bottom, tap the Automation button."),
-        ("BankGuide5", "Choose Notification", "Type Notification in the search box and tap it."),
-        ("BankGuide6", "Pick your bank app", "Tap App and choose your bank, e.g. digibank. (These pictures use News as a stand-in.)"),
-        ("BankGuide7", "Only money coming in", "Tap Add Filter. Tap Title and change it to Message, then tap the grey word and type received."),
-        ("BankGuide8", "Add HowMuch's action", "Search HowMuch in the bottom bar and tap Record pay received."),
-        ("BankGuide9", "Give it the notification", "Tap the grey Notification field, tap Select Variable, then tap the blue Notification under your trigger."),
-        ("BankGuide10", "Go back. Done!", "Tap the back arrow at the top left. Your automation is saved and switched on."),
-    ]
-    private func photoStep(_ number: Int, _ step: (String, String, String)) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 28, height: 28).background(Palette.teal, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(step.1).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                    Text(step.2).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-            Image(step.0).resizable().scaledToFit().frame(maxHeight: 360)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line, lineWidth: 1))
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("Screenshot: \(step.1)")
-        }.padding(14).background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
-            .accessibilityIdentifier("bank.step.\(number)")
-    }
-    private func group(_ title: String, _ steps: [(String, String, String)]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                    if index > 0 { Divider().padding(.leading, 44) }
-                    HStack(alignment: .top, spacing: 12) {
-                        Text("\(index + 1)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 28, height: 28).background(Palette.teal, in: Circle())
-                        VStack(alignment: .leading, spacing: 3) {
-                            Label(step.1, systemImage: step.0).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                            Text(step.2).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }.padding(.vertical, 10).accessibilityElement(children: .combine)
-                }
-            }.padding(.horizontal, 14).padding(.vertical, 2).background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-}
-
 /// How to forward DBS transfer alerts to the account's private HowMuch address.
 struct EmailForwardingGuide: View {
     let address: String

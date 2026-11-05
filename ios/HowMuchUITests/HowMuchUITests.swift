@@ -485,12 +485,21 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(setup.waitForExistence(timeout: 10))
         attach("Pay-in tracking", app: app)
         setup.tap()
-        XCTAssertTrue(app.staticTexts["Create the automation (iOS 27)"].waitForExistence(timeout: 5) || app.staticTexts["CREATE THE AUTOMATION (IOS 27)"].exists)
-        attach("Bank notification setup", app: app)
-        let photo = app.descendants(matching: .any).matching(identifier: "bank.step.6").firstMatch
-        reveal(photo, in: app)
-        XCTAssertTrue(photo.exists)
-        attach("Bank notification photo steps", app: app)
+        XCTAssertTrue(app.staticTexts["Step 1 of 11"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Open Shortcuts"].exists)
+        attach("Bank setup step 1", app: app)
+        let next = app.buttons["bank.next"]
+        for step in 2...11 {
+            next.tap()
+            XCTAssertTrue(app.staticTexts["Step \(step) of 11"].waitForExistence(timeout: 5), "step \(step)")
+            if step == 6 { attach("Bank setup step 6", app: app) }
+            if step == 10 { attach("Bank setup step 10", app: app) }
+        }
+        next.tap()
+        XCTAssertTrue(app.staticTexts["And you're done!"].waitForExistence(timeout: 5))
+        attach("Bank setup finished", app: app)
+        app.buttons["Back to Pay-in tracking"].tap()
+        XCTAssertTrue(setup.waitForExistence(timeout: 5))
     }
     @MainActor
     func testLiveShiftSettingsToggle() {
