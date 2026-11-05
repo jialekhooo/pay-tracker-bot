@@ -150,3 +150,5 @@ Version 1.1 (build 35) adds:
 - **Pet.** Penny, a coin creature on Overview (`PetCard`, `PetView.swift`): egg → hatchling (30 XP) → coinling (150 XP) → golden coin (500 XP), +10 XP per shift worked and +15 XP and a coin per shift paid, a weekly streak, and a mood (happy, sleepy, or worried about overdue pay). Computed from shifts by `PetProgress` in HowMuchCore; only the pet's name is stored, on the phone.
 
 Penny update: endless levels (one every 40 XP), coins (5 per shift worked, 10 per paid shift, 25 per badge), 11 badges, and a wardrobe of 18 items (hats, glasses, neckwear, backgrounds) bought with coins or unlocked by level or badge. Tap Penny for a hop, hearts and a line. The wardrobe is saved on the phone per account (`pet.closet.<account>`).
+
+Build 37: Penny, live shift choices and widget previews sync with the account (AppPreferences.pet / liveShift / widgetPreview); on-phone values from earlier builds move into the account after its first sync.
