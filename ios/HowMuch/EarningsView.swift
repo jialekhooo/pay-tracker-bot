@@ -15,7 +15,10 @@ struct EarningsView: View {
             guard shift.currency == currency else { return false }
             switch scope {
             case "Day": return shift.day == Shift.dayString(date)
-            case "Week": return TrackerCalendar.calendar.dateInterval(of: .weekOfYear, for: date)?.contains(shift.startDate) == true
+            case "Week":
+                // Half-open: a shift starting at midnight on Monday belongs to the new week only.
+                guard let week = TrackerCalendar.calendar.dateInterval(of: .weekOfYear, for: date) else { return false }
+                return week.start <= shift.startDate && shift.startDate < week.end
             case "Month": return shift.day.hasPrefix(String(Shift.dayString(date).prefix(7)))
             default: return true
             }

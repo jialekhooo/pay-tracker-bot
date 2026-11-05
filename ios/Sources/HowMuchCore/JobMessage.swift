@@ -23,6 +23,8 @@ public struct PastedJob: Equatable {
     public var dates: [PastedJobDate] = []
     /// Notes worth showing, such as how a lump sum was split.
     public var notes: [String] = []
+    /// A lump sum split across the dates: the last date takes the leftover cents, so the shares add up exactly.
+    public var lumpSum: Decimal?
     /// Lines with numbers that were not understood, so the person can check them.
     public var skipped: [String] = []
     public init() {}
@@ -116,7 +118,12 @@ public enum JobMessageParser {
             let count = max(job.dates.count, 1)
             let share = PayEngine.rounded(flat / Decimal(count))
             job.fixedPay = share
-            if count > 1 { job.notes.append("Lump sum of \(flat) split across \(count) dates (\(share) each).") }
+            if count > 1 {
+                job.lumpSum = flat
+                let last = flat - share * Decimal(count - 1)
+                job.notes.append(last == share ? "Lump sum of \(flat) split across \(count) dates (\(share) each)."
+                                               : "Lump sum of \(flat) split across \(count) dates (\(share) each, \(last) on the last date).")
+            }
         }
         if let location = job.location, location.count > 1000 { job.location = String(location.prefix(1000)) }
         if let event = job.event, event.count > 120 { job.event = String(event.prefix(120)) }
@@ -173,7 +180,8 @@ public enum JobMessageParser {
     private enum Pay { case hourly(Decimal, String?), perDay(Decimal, String?), flat(Decimal, String?) }
 
     private static func readPay(_ line: inout String) -> Pay? {
-        let money = #"(?:(sgd|s\$|usd|myr|rm|\$)\s*)?(\d{1,5}(?:\.\d{1,2})?)\s*(sgd)?"#
+        // "1,200" is one amount; commas are stripped before reading it.
+        let money = #"(?:(sgd|s\$|usd|myr|rm|\$)\s*)?((?:\d{1,3}(?:,\d{3})+|\d{1,5})(?:\.\d{1,2})?)(?![\d,]*\d)\s*(sgd)?"#
         let patterns: [(String, (Decimal, String?) -> Pay)] = [
             (money + #"\s*(?:/\s*|per\s+|an?\s+|p/)(?:h|hr|hrs|hour)\b"#, { .hourly($0, $1) }),
             (money + #"\s*(?:hourly|ph)\b"#, { .hourly($0, $1) }),
@@ -184,10 +192,13 @@ public enum JobMessageParser {
         for (pattern, make) in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern),
                   let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-                  let amountRange = Range(match.range(at: 2), in: line), let amount = Decimal(string: String(line[amountRange])) else { continue }
+                  let amountRange = Range(match.range(at: 2), in: line),
+                  let amount = Decimal(string: line[amountRange].replacingOccurrences(of: ",", with: "")) else { continue }
             let symbol = [1, 3].compactMap { Range(match.range(at: $0), in: line).map { String(line[$0]) } }.first
             // A bare number without a currency or unit word is never treated as pay.
             if symbol == nil, pattern.hasPrefix("(?:flat") == false, !pattern.contains("hour"), !pattern.contains("day") { continue }
+            // "Total 3 days" is a count, not pay: a lump sum written before the number needs a currency.
+            if symbol == nil, pattern.hasPrefix("(?:flat") { continue }
             let currency: String? = switch symbol { case "sgd", "s$": "SGD"; case "usd": "USD"; case "myr", "rm": "MYR"; default: nil }
             blank(&line, match.range)
             return make(amount, currency)
@@ -231,7 +242,8 @@ public enum JobMessageParser {
             return expand(String(text[listRange]), month: month, year: group(match, 5, text).flatMap(Int.init), today: today, calendar: calendar)
         }
         // Nov 12, Nov 13-14, November 12 2026
-        scan(#"\b"# + monthPattern + #"\s+"# + dayPattern + #"\b((?:"# + joiner + dayPattern + #"\b)*)(?:\s*,?\s*(20\d{2})\b)?"#) { match, text in
+        // The list stops before a number that is really a time ("Nov 15, 10-6pm", "Nov 15, 10:00").
+        scan(#"\b"# + monthPattern + #"\s+"# + dayPattern + #"\b((?:"# + joiner + dayPattern + #"\b(?!\s*(?:[:.]\d{2}|(?:-|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm|noon))))*)(?:\s*,?\s*(20\d{2})\b)?"#) { match, text in
             guard let month = group(match, 1, text).flatMap({ months.firstIndex(of: $0) }).map({ $0 + 1 }),
                   let first = group(match, 2, text) else { return nil }
             return expand(first + (group(match, 3, text) ?? ""), month: month, year: group(match, 5, text).flatMap(Int.init), today: today, calendar: calendar)
@@ -299,7 +311,9 @@ public enum JobMessageParser {
         }
         var days: [Int] = []
         for (day, isRange) in tokens {
-            if isRange, let previous = days.last, day > previous, day - previous <= 31 { days += Array((previous + 1)...day) }
+            // Days in a list only go forwards; anything else isn't part of the date list.
+            if let previous = days.last, day <= previous { break }
+            if isRange, let previous = days.last, day - previous <= 31 { days += Array((previous + 1)...day) }
             else { days.append(day) }
         }
         guard !days.isEmpty else { return nil }
@@ -363,7 +377,8 @@ public enum JobMessageParser {
         guard let hour = parts.first, hour <= 24 else { return nil }
         let minute = parts.count > 1 ? parts[1] : 0
         guard minute < 60 else { return nil }
-        return Clock(hour: hour % 24, minute: minute, twentyFour: hour > 12 || (text.contains(":") && hour == 0))
+        // "06:00" or "06.30" (a leading zero) is written on a 24-hour clock, so it's the morning.
+        return Clock(hour: hour % 24, minute: minute, twentyFour: hour > 12 || (text.contains(":") && hour == 0) || (text.hasPrefix("0") && text.count > 1))
     }
 
     private static func resolve(_ start: Clock, _ startSuffix: String?, _ end: Clock, _ endSuffix: String?) -> (start: Int, end: Int)? {

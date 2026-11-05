@@ -338,10 +338,16 @@ struct ShiftEditor: View {
     private func makeBatch() throws -> [Shift] {
         let primary = try makeShift()
         var batch = (existing == nil || duplicating) && repeatDays > 0 ? try ShiftSeries.make(from: primary, every: repeatDays, count: repeatCount) : [primary]
-        for entry in extraDates {
+        // A pasted lump sum split across the dates: the last date takes the leftover cents so the total is exact.
+        var lastPay = primary.fixedPay
+        if let total = pasted?.lumpSum, let share = primary.fixedPay, share == pasted?.fixedPay, !extraDates.isEmpty, extraDates.count + 1 == pasted?.dates.count, repeatDays == 0 {
+            lastPay = total - share * Decimal(extraDates.count)
+        }
+        for (index, entry) in extraDates.enumerated() {
             var rules = PayRules(); rules.currency = primary.currency
             rules.overtimeAfter = primary.overtimeAfter; rules.overtimeMultiplier = primary.overtimeMultiplier
-            batch.append(try Shift(event: primary.event, location: primary.location, day: Shift.dayString(entry.day), startMinute: minute(entry.start), endMinute: minute(entry.end), breakMinutes: primary.breakMinutes, paidBreak: primary.paidBreak, rate: primary.rate, fixedPay: primary.fixedPay, rules: rules, paymentDue: hasDue ? Shift.dayString(due) : nil))
+            let pay = index == extraDates.count - 1 ? lastPay : primary.fixedPay
+            batch.append(try Shift(event: primary.event, location: primary.location, day: Shift.dayString(entry.day), startMinute: minute(entry.start), endMinute: minute(entry.end), breakMinutes: primary.breakMinutes, paidBreak: primary.paidBreak, rate: primary.rate, fixedPay: pay, rules: rules, paymentDue: hasDue ? Shift.dayString(due) : nil))
         }
         for shift in batch where batch.contains(where: { shift.overlaps($0) }) { throw TrackerError.invalid("Two dates in this entry overlap. Check the schedule before saving.") }
         if !hasDue && (existing == nil || duplicating) {

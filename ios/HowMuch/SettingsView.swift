@@ -457,10 +457,12 @@ struct ProfileStats {
     var topJob: String?
     var topPlace: String?
     init(shifts all: [Shift], currency: String, now: Date = Date()) {
-        let worked = all.filter { $0.startDate <= now }
-        shifts = worked.count
-        hours = worked.reduce(0) { $0 + $1.hours }
-        earned = worked.filter { $0.currency == currency }.reduce(0) { $0 + $1.pay }
+        // Same rules as the Overview card: only time already worked, in one currency.
+        let split = EarningsBreakdown(shifts: all.filter { $0.currency == currency }, now: now)
+        let worked = all.filter { $0.endDate <= now }
+        shifts = split.shiftsWorked
+        hours = split.hoursWorked
+        earned = split.earned
         if let first = worked.map(\.startDate).min() { since = first.formatted(.dateTime.month(.wide).year()) }
         func mostCommon(_ values: [String]) -> String? {
             let counts = Dictionary(values.map { ($0.trimmingCharacters(in: .whitespaces), 1) }.filter { !$0.0.isEmpty }, uniquingKeysWith: +)

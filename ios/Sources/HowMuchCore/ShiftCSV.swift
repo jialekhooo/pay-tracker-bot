@@ -28,9 +28,14 @@ public enum ShiftCSV {
                   breaks < 24 else {
                 throw TrackerError.invalid("CSV row \(index + 2) has an invalid pay or break amount.")
             }
-            let minuteValue = NSDecimalNumber(decimal: breaks * 60).doubleValue
+            // "Break minutes" is exact; "Break hours" may be rounded to 2 places (0.83 h = 50 min).
+            let minuteValue = values["break_minutes"].flatMap { Double($0) } ?? NSDecimalNumber(decimal: breaks * 60).doubleValue
             let wholeMinutes = minuteValue.rounded()
-            guard abs(minuteValue - wholeMinutes) < 0.000001 else {
+            // Break hours rounded to 2 places are off by at most 0.3 minutes; anything more precise must be exact.
+            let hoursText = values["break_hours"] ?? "0"
+            let places = hoursText.split(separator: ".").dropFirst().first?.count ?? 0
+            let tolerance = values["break_minutes"] == nil && places > 2 ? 0.000001 : 0.31
+            guard abs(minuteValue - wholeMinutes) < tolerance, wholeMinutes >= 0, wholeMinutes < 24 * 60 else {
                 throw TrackerError.invalid("CSV row \(index + 2) has a break that is not a whole number of minutes.")
             }
             let breakFlag = values["paid_break"] ?? values["break_paid"] ?? "no"
@@ -62,12 +67,12 @@ public enum ShiftCSV {
     }
 
     public static func encode(_ shifts: [Shift]) -> String {
-        let header = ["Shift ID", "Date", "Start", "End", "Event", "Location", "Hours", "Break hours", "Paid break", "Pay", "Currency", "Paid", "Payment due"]
+        let header = ["Shift ID", "Date", "Start", "End", "Event", "Location", "Hours", "Break hours", "Break minutes", "Paid break", "Pay", "Currency", "Paid", "Payment due"]
         var rows = [header]
         for shift in shifts {
             rows.append([shift.sourceID ?? shift.id.uuidString, shift.day, Shift.clock(shift.startMinute),
-                         Shift.clock(shift.endMinute), shift.event, shift.location, "\(shift.hours)",
-                         "\(Decimal(shift.breakMinutes) / 60)", shift.paidBreak ? "Yes" : "No", "\(shift.pay)", shift.currency, shift.paid ? "Yes" : "No", shift.paymentDue ?? ""])
+                         Shift.clock(shift.endMinute), shift.event, shift.location, "\(PayEngine.rounded(shift.hours))",
+                         "\(PayEngine.rounded(Decimal(shift.breakMinutes) / 60))", "\(shift.breakMinutes)", shift.paidBreak ? "Yes" : "No", "\(shift.pay)", shift.currency, shift.paid ? "Yes" : "No", shift.paymentDue ?? ""])
         }
         return rows.map { $0.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: ",") }.joined(separator: "\r\n") + "\r\n"
     }

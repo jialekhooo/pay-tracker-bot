@@ -10,7 +10,7 @@ public enum SpokenSummary {
         let unit: Calendar.Component = period == .week ? .weekOfYear : .month
         let name = "this \(period.rawValue)"
         guard let interval = calendar.dateInterval(of: unit, for: now) else { return "I couldn't work out \(name)." }
-        let items = shifts.filter { interval.contains($0.startDate) }
+        let items = shifts.filter { interval.start <= $0.startDate && $0.startDate < interval.end } // half-open: no double counting at midnight
         guard !items.isEmpty else { return "You have no shifts \(name)." }
         let done = items.filter { $0.endDate <= now }, booked = items.filter { $0.endDate > now }
         let opening = name.prefix(1).uppercased() + name.dropFirst()

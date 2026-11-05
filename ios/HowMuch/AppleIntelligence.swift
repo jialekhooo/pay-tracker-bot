@@ -33,8 +33,10 @@ enum AppleIntelligence {
             if job.event?.isEmpty ?? true, let event = read.event?.trimmed, !event.isEmpty { job.event = event; helped = true }
             if job.location?.isEmpty ?? true, let location = read.location?.trimmed, !location.isEmpty { job.location = location; helped = true }
             if job.rate == nil, job.fixedPay == nil {
-                if let rate = read.hourlyRate, rate > 0, rate < 1000 { job.rate = Decimal(rate); helped = true }
-                else if let pay = read.payPerDay, pay > 0, pay < 100_000 { job.fixedPay = Decimal(pay); helped = true }
+                // Round to cents: Decimal(Double) would give 12.300000000000001.
+                func cents(_ value: Double) -> Decimal? { Decimal(string: String(format: "%.2f", value)) }
+                if let rate = read.hourlyRate, rate > 0, rate < 1000, let value = cents(rate) { job.rate = value; helped = true }
+                else if let pay = read.payPerDay, pay > 0, pay < 100_000, let value = cents(pay) { job.fixedPay = value; helped = true }
             }
             if job.dates.isEmpty {
                 job.dates = read.shifts.compactMap { $0.pasted }.prefix(JobMessageParser.maximumDates).map { $0 }

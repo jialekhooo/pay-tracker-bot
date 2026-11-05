@@ -22,7 +22,10 @@ public struct PetProgress: Equatable, Sendable {
     /// Weeks in a row, up to this one, with at least one shift worked or booked.
     public let streakWeeks: Int
     /// Pay from finished shifts past their payment due date.
+    /// Overdue pay in the main currency.
     public let overdue: Decimal
+    /// Overdue pay in every currency, never added together.
+    public let overdueByCurrency: [String: Decimal]
 
     public var next: Stage? { Stage(rawValue: stage.rawValue + 1) }
     /// 0...1 progress from this stage to the next (1 at the last stage).
@@ -47,7 +50,9 @@ public struct PetProgress: Equatable, Sendable {
     public func hasAchievement(_ id: String) -> Bool { achievements.contains { $0.id == id && $0.earned } }
 
     /// `pioneer`: the account was made before HowMuch's official launch.
-    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false) {
+    /// `currency`: the person's main currency; money badges only count pay in it. Defaults to the most used one.
+    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, currency: String? = nil) {
+        let main = currency ?? Dictionary(grouping: shifts, by: \.currency).max { $0.value.count < $1.value.count }?.key ?? "SGD"
         let worked = shifts.filter { $0.endDate <= now }
         let paid = worked.filter(\.paid)
         let points = worked.count * Self.xpPerWorkedShift + paid.count * Self.xpPerPaidShift
@@ -56,7 +61,9 @@ public struct PetProgress: Equatable, Sendable {
         coins = paid.count
         let today = Shift.dayString(now)
         let late = worked.filter { !$0.paid && ($0.paymentDue ?? "9999-12-31") < today }
-        overdue = late.reduce(Decimal(0)) { $0 + $1.pay }
+        // Never add different currencies together.
+        overdueByCurrency = Dictionary(grouping: late, by: \.currency).mapValues { $0.reduce(Decimal(0)) { $0 + $1.pay } }
+        overdue = overdueByCurrency[main] ?? 0
         let week: TimeInterval = 7 * 24 * 60 * 60
         let recent = shifts.contains { abs($0.startDate.timeIntervalSince(now)) <= week || ($0.startDate <= now && now < $0.endDate) }
         mood = !late.isEmpty ? .worried : recent ? .happy : .sleepy
@@ -68,15 +75,16 @@ public struct PetProgress: Equatable, Sendable {
             weekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: weekStart)!
         }
         streakWeeks = streak
-        // Best streak: longest run of consecutive weeks across all history.
+        // Best streak: longest run of consecutive weeks actually worked (booked weeks don't earn badges).
         var best = 0, run = 0
         var previous: Date?
-        for week in starts.sorted() {
+        let workedWeeks = Set(worked.compactMap { calendar.dateInterval(of: .weekOfYear, for: $0.startDate)?.start })
+        for week in workedWeeks.sorted() {
             if let previous, calendar.date(byAdding: .weekOfYear, value: 1, to: previous) == week { run += 1 } else { run = 1 }
             best = max(best, run); previous = week
         }
         bestStreakWeeks = best
-        let paidTotal = paid.reduce(Decimal(0)) { $0 + $1.pay }
+        let paidTotal = paid.filter { $0.currency == main }.reduce(Decimal(0)) { $0 + $1.pay }
         var list: [PetAchievement] = pioneer
             ? [.init(id: "pioneer", title: "Pioneer", detail: "Joined HowMuch before launch", symbol: "star.circle.fill", current: 1, target: 1)] : []
         list += [
@@ -100,7 +108,11 @@ public struct PetProgress: Equatable, Sendable {
     /// What the pet says on Overview.
     public func message(name: String, currency: String) -> String {
         switch mood {
-        case .worried: return "\(name) is worried: \(SpokenSummary.amount(overdue, currency)) of pay is overdue. Chase it up and mark it paid to cheer \(name) up."
+        case .worried:
+            let amounts = overdueByCurrency.sorted { ($0.key == currency ? "" : $0.key) < ($1.key == currency ? "" : $1.key) }
+                .map { SpokenSummary.amount($0.value, $0.key) }
+            let total = amounts.count > 1 ? amounts.dropLast().joined(separator: ", ") + " and " + amounts.last! : amounts.first ?? SpokenSummary.amount(overdue, currency)
+            return "\(name) is worried: \(total) of pay is overdue. Chase it up and mark it paid to cheer \(name) up."
         case .sleepy: return "\(name) is napping. Book your next shift to wake \(name) up."
         case .happy:
             if let xpToNext, let next { return "\(name) is happy! \(xpToNext) XP until \(next.title.lowercased())." }

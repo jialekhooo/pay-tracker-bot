@@ -38,7 +38,7 @@ final class TrackerStore: ObservableObject {
         pioneer = value
         UserDefaults.standard.set(value, forKey: "pioneer.\(accountID)")
     }
-    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer) }
+    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, currency: data.rules.currency) }
 
     init(accountID: String, suppressNotifications: Bool = false) {
         self.accountID = UUID(uuidString: accountID)?.uuidString.lowercased() ?? "invalid"
