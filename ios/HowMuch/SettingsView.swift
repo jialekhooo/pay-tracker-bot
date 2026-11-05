@@ -12,54 +12,67 @@ struct SettingsView: View {
         ScreenShell(title: "Settings", subtitle: "Make HowMuch work for you.") {
             NavigationLink { ProfileSettingsView() } label: {
                 Card {
-                    HStack(spacing: 14) {
-                        ProfileAvatar(size: 58)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(store.data.settings.displayName.isEmpty ? "Your profile" : store.data.settings.displayName).font(.system(.title3, design: .rounded, weight: .bold))
-                            Text("Your personal work companion").font(.caption).foregroundStyle(Palette.muted)
+                    HStack(spacing: 12) {
+                        ProfileAvatar(size: 44)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(store.data.settings.displayName.isEmpty ? "Your profile" : store.data.settings.displayName).font(.system(.headline, design: .rounded))
+                            Text("Name and photo").font(.caption).foregroundStyle(Palette.muted)
                         }
-                        Spacer(); Image(systemName: "chevron.right").font(.caption)
+                        Spacer(); Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.muted)
                     }.foregroundStyle(Palette.ink)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
-            Card {
-                settingsRow("Pay & breaks", "\(money(store.data.rules.rate, store.data.rules.currency)) / hour", "wallet.bifold") { PaySettingsView() }
-                Divider()
-                settingsRow("Payers", "Saved companies · bank payer names", "building.2") { PayersSettingsView() }
-                Divider()
-                settingsRow("Job templates", "Reusable locations · times · pay rules", "square.stack.3d.up") { JobTemplatesView() }
-                Divider()
-                settingsRow("Job notifications", "Upcoming · start/end · payment due", "bell.badge") { JobNotificationSettingsView() }
-                Divider()
-                settingsRow("Time to leave", "Routes · arrival buffer · departure alerts", "car.side.arrowtriangle.up.arrowtriangle.down") { TravelReminderSettingsView() }
-                Divider()
-                settingsRow("Widgets", "Calendar · next shift · events · this month", "rectangle.on.rectangle") { WidgetsSettingsView() }
-                Divider()
-                settingsRow("Live shift", "Lock Screen timer · confirm finish time", "timer") { LiveShiftSettingsView() }
-                Divider()
-                settingsRow("Apple Calendar", "Add shifts · calendar link · export", "calendar") { CalendarSettingsView() }
-                Divider()
-                settingsRow("Data & backups", "CSV import · export · restore", "square.and.arrow.down") { DataToolsView() }
+            group("Work") {
+                settingsRow("Pay & breaks", "wallet.bifold", value: money(store.data.rules.rate, store.data.rules.currency) + "/h") { PaySettingsView() }
+                Divider().padding(.leading, 44)
+                settingsRow("Payers", "building.2") { PayersSettingsView() }
+                Divider().padding(.leading, 44)
+                settingsRow("Job templates", "square.stack.3d.up") { JobTemplatesView() }
             }
-            SectionHeading(title: "Your account")
-            Card {
-                settingsRow("Account & sync", store.syncMessage, "person.crop.circle.badge.checkmark") { AccountSettingsView() }
-                Divider()
-                settingsRow("Pay-in tracking", "Bank notifications · email forwarding", "creditcard") { PaymentDetectionView() }
+            group("Reminders") {
+                settingsRow("Job notifications", "bell.badge") { JobNotificationSettingsView() }
+                Divider().padding(.leading, 44)
+                settingsRow("Time to leave", "car.side") { TravelReminderSettingsView() }
+                Divider().padding(.leading, 44)
+                settingsRow("Live shift", "timer") { LiveShiftSettingsView() }
             }
-            Text("Your Apple account owns these records. Telegram is only an optional source for importing previous shifts.")
-                .font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 3)
-            HStack { Text("HOWMUCH").font(.system(size: 10, weight: .bold)).tracking(2); Spacer(); Text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))").font(.caption2) }.foregroundStyle(Palette.muted).padding(.vertical, 10)
+            group("Getting paid") {
+                settingsRow("Pay-in tracking", "creditcard") { PaymentDetectionView() }
+            }
+            group("Widgets & calendar") {
+                settingsRow("Widgets", "rectangle.on.rectangle") { WidgetsSettingsView() }
+                Divider().padding(.leading, 44)
+                settingsRow("Apple Calendar", "calendar") { CalendarSettingsView() }
+            }
+            group("Account") {
+                settingsRow("Account & sync", "person.crop.circle.badge.checkmark", value: store.hasPendingChanges ? "Syncing" : nil) { AccountSettingsView() }
+                Divider().padding(.leading, 44)
+                settingsRow("Data & backups", "square.and.arrow.down") { DataToolsView() }
+            }
+            Text("HowMuch \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
+                .font(.caption2).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.vertical, 8)
         }
     }
-    private func settingsRow<Destination: View>(_ title: String, _ subtitle: String, _ icon: String, @ViewBuilder destination: () -> Destination) -> some View {
+    /// A small titled group of rows.
+    private func group<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.8).foregroundStyle(Palette.muted).padding(.leading, 4)
+            VStack(spacing: 0) { rows() }
+                .padding(.horizontal, 14).padding(.vertical, 4)
+                .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Palette.line.opacity(0.7), lineWidth: 0.6).allowsHitTesting(false))
+        }
+    }
+    private func settingsRow<Destination: View>(_ title: String, _ icon: String, value: String? = nil, @ViewBuilder destination: () -> Destination) -> some View {
         NavigationLink(destination: destination) {
-            HStack(spacing: 13) {
-                Image(systemName: icon).font(.system(size: 18, weight: .regular)).frame(width: 38, height: 38).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 12))
-                VStack(alignment: .leading, spacing: 4) { Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold)); Text(subtitle).font(.system(size: 11)).foregroundStyle(Palette.muted) }
-                Spacer(minLength: 0); Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Palette.muted)
-            }.foregroundStyle(Palette.ink).padding(.vertical, 2)
-                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 15, weight: .medium)).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
+                Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold))
+                Spacer(minLength: 8)
+                if let value { Text(value).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1) }
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.muted.opacity(0.7))
+            }.foregroundStyle(Palette.ink)
+                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
