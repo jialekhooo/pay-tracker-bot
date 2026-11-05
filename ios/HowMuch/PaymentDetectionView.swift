@@ -64,6 +64,8 @@ struct PaymentDetectionView: View {
                                     Link(destination: link) { Label("Confirm forwarding in Gmail", systemImage: "arrow.up.right.square") }
                                 }
                                 Text("Enter the code in Gmail's forwarding settings, or open the link. Then add a filter to forward DBS alerts.").font(.caption).foregroundStyle(Palette.muted)
+                                Button { Task { await forwardingConfirmed() } } label: { Label("I've confirmed it", systemImage: "checkmark.circle") }
+                                    .disabled(busy).accessibilityIdentifier("payin.forwarding.confirmed")
                             }.padding(.vertical, 4)
                         }
                         NavigationLink { EmailForwardingGuide(address: address) } label: { Label("How to forward bank emails", systemImage: "envelope.arrow.triangle.branch") }
@@ -211,6 +213,13 @@ struct PaymentDetectionView: View {
     private func decodePayIn(_ data: Data) throws -> PayInStatus {
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(PayInStatus.self, from: data)
+    }
+    /// Hides Gmail's code once it's been entered; it also clears by itself when the first email is forwarded.
+    private func forwardingConfirmed() async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        do { payIn = try decodePayIn(await auth.api.request(path + "/pay-in/forwarding-confirmed", method: "POST", body: Data("{}".utf8))) }
+        catch { message = error.localizedDescription }
     }
     private func setPayIn(_ enabled: Bool) async {
         guard !busy else { return }

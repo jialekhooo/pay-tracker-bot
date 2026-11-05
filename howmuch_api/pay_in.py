@@ -169,6 +169,15 @@ async def update_pay_in(payload: PayInSettings, request: Request, authorization:
     return pay_in_status(store, user_id)
 
 
+@router.post("/pay-in/forwarding-confirmed")
+async def forwarding_confirmed(request: Request, authorization: str | None = Header(default=None)) -> dict:
+    """The person finished Gmail's confirmation, so the code and link are no longer needed."""
+    store, user_id = _store(request, authorization)
+    with store.db:
+        store.db.execute("UPDATE pay_in_settings SET forward_confirmation=NULL WHERE user_id=?", (user_id,))
+    return pay_in_status(store, user_id)
+
+
 @router.post("/notification")
 async def record_notification(payload: Notification, request: Request, authorization: str | None = Header(default=None)) -> dict:
     """Pay received, as read from a bank app notification on the person's iPhone."""
@@ -252,6 +261,11 @@ async def inbound_email(secret: str, request: Request) -> dict:
             store.db.execute("UPDATE pay_in_settings SET forward_confirmation=? WHERE user_id=?",
                              (json.dumps({**confirmation, "received": int(time.time())}), row["user_id"]))
         return {"status": "confirmation"}
+    # Gmail stamps mail it auto-forwards; seeing that means forwarding is confirmed, so stop asking.
+    headers = email.message_from_bytes(raw[:200_000])
+    if headers.get("X-Forwarded-For") or headers.get("X-Forwarded-To"):
+        with store.db:
+            store.db.execute("UPDATE pay_in_settings SET forward_confirmation=NULL WHERE user_id=?", (row["user_id"],))
     if not parsed:
         return {"status": "ignored"}
     user_id = row["user_id"]

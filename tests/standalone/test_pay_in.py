@@ -120,3 +120,13 @@ def test_gmail_forwarding_confirmation_shows_in_pay_in_tracking(setup, monkeypat
     fake = EmailMessage(); fake['From'], fake['To'] = 'someone@example.com', address
     fake['Subject'] = 'Gmail Forwarding Confirmation'; fake.set_content('Confirmation code: 999999999')
     assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(fake)).json()['status'] == 'ignored'
+    assert setup.client.get('/v1/payment-detection/pay-in', headers=headers(session)).json()['forwarding']['confirmation']
+    # Mail Gmail auto-forwards proves forwarding is confirmed, so the code goes away.
+    forwarded = EmailMessage(); forwarded['From'], forwarded['To'] = 'jane@gmail.com', address
+    forwarded['X-Forwarded-For'] = f'jane@gmail.com {address}'; forwarded['Subject'] = 'Hello'; forwarded.set_content('Hi')
+    setup.client.post('/v1/inbound-email/hook-secret', content=bytes(forwarded))
+    assert setup.client.get('/v1/payment-detection/pay-in', headers=headers(session)).json()['forwarding']['confirmation'] is None
+    # It can also be dismissed by hand.
+    assert setup.client.post('/v1/inbound-email/hook-secret', content=bytes(message)).json()['status'] == 'confirmation'
+    cleared = setup.client.post('/v1/payment-detection/pay-in/forwarding-confirmed', headers=headers(session)).json()
+    assert cleared['forwarding']['confirmation'] is None
