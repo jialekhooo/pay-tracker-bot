@@ -121,3 +121,28 @@ Already answered in the build (`ITSAppUsesNonExemptEncryption = NO`): only stand
 - [x] Support and privacy pages rewritten for launch with a contact email (deploy the API to publish them).
 - [ ] Upload build 34 (no "iOS beta" label, no Payment detection) and wait for processing.
 - [ ] Check on a real iPhone: sign-in, add/edit/delete a shift, Live Activity, Delete account.
+
+## Version 1.1 — review notes and privacy changes
+
+**App Privacy answers to update before submitting 1.1** (App Store Connect → App Privacy):
+- Add **Emails or Text Messages** (linked, not tracking, App Functionality): bank notification text passed by the user's Shortcuts automation, and bank alert emails the user forwards or connects.
+- Add **Identifiers → Device ID** (linked, not tracking, App Functionality): a random installation ID used to deliver notifications to that iPhone.
+- Keep everything else as in 1.0. Apple Intelligence features run on-device and send nothing.
+
+**Review notes for 1.1** (paste into App Review Information → Notes):
+
+> HowMuch uses Sign in with Apple only; please sign in with any Apple ID. A new account starts empty: tap + to add a shift, or copy this message and tap Paste in Add shift:
+>
+> Location: Raffles City
+> 20th Nov 1000-1900hrs
+> 21st Nov 1000-1900hrs
+> Pay: $14/hr
+>
+> New in 1.1 — Pay-in tracking (Settings → Pay-in tracking), optional and off until the user sets it up:
+> • Bank app notifications (iOS 27): the user creates a Shortcuts automation "When I receive a notification from <bank app>" that runs HowMuch's "Record pay received" action. To try it without a bank account, open Shortcuts, add the "Record pay received" action from HowMuch to a new shortcut, type this text into its Notification field and run it: "You have received SGD 14.00 from REFIX PTE. LTD." (first add a shift and set Paid by to REFIX PTE. LTD.). HowMuch checks the text on the iPhone and sends only money-received alerts.
+> • Email forwarding: each account has a private address; forwarded bank alert emails appear in Pay-in tracking for the user to confirm.
+> • Gmail mailbox connection is hidden in this version while Google verification is in progress. Outlook and iCloud connections use read-only access to find bank alerts only.
+> • Apple Intelligence (iOS 26+, supported devices) reads job messages, bank alerts and receipts and writes a monthly recap, entirely on-device.
+> • Calendar sync: Settings → Calendar sync creates a private calendar feed for Apple Calendar or Google Calendar.
+>
+> Accounts can be deleted in Settings → Account & sync → Delete account, which also revokes any connected Gmail access.

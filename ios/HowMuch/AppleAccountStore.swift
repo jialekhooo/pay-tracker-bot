@@ -291,6 +291,12 @@ final class AppleAccountStore: ObservableObject {
         } catch { self.error = "Your versions remain safe. \(error.localizedDescription)" }
     }
     func signOut() async { await clearSession(revoke: true) }
+    /// Ends every session for this account (e.g. a lost phone), then signs out here.
+    func signOutEverywhere() async {
+        await synchronize()
+        _ = try? await api.request("/v1/auth/logout-all", method: "POST", body: Data("{}".utf8))
+        await clearSession(revoke: false)
+    }
     func credentialsRevoked() async { await clearSession(revoke: true) }
     private func clearSession(revoke: Bool, keepReminders: Bool = false) async {
         let token = api.session?.revocationToken

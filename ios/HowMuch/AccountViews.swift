@@ -68,7 +68,7 @@ struct AppleWelcomeView: View {
                 }
                 Spacer(minLength: 20)
                 AppleAccountButton()
-                Text("Sign in to create your account or return to your records. Your Telegram bot and its records remain separate.")
+                Text("Sign in to create your account or return to your records.")
                     .font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 HStack { Link("Privacy", destination: AccountAPI.base.appending(path: "/privacy")); Spacer(); Text("HowMuch for iPhone").foregroundStyle(Palette.muted) }.font(.caption)
                }.padding(28).padding(.bottom, 12)
@@ -110,6 +110,7 @@ struct AccountSettingsView: View {
     @EnvironmentObject private var auth: AppleAccountStore
     @EnvironmentObject private var store: TrackerStore
     @State private var signOut = false
+    @State private var signOutEverywhere = false
     @State private var deleteConfirm = false
     @State private var deleting = false
     var body: some View {
@@ -127,9 +128,14 @@ struct AccountSettingsView: View {
             }
             Section {
                 Button("Sign out", role: .destructive) { signOut = true }.rowAction().accessibilityIdentifier("account.signOut")
+                Button("Sign out of all devices", role: .destructive) { signOutEverywhere = true }.rowAction().disabled(auth.isDemo).accessibilityIdentifier("account.signOutAll")
                 Button("Delete account", role: .destructive) { deleteConfirm = true }.rowAction().disabled(auth.isDemo)
             } footer: { Text("Signing out keeps your account’s cache separate from other users. Deleting your account removes its cloud records, devices and payment connections, and this phone’s account cache.") }
         }.detailStyle("Account & sync")
+            .confirmationDialog("Sign out on every iPhone using this account? Use this if a phone was lost or stolen.", isPresented: $signOutEverywhere, titleVisibility: .visible) {
+                Button("Sign out everywhere", role: .destructive) { Task { await auth.signOutEverywhere() } }
+                Button("Cancel", role: .cancel) {}
+            }
             .confirmationDialog("Sign out of this account? Pending edits remain in this account’s cache.", isPresented: $signOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { Task { await auth.signOut() } }
             }
