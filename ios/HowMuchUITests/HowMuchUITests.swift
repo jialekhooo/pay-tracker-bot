@@ -487,6 +487,10 @@ final class HowMuchUITests: XCTestCase {
         setup.tap()
         XCTAssertTrue(app.staticTexts["Create the automation (iOS 27)"].waitForExistence(timeout: 5) || app.staticTexts["CREATE THE AUTOMATION (IOS 27)"].exists)
         attach("Bank notification setup", app: app)
+        let photo = app.descendants(matching: .any).matching(identifier: "bank.step.6").firstMatch
+        reveal(photo, in: app)
+        XCTAssertTrue(photo.exists)
+        attach("Bank notification photo steps", app: app)
     }
     @MainActor
     func testLiveShiftSettingsToggle() {

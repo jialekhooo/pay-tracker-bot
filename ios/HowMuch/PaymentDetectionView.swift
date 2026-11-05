@@ -280,7 +280,7 @@ struct BankNotificationsGuide: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("When your bank app says money came in, HowMuch marks the matching job paid. It takes one automation in the Shortcuts app, about a minute to set up.")
+                Text("When your bank app says money came in, HowMuch marks the matching job paid. It takes one automation in the Shortcuts app, about two minutes with the pictures below.")
                     .font(.subheadline).foregroundStyle(Palette.muted)
 
                 group("Before you start", [
@@ -288,14 +288,13 @@ struct BankNotificationsGuide: View {
                     ("bell.badge", "Allow your bank's notifications", "In your bank app, turn on alerts for incoming transfers and PayNow."),
                 ])
 
-                group("Create the automation (iOS 27)", [
-                    ("square.2.layers.3d", "Open Shortcuts", "Tap Automation at the bottom, then +."),
-                    ("app.badge", "Choose Notification", "Under When, tap App, pick your bank app (e.g. digibank) and tap Done."),
-                    ("line.3.horizontal.decrease", "Only money coming in", "Tap Add Filter, choose Message, set it to contains, and type received. Codes and card alerts then never run it."),
-                    ("bolt", "Run Immediately", "Choose Run Immediately, then tap Next."),
-                    ("plus.square", "Add HowMuch's action", "Tap New Blank Automation, search HowMuch and tap Record pay received."),
-                    ("text.bubble", "Give it the notification", "Tap the Notification field in the action and choose the Notification variable. Tap Done. That's it."),
-                ])
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Create the automation (iOS 27)").font(.system(.headline, design: .rounded)).foregroundStyle(Palette.ink)
+                    Text("Follow the pictures. It's the same on every iPhone with iOS 27.").font(.caption).foregroundStyle(Palette.muted)
+                }
+                ForEach(Array(Self.photoSteps.enumerated()), id: \.offset) { index, step in
+                    photoStep(index + 1, step)
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Filter word").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted)
@@ -317,6 +316,37 @@ struct BankNotificationsGuide: View {
                     .font(.caption).foregroundStyle(Palette.muted)
             }.padding(.horizontal, 20).padding(.vertical, 12)
         }.detailStyle("Bank notifications")
+    }
+    /// Real iOS 27 Shortcuts screens, in order (image, title, what to do).
+    static let photoSteps: [(String, String, String)] = [
+        ("BankGuide1", "Open Shortcuts, then Automation", "In the Library list, tap Automation."),
+        ("BankGuide2", "Tap +", "The + button is at the bottom of the screen."),
+        ("BankGuide3", "Tap Edit", "If you see Describe a Shortcut, tap Edit at the top right to build it yourself."),
+        ("BankGuide4", "Tap Automation", "In the action list at the bottom, tap the Automation button."),
+        ("BankGuide5", "Choose Notification", "Type Notification in the search box and tap it."),
+        ("BankGuide6", "Pick your bank app", "Tap App and choose your bank, e.g. digibank. (These pictures use News as a stand-in.)"),
+        ("BankGuide7", "Only money coming in", "Tap Add Filter. Tap Title and change it to Message, then tap the grey word and type received."),
+        ("BankGuide8", "Add HowMuch's action", "Search HowMuch in the bottom bar and tap Record pay received."),
+        ("BankGuide9", "Give it the notification", "Tap the grey Notification field, tap Select Variable, then tap the blue Notification under your trigger."),
+        ("BankGuide10", "Go back. Done!", "Tap the back arrow at the top left. Your automation is saved and switched on."),
+    ]
+    private func photoStep(_ number: Int, _ step: (String, String, String)) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 28, height: 28).background(Palette.teal, in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(step.1).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(step.2).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            Image(step.0).resizable().scaledToFit().frame(maxHeight: 360)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line, lineWidth: 1))
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Screenshot: \(step.1)")
+        }.padding(14).background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+            .accessibilityIdentifier("bank.step.\(number)")
     }
     private func group(_ title: String, _ steps: [(String, String, String)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
