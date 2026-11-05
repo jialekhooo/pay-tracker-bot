@@ -160,3 +160,5 @@ Build 39: Pay-in tracking shows Gmail's forwarding confirmation code and link fo
 Build 40: Settings is tidied into small labelled groups with one-line rows.
 
 Build 41: A personal Profile page with work stats, and a Pioneer badge and Penny skin for accounts made before launch.
+
+Build 42: Simpler Record pay received shortcut and an iOS 27 step-by-step bank notification guide.
