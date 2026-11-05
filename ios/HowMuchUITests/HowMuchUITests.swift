@@ -434,6 +434,34 @@ final class HowMuchUITests: XCTestCase {
         attach("Overview with nothing today or tomorrow", app: app)
     }
     @MainActor
+    func testPetCardOpensItsPage() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        let card = app.buttons["pet.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        reveal(card, in: app)
+        attach("Pet on Overview", app: app)
+        card.tap()
+        XCTAssertTrue(app.textFields["pet.name"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["pet.name"].value as? String, "Penny")
+        attach("Pet page", app: app)
+        let stages = app.staticTexts["Stages"]
+        reveal(stages, in: app)
+        XCTAssertTrue(app.staticTexts["Golden coin"].exists)
+        attach("Pet stages", app: app)
+    }
+    @MainActor
+    func testPayInTrackingShowsBankNotificationSetup() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Pay-in tracking"], in: app)
+        let setup = app.buttons["payin.notifications.setup"]
+        XCTAssertTrue(setup.waitForExistence(timeout: 10))
+        attach("Pay-in tracking", app: app)
+        setup.tap()
+        XCTAssertTrue(app.staticTexts["Create the automation (iOS 27)"].waitForExistence(timeout: 5) || app.staticTexts["CREATE THE AUTOMATION (IOS 27)"].exists)
+        attach("Bank notification setup", app: app)
+    }
+    @MainActor
     func testLiveShiftSettingsToggle() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
@@ -514,7 +542,7 @@ final class HowMuchUITests: XCTestCase {
             ("Apple Calendar", "Apple Calendar"),
             ("Data & backups", "Data & backups"),
             ("Account & sync", "Account & sync"),
-            ("Payment detection", "Payment detection")
+            ("Pay-in tracking", "Pay-in tracking")
         ]
         for (row, title) in destinations {
             let entry = app.staticTexts[row].firstMatch
@@ -559,7 +587,7 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
         app.buttons["nav.settings"].tap()
-        for title in ["Pay & breaks", "Job notifications", "Apple Calendar", "Data & backups", "Account & sync", "Payment detection"] {
+        for title in ["Pay & breaks", "Job notifications", "Apple Calendar", "Data & backups", "Account & sync", "Pay-in tracking"] {
             let label = app.staticTexts[title].firstMatch
             reveal(label, in: app)
             XCTAssertTrue(label.isHittable)
@@ -658,11 +686,11 @@ final class HowMuchUITests: XCTestCase {
     func testPaymentServiceErrorStopsLoadingAndAllowsRetry() {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments", "--ui-test-payments-offline"]; app.launch()
         app.buttons["nav.settings"].tap()
-        tapTrailingArea(app.staticTexts["Payment detection"], in: app)
-        XCTAssertTrue(app.staticTexts["Payment detection couldn’t be loaded. Refresh to try again."].waitForExistence(timeout: 5))
+        tapTrailingArea(app.staticTexts["Pay-in tracking"], in: app)
+        XCTAssertTrue(app.staticTexts["Pay-in tracking couldn’t be loaded. Refresh to try again."].waitForExistence(timeout: 5))
         XCTAssertFalse(app.progressIndicators.firstMatch.exists)
-        XCTAssertTrue(app.buttons["Refresh connection status"].isEnabled)
-        app.buttons["Refresh connection status"].tap()
+        XCTAssertTrue(app.buttons["Refresh"].isEnabled)
+        app.buttons["Refresh"].tap()
         XCTAssertTrue(app.staticTexts["Payment service is temporarily unavailable."].waitForExistence(timeout: 5))
         attach("Payment service error and retry", app: app)
     }
@@ -706,7 +734,7 @@ final class HowMuchUITests: XCTestCase {
     func testPaymentReviewControlsWithIsolatedDBSResponses() {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
-        tapTrailingArea(app.staticTexts["Payment detection"], in: app)
+        tapTrailingArea(app.staticTexts["Pay-in tracking"], in: app)
         XCTAssertTrue(app.staticTexts["Gmail connected"].waitForExistence(timeout: 5))
         tapTrailingArea(app.buttons["payment.scan"], in: app)
         let confirm = app.buttons["payment.receipt.1.confirm"]
@@ -738,7 +766,7 @@ final class HowMuchUITests: XCTestCase {
     func testICloudConnectionRetryAndBankConfirmation() {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments", "--ui-test-email-providers"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
-        tapTrailingArea(app.staticTexts["Payment detection"], in: app)
+        tapTrailingArea(app.staticTexts["Pay-in tracking"], in: app)
         XCTAssertTrue(app.buttons["payment.connect.icloud"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["payment.connect.microsoft"].isEnabled)
         tapTrailingArea(app.buttons["payment.connect.icloud"], in: app)
@@ -756,8 +784,13 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled)
         attach("iCloud failed connection preserves editable input", app: app)
         tapTrailingArea(save, in: app)
-        XCTAssertTrue(app.staticTexts["iCloud Mail connected"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.switches["Mark exact verified matches paid"].isEnabled)
+        // Pay-in tracking's bank-notification and forwarding sections sit above the mailbox section.
+        let connected = app.staticTexts["iCloud Mail connected"]
+        for _ in 0..<4 where !connected.waitForExistence(timeout: 2) { app.swipeDown() }
+        XCTAssertTrue(connected.exists)
+        let automatic = app.switches["Mark exact verified matches paid"]
+        reveal(automatic, in: app)
+        XCTAssertFalse(automatic.isEnabled)
         tapTrailingArea(app.buttons["payment.receipt.1.confirm"], in: app)
         XCTAssertTrue(app.alerts["Confirm bank payment"].waitForExistence(timeout: 5))
         app.alerts.buttons["Cancel"].tap()

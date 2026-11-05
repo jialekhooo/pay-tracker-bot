@@ -216,7 +216,9 @@ class PaymentStore:
             })
         return candidates
 
-    def ingest(self, user_id: int, message_id: str, parsed: dict, trusted: bool) -> int:
+    def ingest(self, user_id: int, message_id: str, parsed: dict, trusted: bool, auto: bool | None = None, review_reason: str = "") -> int:
+        """`auto` set (bank-notification and forwarded payments) replaces the mailbox auto-marking rule:
+        apply only when allowed, complete, and exactly one saved payer's event total matches."""
         # This transaction has no awaits; a receipt and its paid flags commit together.
         with self.db:
             self.db.execute(
@@ -234,11 +236,12 @@ class PaymentStore:
             connection = self.connection(user_id)
             since = connection["auto_since"] if connection else 0
             timestamp = datetime.fromisoformat(receipt["received_at"]).timestamp() if receipt["received_at"] else 0
-            if trusted and not parsed["reason"] and since and timestamp >= since and len(matched) == 1:
+            allowed = bool(auto) if auto is not None else bool(trusted and since and timestamp >= since)
+            if allowed and not parsed["reason"] and len(matched) == 1:
                 self._apply(user_id, receipt, matched[0], "auto_paid")
             else:
                 reason = parsed["reason"] or (
-                    "Email authentication could not be verified." if not trusted else
+                    (review_reason or "Email authentication could not be verified.") if not trusted and not (auto is not None and choices) else
                     "Multiple payer matches; choose the correct event." if len(matched) > 1 else
                     "Exact amount found; confirm the event or add a payer rule." if choices else
                     "No exact unpaid event total found. Partial and combined payments need manual reconciliation."

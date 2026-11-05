@@ -44,7 +44,7 @@ async def delete_account(payload:AppleSignIn,request:Request,authorization:str|N
         if pending and refresh and apple_service_configured():
             db.execute('INSERT OR REPLACE INTO apple_revocations VALUES(?,?,?)',(digest(refresh),encryption().encrypt(refresh.encode()).decode(),int(time.time())))
         # The work/payment projection has numeric IDs owned by this account, not Telegram IDs.
-        for table in ('payment_audit','payment_allocations','payment_receipts','payment_rules','payment_oauth','payment_connections','avatars','reminders','feeds','cab_claims','event_rates','shifts','settings'):
+        for table in ('pay_in_settings','payment_audit','payment_allocations','payment_receipts','payment_rules','payment_oauth','payment_connections','avatars','reminders','feeds','cab_claims','event_rates','shifts','settings'):
             db.execute(f'DELETE FROM {table} WHERE user_id=?',(account['id'],))
         db.execute('DELETE FROM accounts WHERE account_id=?',(account['account_id'],))
     return {'deleted':True,'appleRevocationPending':pending}

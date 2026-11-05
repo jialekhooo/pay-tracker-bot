@@ -45,10 +45,7 @@ struct SettingsView: View {
             Card {
                 settingsRow("Account & sync", store.syncMessage, "person.crop.circle.badge.checkmark") { AccountSettingsView() }
                 Divider()
-                // Gmail access is awaiting Google's verification, so App Store builds leave payment detection out for now.
-                #if DEBUG
-                settingsRow("Payment detection", "DBS alerts · connect your email", "creditcard") { PaymentDetectionView() }
-                #endif
+                settingsRow("Pay-in tracking", "Bank notifications · email forwarding", "creditcard") { PaymentDetectionView() }
             }
             Text("Your Apple account owns these records. Telegram is only an optional source for importing previous shifts.")
                 .font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 3)

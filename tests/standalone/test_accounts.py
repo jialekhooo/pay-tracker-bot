@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from howmuch_api import auth,documents,push,accounts,calendar_feed,gmail_payments,live_activity
+from howmuch_api import auth,documents,push,accounts,calendar_feed,gmail_payments,live_activity,pay_in
 from howmuch_api.database import AppStorage
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def setup(tmp_path,monkeypatch):
     monkeypatch.setenv('HOWMUCH_APPLE_BUNDLE_ID','com.howmuch.tracker')
     storage=AppStorage(tmp_path/'accounts.sqlite3')
     app=FastAPI();app.state.storage=storage
-    for router in (auth.router,documents.router,push.router,accounts.router,gmail_payments.router,live_activity.router):app.include_router(router,prefix='/v1')
+    for router in (auth.router,documents.router,push.router,accounts.router,gmail_payments.router,live_activity.router,pay_in.router,pay_in.inbound):app.include_router(router,prefix="/v1")
     app.include_router(calendar_feed.router)
     with TestClient(app,base_url='https://howmuch-ios.test') as client:
         yield SimpleNamespace(client=client,storage=storage,private=private)

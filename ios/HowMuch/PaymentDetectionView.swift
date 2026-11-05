@@ -17,6 +17,8 @@ struct PaymentDetectionView: View {
     @State private var pendingReceipt: DetectionReceipt?
     @State private var pendingEvent = ""
     @State private var confirmBank = false
+    @State private var payIn: PayInStatus?
+    @State private var copied = false
     private let path = "/v1/payment-detection"
     private var previewOnly: Bool {
         #if DEBUG
@@ -28,8 +30,31 @@ struct PaymentDetectionView: View {
     var body: some View {
         Form {
             if previewOnly {
-                Section { Text("Sign in to your own Apple account to connect email. The preview does not access any mailbox.").foregroundStyle(Palette.muted) }
+                Section { Text("Sign in to your own Apple account to track pay coming in. The preview doesn't read any notifications or email.").foregroundStyle(Palette.muted) }
             } else if let status {
+                Section("Bank app notifications") {
+                    NavigationLink { BankNotificationsGuide() } label: { Label("Set up bank notifications", systemImage: "bell.badge") }
+                        .accessibilityIdentifier("payin.notifications.setup")
+                    Toggle("Mark matching pay as paid", isOn: Binding(get: { payIn?.notificationsAuto ?? false },
+                                                                       set: { enabled in Task { await setPayIn(enabled) } }))
+                        .disabled(payIn == nil || busy).accessibilityIdentifier("payin.notifications.auto")
+                    Text("When your bank app says money came in, a Shortcuts automation passes it to HowMuch. Pay from a saved payer that exactly matches an event's unpaid total is marked paid; anything else waits below for you to check. Needs iOS 27.").font(.caption).foregroundStyle(Palette.muted)
+                }
+                Section("Email forwarding") {
+                    if let address = payIn?.forwarding.address {
+                        HStack {
+                            Text(address).font(.subheadline.monospaced()).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                            Spacer()
+                            Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = address; copied = true }
+                                .labelStyle(.iconOnly).accessibilityLabel("Copy forwarding address")
+                        }.accessibilityIdentifier("payin.forwarding.address")
+                        NavigationLink { EmailForwardingGuide(address: address) } label: { Label("How to forward bank emails", systemImage: "envelope.arrow.triangle.branch") }
+                        Text("Forward DBS \u{201C}You\u{2019}ve received a transfer\u{201D} alerts to this private address, by hand or with a mail rule. Forwarded emails always wait for you to check them below.").font(.caption).foregroundStyle(Palette.muted)
+                    } else {
+                        Text("Coming soon: a private address you can forward bank alert emails to.").font(.subheadline).foregroundStyle(Palette.muted)
+                    }
+                }
+                #if DEBUG
                 Section("Email & DBS alerts") {
                     Label(status.connected ? "\(status.providerName) connected" : "No email connected", systemImage: status.connected ? "checkmark.shield" : "envelope")
                     if let email = status.email { Text(email).font(.caption).foregroundStyle(Palette.muted) }
@@ -51,6 +76,7 @@ struct PaymentDetectionView: View {
                     Toggle("Mark exact verified matches paid", isOn: Binding(get: { status.autoEnabled }, set: { enabled in Task { await action("", method: "PATCH", body: ["auto_enabled": enabled]) } })).disabled(!status.connected || !status.available || status.provider != nil && status.provider != "gmail" || busy)
                     Text("Automatic marking is supported for verified Gmail alerts. Outlook and iCloud alerts require confirmation against your bank transaction. You can undo applied payments below.").font(.caption).foregroundStyle(Palette.muted)
                 }
+                #endif
                 Section("Saved payers") {
                     NavigationLink("Manage saved payers") { PayersSettingsView() }.accessibilityIdentifier("payment.payers")
                     Text("Save companies once in Settings → Payers. Choose ‘Paid by’ when adding/editing an event or from Earnings. Every saved bank name for the selected company is used for exact matching.").font(.caption).foregroundStyle(Palette.muted)
@@ -69,7 +95,7 @@ struct PaymentDetectionView: View {
                     }
                 }
                 Section("Payment review & history") {
-                    if status.receipts.isEmpty { Text("No matching alerts yet.").foregroundStyle(Palette.muted) }
+                    if status.receipts.isEmpty { Text("No pay received yet. Payments from saved payers appear here.").foregroundStyle(Palette.muted) }
                     ForEach(status.receipts) { receipt in
                         VStack(alignment: .leading, spacing: 10) {
                             Text("\(receipt.currency) \(receipt.amount ?? "—")").font(.headline)
@@ -90,10 +116,10 @@ struct PaymentDetectionView: View {
                     }
                 }
             } else if busy { Section { ProgressView("Checking your account…") } }
-            else { Section { Label("Payment detection couldn’t be loaded. Refresh to try again.", systemImage: "wifi.exclamationmark") } }
+            else { Section { Label("Pay-in tracking couldn’t be loaded. Refresh to try again.", systemImage: "wifi.exclamationmark") } }
             if !message.isEmpty { Section { Text(message).font(.caption).foregroundStyle(Palette.muted) } }
-            if !previewOnly { Button("Refresh connection status") { Task { await load() } }.rowAction().disabled(busy) }
-        }.detailStyle("Payment detection")
+            if !previewOnly { Button("Refresh") { Task { await load() } }.rowAction().disabled(busy) }
+        }.detailStyle("Pay-in tracking")
             .task { if !previewOnly { await load() } }
             .onChange(of: scenePhase) { _, value in if value == .active && !previewOnly { Task { await load() } } }
             .confirmationDialog("Disconnect email for this HowMuch account?", isPresented: $disconnect, titleVisibility: .visible) {
@@ -160,7 +186,19 @@ struct PaymentDetectionView: View {
     private func load() async {
         guard !busy else { return }
         busy = true; defer { busy = false }
-        do { await auth.synchronize(); status = try decode(await auth.api.request(path)); message = "" }
+        do {
+            await auth.synchronize(); status = try decode(await auth.api.request(path)); message = ""
+            payIn = try? decodePayIn(await auth.api.request(path + "/pay-in"))
+        } catch { message = error.localizedDescription }
+    }
+    private func decodePayIn(_ data: Data) throws -> PayInStatus {
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(PayInStatus.self, from: data)
+    }
+    private func setPayIn(_ enabled: Bool) async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        do { payIn = try decodePayIn(await auth.api.request(path + "/pay-in", method: "PATCH", body: JSONSerialization.data(withJSONObject: ["notifications_auto": enabled]))) }
         catch { message = error.localizedDescription }
     }
     @discardableResult
@@ -212,4 +250,71 @@ private struct DetectionReceipt: Decodable, Identifiable {
     let status: String
     let reason: String
     let candidates: [DetectionCandidate]
+}
+
+private struct PayInStatus: Decodable {
+    struct Forwarding: Decodable { let available: Bool; let address: String? }
+    let notificationsAuto: Bool
+    let forwarding: Forwarding
+}
+
+/// Step-by-step setup for the iOS 27 Shortcuts automation that runs on bank app notifications.
+struct BankNotificationsGuide: View {
+    @State private var copied = false
+    static let prompt = "If this notification says money was received, reply with only the amount as a number. Otherwise reply 0."
+    var body: some View {
+        Form {
+            Section {
+                Text("When your bank app tells you money came in, HowMuch can mark the matching job paid. It reads the notification on your iPhone; notifications that aren't pay are ignored.")
+                    .font(.subheadline).foregroundStyle(Palette.muted)
+            }
+            Section("Before you start") {
+                step(1, "Save who pays you", "On each event, choose Paid by and save the company name as it appears in your bank app, e.g. REFIX PTE. LTD.")
+                step(2, "Turn on bank notifications", "In your bank app (e.g. DBS digibank), turn on notifications for incoming transfers and PayNow.")
+            }
+            Section("Create the automation (iOS 27)") {
+                step(3, "Open Shortcuts → Automation → +", "Choose Notification, pick your bank app, and select Run Immediately.")
+                step(4, "Add the HowMuch action", "Search for Record pay received and add it. Set Notification text to the notification's Body.")
+                step(5, "Done", "Pay from a saved payer now shows up in Pay-in tracking. Turn on Mark matching pay as paid to mark exact matches automatically.")
+            }
+            Section("Optional: other banks' wording") {
+                Text("If HowMuch doesn't recognise your bank's wording, add Apple Intelligence's Use Model action before Record pay received with this request, and pass its result as Amount:").font(.caption).foregroundStyle(Palette.muted)
+                Text(Self.prompt).font(.callout).textSelection(.enabled)
+                Button(copied ? "Copied" : "Copy request", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = Self.prompt; copied = true }.rowAction()
+            }
+            Section {
+                Link(destination: URL(string: "shortcuts://")!) { Label("Open Shortcuts", systemImage: "square.2.layers.3d") }
+            }
+        }.detailStyle("Bank notifications")
+    }
+    private func step(_ number: Int, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 26, height: 26).background(Palette.teal, in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(Palette.muted)
+            }
+        }.padding(.vertical, 4)
+    }
+}
+
+/// How to forward DBS transfer alerts to the account's private HowMuch address.
+struct EmailForwardingGuide: View {
+    let address: String
+    var body: some View {
+        Form {
+            Section("Your private address") {
+                Text(address).font(.callout.monospaced()).textSelection(.enabled)
+                Button("Copy address", systemImage: "doc.on.doc") { UIPasteboard.general.string = address }.rowAction()
+                Text("Only forward bank alerts here. Anyone with this address could send you emails to check, so forwarded payments always wait for your OK.").font(.caption).foregroundStyle(Palette.muted)
+            }
+            Section("Forward one email") {
+                Text("Open a DBS \u{201C}You\u{2019}ve received a transfer\u{201D} email, tap Forward, and send it to your address. It appears in Pay-in tracking within a minute.").font(.subheadline)
+            }
+            Section("Forward automatically (Gmail)") {
+                Text("On a computer, open Gmail Settings → Forwarding and POP/IMAP → Add a forwarding address, and enter your HowMuch address. Gmail sends a confirmation code, which appears in Pay-in tracking.").font(.subheadline)
+                Text("Then create a filter: From ibanking.alert@dbs.com, Subject \u{201C}You\u{2019}ve received a transfer\u{201D} → Forward it to your HowMuch address.").font(.subheadline)
+            }
+        }.detailStyle("Email forwarding")
+    }
 }

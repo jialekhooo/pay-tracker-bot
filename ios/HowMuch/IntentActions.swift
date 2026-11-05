@@ -2,6 +2,7 @@ import AppIntents
 import ActivityKit
 import Foundation
 import HowMuchCore
+import UserNotifications
 
 /// The app's side of the live-card buttons, Siri and Control Center. iOS may launch HowMuch in the
 /// background just to run one of these, so each opens the signed-in account itself when needed.
@@ -85,6 +86,48 @@ struct OwedIntent: AppIntent {
         return .result(value: answer, dialog: IntentDialog(stringLiteral: answer))
     }
 }
+
+/// Called by a Shortcuts automation when the bank app posts a notification (iOS 27's notification trigger).
+/// The server ignores anything that isn't money received, and only marks shifts paid for a saved payer whose
+/// unpaid event total matches exactly; otherwise the payment waits in Pay-in tracking.
+struct RecordPayReceivedIntent: AppIntent {
+    static var title: LocalizedStringResource = "Record pay received"
+    static var description = IntentDescription("Matches money received, from a bank notification or its text, against your unpaid jobs. Payments from saved payers are marked paid or kept for you to check in Pay-in tracking.")
+    @Parameter(title: "Notification text", description: "The bank notification's text, e.g. the Notification's Body from the automation.") var text: String
+    @Parameter(title: "Amount", description: "Optional. Fill in when a model step has read the amount.") var amount: Double?
+    @Parameter(title: "From", description: "Optional. Who sent the money, when a model step has read it.") var payer: String?
+    static var parameterSummary: some ParameterSummary { Summary("Record pay received from \(\.$text)") { \.$amount; \.$payer } }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let message = try await IntentActions.recordPayReceived(text: text, amount: amount, payer: payer)
+        return .result(dialog: IntentDialog(stringLiteral: message))
+    }
+}
+
+extension IntentActions {
+    static func recordPayReceived(text: String, amount: Double?, payer: String?) async throws -> String {
+        let account = AppleAccountStore.shared
+        guard await tracker() != nil, account.account != nil, !account.isDemo else {
+            throw TrackerError.invalid("Open HowMuch and sign in first.")
+        }
+        var body: [String: Any] = ["text": String(text.prefix(2000)), "payer": String((payer ?? "").prefix(200))]
+        if let amount, amount > 0 { body["amount"] = String(format: "%.2f", amount) }
+        let data = try await account.api.request("/v1/payment-detection/notification", method: "POST", body: JSONSerialization.data(withJSONObject: body))
+        let result = try JSONDecoder().decode(PayInResult.self, from: data)
+        guard result.status != "ignored" else { return result.message }
+        // Bring the paid flags into the phone's records straight away.
+        if result.status == "auto_paid" { await account.synchronize() }
+        let content = UNMutableNotificationContent()
+        content.title = result.status == "auto_paid" ? "Pay received" : "Pay received · check it"
+        content.body = result.message
+        content.userInfo = ["kind": "pay_in"]
+        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "howmuch.pay-in.\(UUID().uuidString)", content: content, trigger: nil))
+        return result.message
+    }
+}
+
+private struct PayInResult: Decodable { let status: String; let message: String }
 
 struct HowMuchShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {

@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager,suppress
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from .database import AppStorage
-from . import auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity
+from . import auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity,pay_in
 
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
@@ -31,6 +31,8 @@ app.include_router(push.router,prefix='/v1')
 app.include_router(live_activity.router,prefix='/v1')
 app.include_router(accounts.router,prefix='/v1')
 app.include_router(gmail_payments.router,prefix='/v1')
+app.include_router(pay_in.router,prefix='/v1')
+app.include_router(pay_in.inbound,prefix='/v1')
 app.include_router(email_providers.router,prefix='/v1')
 app.include_router(travel.router,prefix='/v1')
 app.include_router(receipts.router,prefix='/v1')
@@ -50,6 +52,8 @@ If you permit notifications, we store your device push token and reminder prefer
 Time to leave reminders are off by default. If enabled, your saved departure address, job destination, travel mode and arrival time are sent to the HowMuch service and Apple Maps to estimate a route. The service periodically checks upcoming work while you are signed in for push notifications. Public-transport estimates are requested from Apple Maps on your iPhone when the app is open and used for scheduled iPhone reminders; they are not continuously refreshed while closed. It does not track your live location. Estimates and traffic coverage vary, and notification delivery is not guaranteed. Turning this feature off cancels pending travel reminders; removing the saved address removes it from the active account document.
 
 Receipt photos are optional. Selected images are resized on your iPhone and uploaded to encrypted, account-owned attachment storage on the HowMuch service. Receipt text recognition runs on the device and fills a detected total automatically; review it before saving. Saved receipt copies can be reopened and downloaded to Files. Images are not sent to an AI service. JSON/CSV work exports do not contain receipt image files. Removing an attachment from a claim unlinks it; account deletion removes all receipt photos from the active service.
+
+Pay-in tracking is optional. If you set up the bank notification shortcut, the text of the bank notifications it passes to HowMuch (and any amount or payer read from them) is sent to the HowMuch service to match payments from your saved payers; notifications that aren't money received are discarded, and matched payments are kept with your payment history so you can undo them. If you forward bank alert emails to your private HowMuch address, those emails are read the same way and wait for your confirmation.
 
 No advertising or analytics SDK is used, and we do not sell or share your data for tracking.
 
