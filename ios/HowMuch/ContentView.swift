@@ -222,7 +222,7 @@ struct EarningsHero: View {
             HStack(alignment: .top) {
                 figure("Paid", split.paid, color: Palette.teal, alignment: .leading)
                 Spacer(minLength: 8)
-                figure("Owed", split.owed, color: split.owed > 0 ? Color(red: 0.8, green: 0.42, blue: 0.12) : Palette.ink, alignment: .center)
+                figure("Pending payment", split.owed, color: split.owed > 0 ? Color(red: 0.8, green: 0.42, blue: 0.12) : Palette.ink, alignment: .center)
                 Spacer(minLength: 8)
                 figure("Booked", split.booked, color: Palette.ink, alignment: .trailing)
             }
@@ -244,7 +244,7 @@ struct EarningsHero: View {
             Text(title).font(.caption2).foregroundStyle(Palette.muted)
             Text(money(value, currency)).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(color)
                 .lineLimit(1).minimumScaleFactor(0.7)
-        }.accessibilityElement(children: .combine).accessibilityIdentifier("earnings." + title.lowercased())
+        }.accessibilityElement(children: .combine).accessibilityIdentifier("earnings." + title.lowercased().replacingOccurrences(of: " ", with: "-"))
     }
 }
 
