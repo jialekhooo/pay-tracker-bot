@@ -207,31 +207,44 @@ struct EarningsHero: View {
     var label = "TOTAL EARNINGS"
     var now = Date()
     var body: some View {
-        let total = shifts.reduce(Decimal.zero) { $0 + $1.pay }
-        let earned = shifts.reduce(Decimal.zero) { $0 + $1.earned(at: now) }
+        let split = EarningsBreakdown(shifts: shifts, now: now)
         Card {
             HStack {
                 Text(label).font(.system(size: 10, weight: .bold)).tracking(1.2).foregroundStyle(Palette.muted)
                 Spacer()
                 Image(systemName: "wallet.bifold").font(.system(size: 21, weight: .light)).foregroundStyle(Palette.teal)
             }
-            Text(money(total, currency)).font(.system(size: 40, weight: .bold, design: .rounded)).tracking(-1.5)
-                .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink).accessibilityIdentifier("earnings.total")
-            Text("\(PayEngine.rounded(shifts.reduce(0) { $0 + $1.hours })) hours · \(counted(shifts.count, "shift"))")
-                .font(.caption).foregroundStyle(Palette.muted)
+            // Only what's been worked counts; booked shifts are shown separately below.
+            Text(money(split.earned, currency)).font(.system(size: 40, weight: .bold, design: .rounded)).tracking(-1.5)
+                .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink).accessibilityIdentifier("earnings.earned")
+            Text(workedLine(split)).font(.caption).foregroundStyle(Palette.muted)
             Divider().overlay(Palette.line)
-            HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Earned so far").font(.caption2).foregroundStyle(Palette.muted)
-                    Text(money(earned, currency)).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.teal)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text("Still to come").font(.caption2).foregroundStyle(Palette.muted)
-                    Text(money(total - earned, currency)).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink)
-                }
+            HStack(alignment: .top) {
+                figure("Paid", split.paid, color: Palette.teal, alignment: .leading)
+                Spacer(minLength: 8)
+                figure("Owed", split.owed, color: split.owed > 0 ? Color(red: 0.8, green: 0.42, blue: 0.12) : Palette.ink, alignment: .center)
+                Spacer(minLength: 8)
+                figure("Booked", split.booked, color: Palette.ink, alignment: .trailing)
+            }
+            if split.booked > 0 {
+                Text("\(money(split.total, currency)) including booked shifts").font(.caption2).foregroundStyle(Palette.muted)
+                    .accessibilityIdentifier("earnings.total")
+            } else {
+                Text(money(split.total, currency)).font(.caption2).foregroundStyle(.clear).frame(height: 0).accessibilityIdentifier("earnings.total")
             }
         }
+    }
+    private func workedLine(_ split: EarningsBreakdown) -> String {
+        var parts = ["\(PayEngine.rounded(split.hoursWorked)) hours", "\(counted(split.shiftsWorked, "shift")) worked"]
+        if split.shiftsBooked > 0 { parts.append("\(split.shiftsBooked) booked") }
+        return parts.joined(separator: " · ")
+    }
+    private func figure(_ title: String, _ value: Decimal, color: Color, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 5) {
+            Text(title).font(.caption2).foregroundStyle(Palette.muted)
+            Text(money(value, currency)).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(color)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }.accessibilityElement(children: .combine).accessibilityIdentifier("earnings." + title.lowercased())
     }
 }
 
