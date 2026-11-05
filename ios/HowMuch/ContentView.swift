@@ -158,10 +158,21 @@ struct DashboardView: View {
                     ShiftCards(shifts: todayShifts)
                 }
                 let tomorrow = TrackerCalendar.calendar.date(byAdding: .day, value: 1, to: clock.date)!
-                SectionHeading(title: "Tomorrow", detail: tomorrow.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
                 let tomorrowShifts = store.data.shifts.filter { $0.day == Shift.dayString(tomorrow) }.sorted { $0.startMinute < $1.startMinute }
-                if tomorrowShifts.isEmpty { EmptyCard(message: "Nothing booked for tomorrow. Your next opportunity is ahead.") }
-                else { UpcomingWorkList(shifts: tomorrowShifts) }
+                let tomorrowLabel = tomorrow.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+                if !tomorrowShifts.isEmpty {
+                    SectionHeading(title: "Tomorrow", detail: tomorrowLabel)
+                    UpcomingWorkList(shifts: tomorrowShifts)
+                } else if let next = store.data.shifts.filter({ $0.startDate > clock.date && $0.day > Shift.dayString(tomorrow) }).min(by: { $0.startDate < $1.startDate }) {
+                    // Nothing tomorrow: point to the next booked day instead of an empty card.
+                    let calendar = TrackerCalendar.calendar
+                    let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: clock.date), to: calendar.startOfDay(for: next.startDate)).day ?? 0
+                    SectionHeading(title: "Next up", detail: "in \(counted(days, "day"))")
+                    UpcomingWorkList(shifts: store.data.shifts.filter { $0.day == next.day }.sorted { $0.startMinute < $1.startMinute })
+                } else {
+                    SectionHeading(title: "Tomorrow", detail: tomorrowLabel)
+                    EmptyCard(message: "Nothing booked for tomorrow. Your next opportunity is ahead.")
+                }
                 } else {
                     SectionHeading(title: month.formatted(.dateTime.month(.wide)), detail: counted(shifts.count, "shift"))
                     if shifts.isEmpty { EmptyCard(title: "No shifts this month", message: "Browse another month or add your first shift.") }

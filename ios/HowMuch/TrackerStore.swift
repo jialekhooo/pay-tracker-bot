@@ -239,6 +239,11 @@ final class TrackerStore: ObservableObject {
                 data.shifts = [try Shift(event: "Public transit QA", location: "Marina Bay Sands, 10 Bayfront Avenue, Singapore 018956", day: Shift.dayString(date), startMinute: start, endMinute: (start + 240) % 1440, rate: 20)]
             }
         }
+        if CommandLine.arguments.contains("--ui-test-quiet-days") {
+            // Nothing today or tomorrow, so Overview points to the next booked day.
+            let soon = [0, 1].map { Shift.dayString(calendar.date(byAdding: .day, value: $0, to: Date())!) }
+            data.shifts.removeAll { soon.contains($0.day) }
+        }
         if CommandLine.arguments.contains("--ui-test-travel-error") {
             var options = TravelReminderOptions(); options.enabled = true; options.origin = "Singapore Botanic Gardens, Singapore"
             data.preferences?.travel = options

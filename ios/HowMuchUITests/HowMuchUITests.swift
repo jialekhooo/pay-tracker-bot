@@ -423,6 +423,17 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(["", "Event name"].contains(app.textFields["Event name"].value as? String ?? ""))
     }
     @MainActor
+    func testOverviewPointsToTheNextShiftWhenTomorrowIsFree() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-quiet-days"]; app.launch()
+        let heading = app.staticTexts["Next up"]
+        reveal(heading, in: app)
+        XCTAssertTrue(heading.exists)
+        XCTAssertTrue(app.staticTexts["in 3 days"].exists)
+        XCTAssertTrue(app.staticTexts["Weekend roadshow"].firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Today"].exists)
+        attach("Overview with nothing today or tomorrow", app: app)
+    }
+    @MainActor
     func testLiveShiftSettingsToggle() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
