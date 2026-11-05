@@ -358,15 +358,23 @@ def test_apns_delivery_retries_and_deduplicates_without_cross_account_sends(setu
     assert db.execute('SELECT status FROM notification_jobs WHERE job_id=?',(job['job_id'],)).fetchone()[0]=='sent'
 
 
-def test_calendar_links_are_owned_rotatable_and_no_bot_auth_is_accepted(setup):
+def test_calendar_links_are_owned_rotatable_and_no_bot_auth_is_accepted(setup,monkeypatch):
+    from cryptography.fernet import Fernet
+    monkeypatch.setenv('HOWMUCH_ENCRYPTION_KEY',Fernet.generate_key().decode())
     a,_=login(setup);b,_=login(setup,'apple-user-B')
     data=document();assert write(setup,a,data).status_code==200
+    assert setup.client.get('/v1/calendar/link',headers=headers(a)).json()['url'] is None
     first=setup.client.post('/v1/calendar/link',headers=headers(a)).json()['url']
+    # Every iPhone on the account sees the same link.
+    assert setup.client.get('/v1/calendar/link',headers=headers(a)).json()['url']==first
     response=setup.client.get(first.replace('https://howmuch-ios.fly.dev','https://howmuch-ios.test'))
     assert response.status_code==200 and 'Roadshow' in response.text
+    assert 'X-WR-CALNAME:HowMuch shifts' in response.text and 'REFRESH-INTERVAL;VALUE=DURATION:PT1H' in response.text
+    assert 'Awaiting payment' in response.text and 'DESCRIPTION:' in response.text
     other=setup.client.post('/v1/calendar/link',headers=headers(b)).json()['url']
     assert 'Roadshow' not in setup.client.get(other.replace('https://howmuch-ios.fly.dev','https://howmuch-ios.test')).text
-    setup.client.post('/v1/calendar/link',headers=headers(a))
+    replaced=setup.client.post('/v1/calendar/link',headers=headers(a)).json()['url']
+    assert setup.client.get('/v1/calendar/link',headers=headers(a)).json()['url']==replaced!=first
     assert setup.client.get(first.replace('https://howmuch-ios.fly.dev','https://howmuch-ios.test')).status_code==404
 
 

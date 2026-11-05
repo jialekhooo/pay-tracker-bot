@@ -74,6 +74,9 @@ class AppStorage(Storage):
         super().__init__(path)
         self._conn.execute('PRAGMA journal_mode=WAL')
         self._conn.executescript(SCHEMA)
+        # The calendar link, encrypted, so every iPhone on the account shows the same one.
+        if 'encrypted_token' not in {r['name'] for r in self._conn.execute('PRAGMA table_info(calendar_links)')}:
+            self._conn.execute('ALTER TABLE calendar_links ADD COLUMN encrypted_token TEXT')
         for table in ('shifts','cab_claims'):
             columns={r['name'] for r in self._conn.execute(f'PRAGMA table_info({table})')}
             if 'ios_uuid' not in columns:

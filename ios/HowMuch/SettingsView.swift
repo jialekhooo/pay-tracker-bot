@@ -42,7 +42,7 @@ struct SettingsView: View {
             group("Widgets & calendar") {
                 settingsRow("Widgets", "rectangle.on.rectangle") { WidgetsSettingsView() }
                 Divider().padding(.leading, 44)
-                settingsRow("Apple Calendar", "calendar") { CalendarSettingsView() }
+                settingsRow("Calendar sync", "calendar") { CalendarSettingsView() }
             }
             group("Account") {
                 settingsRow("Account & sync", "person.crop.circle.badge.checkmark", value: store.hasPendingChanges ? "Syncing" : nil) { AccountSettingsView() }

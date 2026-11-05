@@ -540,7 +540,7 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(months.isSelected)
         attach("Earnings by month", app: app)
         app.buttons["nav.settings"].tap()
-        XCTAssertTrue(app.staticTexts["Apple Calendar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Calendar sync"].waitForExistence(timeout: 5))
         attach("Settings", app: app)
     }
     @MainActor
@@ -579,7 +579,7 @@ final class HowMuchUITests: XCTestCase {
         let destinations = [
             ("Pay & breaks", "Pay & breaks"),
             ("Job notifications", "Job notifications"),
-            ("Apple Calendar", "Apple Calendar"),
+            ("Calendar sync", "Calendar sync"),
             ("Data & backups", "Data & backups"),
             ("Account & sync", "Account & sync"),
             ("Pay-in tracking", "Pay-in tracking")
@@ -629,7 +629,7 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5))
         app.buttons["nav.settings"].tap()
-        for title in ["Pay & breaks", "Job notifications", "Apple Calendar", "Data & backups", "Account & sync", "Pay-in tracking"] {
+        for title in ["Pay & breaks", "Job notifications", "Calendar sync", "Data & backups", "Account & sync", "Pay-in tracking"] {
             let label = app.staticTexts[title].firstMatch
             reveal(label, in: app)
             XCTAssertTrue(label.isHittable)
@@ -856,11 +856,24 @@ final class HowMuchUITests: XCTestCase {
             XCTAssertTrue(app.navigationBars["Data & backups"].waitForExistence(timeout: 5))
         }
         app.navigationBars.buttons.firstMatch.tap()
-        tapTrailingArea(app.staticTexts["Apple Calendar"], in: app)
+        tapTrailingArea(app.staticTexts["Calendar sync"], in: app)
         tapTrailingArea(app.buttons["calendar.exportICS"], in: app)
         XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["Cancel"].firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["Apple Calendar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Calendar sync"].waitForExistence(timeout: 5))
+    }
+    @MainActor
+    func testLiveCalendarLinkOffersAppleGoogleAndTimeTree() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-calendar-link"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Calendar sync"], in: app)
+        XCTAssertTrue(app.buttons["calendar.subscribeApple"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["calendar.subscribeGoogle"].exists)
+        attach("Live calendar link", app: app)
+        let timeTree = app.staticTexts["Using TimeTree?"].firstMatch
+        reveal(timeTree, in: app)
+        XCTAssertTrue(timeTree.exists || app.staticTexts["USING TIMETREE?"].exists)
+        attach("TimeTree steps", app: app)
     }
     @MainActor
     func testEditDuplicateDeleteAndCalendarEditor() {

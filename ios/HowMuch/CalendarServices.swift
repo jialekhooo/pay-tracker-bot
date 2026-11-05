@@ -53,10 +53,37 @@ struct CalendarSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Label("Your work calendar", systemImage: "calendar.badge.clock").font(.headline)
-                Text("Tap any shift to add it to Apple Calendar, export a calendar file below, or create a calendar link that stays up to date.").font(.subheadline).foregroundStyle(Palette.muted)
+                Label("Your shifts in any calendar", systemImage: "calendar.badge.clock").font(.headline)
+                Text("Create a private live link once, and your shifts show up in Apple Calendar, Google Calendar or TimeTree, updating as you add or change jobs.").font(.subheadline).foregroundStyle(Palette.muted)
             }
-            Section("Export shifts") {
+            Section("Live calendar") {
+                if let link, let url = URL(string: link) {
+                    Button { openURL(Self.webcal(url)) } label: { Label("Subscribe in Apple Calendar", systemImage: "calendar") }
+                        .accessibilityIdentifier("calendar.subscribeApple")
+                    Button { openURL(Self.google(url)) } label: { Label("Add to Google Calendar", systemImage: "globe") }
+                        .accessibilityIdentifier("calendar.subscribeGoogle")
+                    ShareLink(item: url) { Label("Copy or share link", systemImage: "link") }
+                    Text("Calendars check for changes about every hour; Google Calendar can take up to a day.").font(.caption).foregroundStyle(Palette.muted)
+                } else {
+                    Button { rotateLink = true } label: { Label("Create my live calendar link", systemImage: "plus.circle.fill") }
+                        .rowAction().disabled(auth.isDemo).accessibilityIdentifier("calendar.createLink")
+                    if auth.isDemo { Text("Sign in to your own Apple account to create a live calendar link.").font(.caption).foregroundStyle(Palette.muted) }
+                }
+                if !linkMessage.isEmpty { Text(linkMessage).font(.caption).foregroundStyle(Palette.muted) }
+            }
+            if link != nil {
+                Section("Using TimeTree?") {
+                    step(1, "Subscribe in Apple Calendar", "Tap Subscribe in Apple Calendar above, then Subscribe. A calendar called HowMuch shifts appears on your iPhone.")
+                    step(2, "Show it in TimeTree", "TimeTree can show the calendars on your iPhone. In TimeTree's calendar settings, turn on your iPhone's calendars and pick HowMuch shifts.")
+                    Text("TimeTree closed its API to other apps in 2023, so this is the way to see your shifts there.").font(.caption).foregroundStyle(Palette.muted)
+                }
+                Section {
+                    Button("Replace link", role: .destructive) { rotateLink = true }.disabled(auth.isDemo)
+                } footer: {
+                    Text("Anyone with the link can see your shifts and pay. Replacing it stops the old link working; subscribe again with the new one.")
+                }
+            }
+            Section("One-off export") {
                 Picker("Include", selection: $scope) { Text("Upcoming").tag("Upcoming"); Text("This month").tag("This month"); Text("All shifts").tag("All shifts") }
                 Button("Export calendar (.ics)", systemImage: "square.and.arrow.up") {
                     let shifts = store.data.shifts.filter { shift in
@@ -64,37 +91,56 @@ struct CalendarSettingsView: View {
                     }
                     document = TextFile(CalendarExport.encode(shifts)); export = true
                 }.rowAction().accessibilityIdentifier("calendar.exportICS")
-                Text("Open the .ics file from Files to add it to your calendar. The file is a one-time copy, so export again after changing shifts.").font(.caption).foregroundStyle(Palette.muted)
+                Text("A file you open once; it won't update. To add a single shift, tap it and choose Add to Calendar.").font(.caption).foregroundStyle(Palette.muted)
             }
-            Section("Your account’s calendar subscription") {
-                if let link, let url = URL(string: link) {
-                    Text(link).font(.caption).textSelection(.enabled)
-                    ShareLink("Copy or share calendar link", item: url)
-                    Button("Add subscription in Calendar") {
-                        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                        components?.scheme = "webcal"
-                        if let calendarURL = components?.url { openURL(calendarURL) }
-                    }.rowAction()
-                }
-                Button(link == nil ? "Create private calendar link" : "Replace private calendar link") { rotateLink = true }.rowAction().disabled(auth.isDemo)
-                Text("This feed contains your signed-in account’s synced shifts and updates as its records change. Anyone with the link can read the schedule; replacing it invalidates the previous link.").font(.caption).foregroundStyle(Palette.muted)
-                if !linkMessage.isEmpty { Text(linkMessage).font(.caption).foregroundStyle(Palette.muted) }
-            }
-        }.detailStyle("Apple Calendar")
+        }.detailStyle("Calendar sync")
             .fileExporter(isPresented: $export, document: document, contentType: .calendarEvent, defaultFilename: "howmuch-shifts.ics") { result in if case .failure(let error) = result { store.error = error.localizedDescription } }
-            .onAppear { if let id = auth.account?.id { link = AccountVault.read("calendar." + id, as: String.self) } }
-            .confirmationDialog("Create a new private link? Any previous subscription link will stop working.", isPresented: $rotateLink, titleVisibility: .visible) {
-                Button("Create private link") { Task {
+            .onAppear {
+                if let id = auth.account?.id { link = AccountVault.read("calendar." + id, as: String.self) }
+                #if DEBUG
+                if CommandLine.arguments.contains("--ui-test-calendar-link") { link = "https://howmuch-ios.fly.dev/calendar/preview.ics" }
+                #endif
+            }
+            .task {
+                // The link belongs to the account, so a second iPhone shows the same one.
+                guard !auth.isDemo, let id = auth.account?.id,
+                      let data = try? await auth.api.request("/v1/calendar/link", method: "GET", body: nil),
+                      let current = try? JSONDecoder().decode(CalendarLinkLookup.self, from: data) else { return }
+                link = current.url
+                if let url = current.url { try? AccountVault.save(url, key: "calendar." + id) }
+            }
+            .confirmationDialog(link == nil ? "Create a private live calendar link?" : "Replace your link? Calendars using the old one stop updating.", isPresented: $rotateLink, titleVisibility: .visible) {
+                Button(link == nil ? "Create link" : "Replace link") { Task {
                     do {
                         await auth.synchronize()
                         let data = try await auth.api.request("/v1/calendar/link", method: "POST", body: Data("{}".utf8))
                         let response = try JSONDecoder().decode(CalendarLinkResult.self, from: data)
                         guard let id = auth.account?.id else { return }
                         try AccountVault.save(response.url, key: "calendar." + id)
-                        link = response.url; linkMessage = "Private account calendar link created."
+                        link = response.url; linkMessage = "Your live calendar link is ready."
                     } catch { linkMessage = error.localizedDescription }
                 } }
             }
+    }
+    static func webcal(_ url: URL) -> URL {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = "webcal"
+        return components?.url ?? url
+    }
+    /// Google Calendar's "add by URL" page, pre-filled with the feed.
+    static func google(_ url: URL) -> URL {
+        var components = URLComponents(string: "https://calendar.google.com/calendar/render")!
+        components.queryItems = [URLQueryItem(name: "cid", value: webcal(url).absoluteString)]
+        return components.url!
+    }
+    private func step(_ number: Int, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 26, height: 26).background(Palette.teal, in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(Palette.muted)
+            }
+        }.padding(.vertical, 4)
     }
 }
 
@@ -140,3 +186,5 @@ enum ShiftNotifications {
 }
 
 private struct CalendarLinkResult: Decodable { let url: String }
+
+private struct CalendarLinkLookup: Decodable { let url: String? }
