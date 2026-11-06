@@ -21,6 +21,13 @@ enum PetPalette {
     static let purpleDark = Color(red: 0.30, green: 0.22, blue: 0.60)
     static let white = Color.white
     static let flower = Color(red: 1.0, green: 0.72, blue: 0.82)
+    static let straw = Color(red: 0.96, green: 0.84, blue: 0.52)
+    static let strawDark = Color(red: 0.78, green: 0.62, blue: 0.30)
+    static let navy = Color(red: 0.18, green: 0.24, blue: 0.45)
+    static let blue = Color(red: 0.30, green: 0.55, blue: 0.90)
+    static let glow = Color(red: 0.40, green: 0.95, blue: 0.95)
+    static let charcoal = Color(red: 0.20, green: 0.22, blue: 0.25)
+    static let cream = Color(red: 0.93, green: 0.90, blue: 0.84)
 }
 
 /// Penny's coin colours: the classic gold, or a skin from the shop.
@@ -53,6 +60,23 @@ struct PetSkin {
         case "midnight":
             base = rgb(0.24, 0.28, 0.50); light = rgb(0.46, 0.52, 0.80); deep = rgb(0.13, 0.15, 0.32); outline = rgb(0.05, 0.06, 0.16)
             ink = .white; badge = "m"; sparkles = true
+        case "copper":
+            base = rgb(0.86, 0.53, 0.33); light = rgb(0.99, 0.77, 0.57); deep = rgb(0.63, 0.34, 0.18); outline = rgb(0.32, 0.14, 0.06)
+        case "bubblegum":
+            base = rgb(1, 0.64, 0.82); light = rgb(1, 0.88, 0.95); deep = rgb(0.88, 0.42, 0.64); outline = rgb(0.45, 0.12, 0.30); badge = "o"
+        case "ocean":
+            base = rgb(0.32, 0.64, 0.88); light = rgb(0.72, 0.91, 0.99); deep = rgb(0.16, 0.42, 0.68); outline = rgb(0.05, 0.18, 0.36); badge = "~"
+        case "lava":
+            // Dark rock with a glowing ring and glowing eyes.
+            base = rgb(0.32, 0.14, 0.11); light = rgb(1, 0.58, 0.22); deep = rgb(0.92, 0.36, 0.08); outline = rgb(0.12, 0.03, 0.02)
+            ink = rgb(1, 0.78, 0.30); badge = "^"
+        case "blaze":
+            // The Unstoppable badge: flame colours from yellow to red.
+            light = rgb(1, 1, 0.85); deep = rgb(0.72, 0.18, 0.10); outline = rgb(0.42, 0.08, 0.04); rows = PetSkin.blazeRows; badge = "^"
+        case "frost":
+            // Gift-code special: icy blues with a snowflake.
+            light = .white; deep = rgb(0.55, 0.75, 0.92); outline = rgb(0.20, 0.40, 0.62); ink = rgb(0.12, 0.24, 0.42)
+            rows = PetSkin.frostRows; sparkles = true; badge = "x"
         case "rainbow":
             light = .white; deep = rgb(0.62, 0.48, 0.90); outline = rgb(0.30, 0.22, 0.45); rainbow = true
         case "terminal":
@@ -77,6 +101,14 @@ struct PetSkin {
     static let holoRows: [Color] = [
         Color(red: 0.75, green: 0.95, blue: 1), Color(red: 0.80, green: 0.80, blue: 1), Color(red: 0.95, green: 0.80, blue: 1),
         Color(red: 1, green: 0.85, blue: 0.92), Color(red: 0.85, green: 1, blue: 0.92), Color(red: 0.75, green: 0.90, blue: 1),
+    ]
+    static let blazeRows: [Color] = [
+        Color(red: 1, green: 0.95, blue: 0.55), Color(red: 1, green: 0.85, blue: 0.35), Color(red: 1, green: 0.68, blue: 0.25),
+        Color(red: 0.98, green: 0.52, blue: 0.18), Color(red: 0.92, green: 0.36, blue: 0.15), Color(red: 0.78, green: 0.22, blue: 0.12),
+    ]
+    static let frostRows: [Color] = [
+        Color(red: 0.93, green: 0.98, blue: 1), Color(red: 0.86, green: 0.95, blue: 1), Color(red: 0.79, green: 0.91, blue: 0.99),
+        Color(red: 0.73, green: 0.87, blue: 0.98), Color(red: 0.67, green: 0.83, blue: 0.96), Color(red: 0.61, green: 0.79, blue: 0.94),
     ]
     static let rainbowRows: [Color] = [
         Color(red: 1, green: 0.62, blue: 0.62), Color(red: 1, green: 0.78, blue: 0.5), Color(red: 1, green: 0.92, blue: 0.5),
@@ -222,6 +254,8 @@ enum PetPixels {
             "R": PetPalette.redDark, "p": PetPalette.pink, "j": PetPalette.jade, "w": PetPalette.white,
             "k": Color.black, "b": PetPalette.tear, "l": PetPalette.leaf, "L": PetPalette.leafDark,
             "f": PetPalette.flower, "v": PetPalette.purple, "V": PetPalette.purpleDark, "g": Color.gray.opacity(0.45),
+            "s": PetPalette.straw, "S": PetPalette.strawDark, "n": PetPalette.navy, "c": PetPalette.blue, "q": PetPalette.glow,
+            "e": PetPalette.charcoal, "W": PetPalette.cream,
         ]
         if outfit[.hat] == nil {
             switch stage {
@@ -243,6 +277,10 @@ enum PetPixels {
         case "*": stamp([".y.", "yyy", ".y."], x: cx - 1, y: top + 1, p)
         case "f": stamp([".f.", "fyf", ".f."], x: cx - 1, y: top + 1, p)
         case "m": stamp(["yy", "y."], x: cx - 1, y: top + 2, p)
+        case "o": stamp([".w.", "w.w", ".w."], x: cx - 1, y: top + 1, p)
+        case "~": stamp([".w..", "w.ww"], x: cx - 2, y: top + 2, p)
+        case "^": stamp([".y.", "yry", "yry"], x: cx - 1, y: top + 1, p)
+        case "x": stamp(["b.b", ".b.", "b.b"], x: cx - 1, y: top + 1, p)
         case ">": stamp(["g...", ".g..", "g.gg"], x: cx - 2, y: top + 1, [Character("g"): skin.ink])
         default: break
         }
@@ -326,6 +364,43 @@ enum PetPixels {
                 }
                 stamp(["rR", "rR", "R."], x: cx + 2, y: neckY + 1, p)
             case "bow-tie": stamp(["ro.or", "rrorr", "ro.or"], x: cx - 2, y: neckY, p)
+            case "straw-hat": stamp(["...ooooo...", "..osssSso..", "..orrrrro..", "osssssssSso", ".ooooooooo."], x: cx - 5, y: top - 4, p)
+            case "beret": stamp(["......o...", "..ooooooo.", ".orrrrrrro", "orrrrrrrRo", "oRRRRRRRRo", ".oooooooo."], x: cx - 5, y: top - 4, p)
+            case "headphones":
+                // A band that follows the top of the head, with a cup over each side.
+                let r = Int(s.rx)
+                for x in (cx - r + 1)...(cx + r - 2) {
+                    if let y = (0..<grid).first(where: { canvas[$0][x] != nil }), y - 1 < eyeY - 1 { put(x, y - 1, PetPalette.red) }
+                }
+                for x in [cx - r - 1, cx + r - 1] { stamp(["ee", "rr", "rr", "ee"], x: x, y: eyeY - 2, p) }
+            case "top-hat": stamp(["..ooooo..", "..okkko..", "..okkko..", "..okkko..", "..orrro..", "okkkkkkko", "ooooooooo"], x: cx - 4, y: top - 6, p)
+            case "hard-hat": stamp(["...ooooo...", "..oyyYyyo..", ".oyyyYyyyo.", ".oyyyyyyyo.", "oYYYYYYYYYo"], x: cx - 5, y: top - 4, p)
+            case "bunny-ears": stamp([".oo...oo.", "owpo.opwo", "owpo.opwo", "owpo.opwo", ".owo.owo."], x: cx - 4, y: top - 5, p)
+            case "square-specs": stamp(["VVVVVVVVV", "V..VVV..V", "V..V.V..V", "VVVV.VVVV"], x: lx - 1, y: eyeY - 1, p)
+            case "monocle": stamp(["oooo", "o..o", "o..o", "oooo", "...Y", "...Y", "..Y."], x: rx - 1, y: eyeY - 1, p)
+            case "visor": stamp(["oooooooooo", "oqwqqqqwqo", "oooooooooo"], x: lx - 2, y: eyeY - 1, p)
+            case "sleep-mask": stamp([".vvvvvvvvvv.", "VvwvwvvwvwvV", ".vvwvvvvwvv."], x: lx - 3, y: eyeY - 1, p)
+            case "3d-glasses": stamp(["wwwwwwwww", "wrrwwwccw", "wrrw.wccw", "wwww.wwww"], x: lx - 1, y: eyeY - 1, p)
+            case "necktie": stamp(["ono", ".n.", "nnn", "nnn", ".n."], x: cx - 1, y: neckY, p)
+            case "bandana":
+                for (i, x) in ((cx - Int(s.rx) + 1)...(cx + Int(s.rx) - 1)).enumerated() where neckY < grid && canvas[neckY][x] != nil {
+                    put(x, neckY, i % 3 == 1 ? PetPalette.white : PetPalette.blue)
+                }
+                stamp(["cwcccwc", ".ccwcc.", "..ccc.."], x: cx - 3, y: neckY + 1, p)
+            case "pearls":
+                for (i, x) in ((cx - Int(s.rx) + 1)...(cx + Int(s.rx) - 1)).enumerated() where neckY < grid && canvas[neckY][x] != nil {
+                    put(x, neckY, i % 2 == 0 ? PetPalette.white : PetPalette.cream)
+                }
+                stamp(["w", "p"], x: cx, y: neckY + 1, p)
+            case "gold-chain":
+                for (i, x) in ((cx - Int(s.rx) + 1)...(cx + Int(s.rx) - 1)).enumerated() where neckY < grid && canvas[neckY][x] != nil {
+                    put(x, neckY, i % 2 == 0 ? PetPalette.gold : PetPalette.goldDark)
+                }
+                stamp([".ooo.", "oyYyo", "oYyYo", ".ooo."], x: cx - 2, y: neckY + 1, p)
+            case "lanyard": stamp(["j.....j", ".j...j.", "..owo..", "..oco..", "..ooo.."], x: cx - 3, y: neckY, p)
+            case "bell-collar":
+                for x in (cx - Int(s.rx) + 1)...(cx + Int(s.rx) - 1) where neckY < grid && canvas[neckY][x] != nil { put(x, neckY, PetPalette.red) }
+                stamp([".yy.", "yyyy", "YYYY", ".oo."], x: cx - 2, y: neckY + 1, p)
             case "medal": stamp(["j...j", ".j.j.", "..y..", ".yYy.", "..y.."], x: cx - 2, y: neckY, p)
             default: break
             }
@@ -396,6 +471,88 @@ struct PetScene: View {
                     Rectangle().fill(Color(red: 0.4, green: 0.72, blue: 0.9).opacity(0.7)).frame(height: 8).position(x: geo.size.width / 2, y: ground - 4)
                 case "sunset":
                     Rectangle().fill(Color(red: 1, green: 0.88, blue: 0.5)).frame(width: 40, height: 20).position(x: geo.size.width * 0.5, y: ground - 10)
+                case "rainy-day":
+                    cloud(at: CGPoint(x: geo.size.width * 0.26, y: ground * 0.2), color: .white.opacity(0.85))
+                    cloud(at: CGPoint(x: geo.size.width * 0.74, y: ground * 0.12), color: .white.opacity(0.7))
+                    ForEach(0..<18, id: \.self) { i in
+                        Rectangle().fill(Color(red: 0.55, green: 0.72, blue: 0.92)).frame(width: 2, height: 7)
+                            .position(x: geo.size.width * CGFloat((i * 31 + 5) % 100) / 100, y: ground * CGFloat((i * 47) % 60 + 32) / 100)
+                    }
+                    Rectangle().fill(Color(red: 0.50, green: 0.66, blue: 0.82)).frame(width: 46, height: 5).position(x: geo.size.width * 0.78, y: ground + 8)
+                case "snowfall":
+                    ForEach(0..<20, id: \.self) { i in
+                        Rectangle().fill(.white).frame(width: i % 3 == 0 ? 4 : 3, height: i % 3 == 0 ? 4 : 3)
+                            .position(x: geo.size.width * CGFloat((i * 37 + 11) % 100) / 100, y: ground * CGFloat((i * 43) % 85 + 6) / 100)
+                    }
+                    // A little pine tree in the snow.
+                    let pine = Color(red: 0.20, green: 0.48, blue: 0.40)
+                    VStack(spacing: 0) {
+                        pine.frame(width: 8, height: 8); pine.frame(width: 16, height: 8); pine.frame(width: 24, height: 8)
+                        Color(red: 0.45, green: 0.30, blue: 0.20).frame(width: 6, height: 6)
+                    }.position(x: geo.size.width * 0.14, y: ground - 15)
+                case "city-lights":
+                    ForEach(0..<8, id: \.self) { i in
+                        Rectangle().fill(.white.opacity(0.7)).frame(width: 2, height: 2)
+                            .position(x: geo.size.width * CGFloat((i * 41 + 9) % 100) / 100, y: ground * CGFloat((i * 29) % 30 + 6) / 100)
+                    }
+                    Rectangle().fill(Color(red: 1, green: 0.95, blue: 0.80)).frame(width: 12, height: 12).position(x: geo.size.width * 0.16, y: ground * 0.18)
+                    HStack(alignment: .bottom, spacing: 3) {
+                        ForEach(0..<9, id: \.self) { i in
+                            let height = CGFloat([34, 52, 26, 44, 60, 30, 48, 38, 56][i])
+                            Rectangle().fill(Color(red: 0.16, green: 0.18, blue: 0.34)).frame(maxWidth: .infinity).frame(height: height)
+                                .overlay(alignment: .top) {
+                                    VStack(spacing: 5) {
+                                        ForEach(0..<Int(height / 12), id: \.self) { row in
+                                            HStack(spacing: 4) {
+                                                ForEach(0..<2, id: \.self) { col in
+                                                    Color(red: 1, green: 0.85, blue: 0.40).opacity((i + row + col) % 3 == 0 ? 0.25 : 0.9).frame(width: 3, height: 3)
+                                                }
+                                            }
+                                        }
+                                    }.padding(.top, 5)
+                                }
+                        }
+                    }
+                    .frame(width: geo.size.width).position(x: geo.size.width / 2, y: ground - 30)
+                case "vault":
+                    // A round vault door on the wall, and stacks of coins.
+                    let steel = Color(red: 0.55, green: 0.56, blue: 0.60), coin = PetPalette.gold, coinDark = PetPalette.goldDark
+                    Rectangle().fill(steel).frame(width: 44, height: 44).overlay(Rectangle().stroke(Color(red: 0.32, green: 0.33, blue: 0.38), lineWidth: 4))
+                        .overlay(Rectangle().fill(Color(red: 0.36, green: 0.37, blue: 0.42)).frame(width: 14, height: 14))
+                        .position(x: geo.size.width * 0.15, y: ground * 0.42)
+                    ForEach(0..<4, id: \.self) { i in
+                        let count = [5, 8, 3, 6][i]
+                        VStack(spacing: 0) {
+                            ForEach(0..<count, id: \.self) { n in (n % 2 == 0 ? coin : coinDark).frame(width: 16, height: 3) }
+                        }
+                        .position(x: geo.size.width * CGFloat([66, 76, 86, 94][i]) / 100, y: ground - CGFloat(count) * 1.5)
+                    }
+                    ForEach(0..<5, id: \.self) { i in
+                        Rectangle().fill(.white.opacity(0.9)).frame(width: 3, height: 3)
+                            .position(x: geo.size.width * CGFloat([62, 72, 84, 90, 80][i]) / 100, y: ground * CGFloat([70, 52, 74, 58, 40][i]) / 100)
+                    }
+                case "sunrise":
+                    Rectangle().fill(Color(red: 1, green: 0.78, blue: 0.40)).frame(width: 44, height: 22).position(x: geo.size.width * 0.78, y: ground - 11)
+                    Rectangle().fill(Color(red: 1, green: 0.88, blue: 0.55)).frame(width: 30, height: 8).position(x: geo.size.width * 0.78, y: ground - 26)
+                    ForEach(0..<6, id: \.self) { i in
+                        let angle = Double(i + 1) * .pi / 7
+                        Rectangle().fill(Color(red: 1, green: 0.90, blue: 0.62)).frame(width: 4, height: 4)
+                            .position(x: geo.size.width * 0.78 - CGFloat(cos(angle)) * 40, y: ground - 10 - CGFloat(sin(angle)) * 36)
+                    }
+                    cloud(at: CGPoint(x: geo.size.width * 0.18, y: ground * 0.3), color: .white.opacity(0.75))
+                case "aurora":
+                    ForEach(0..<12, id: \.self) { i in
+                        Rectangle().fill(.white.opacity(0.8)).frame(width: 2, height: 2)
+                            .position(x: geo.size.width * CGFloat((i * 37 + 3) % 100) / 100, y: ground * CGFloat((i * 53) % 75 + 5) / 100)
+                    }
+                    ForEach(0..<3, id: \.self) { band in
+                        let colors: [Color] = [Color(red: 0.30, green: 0.95, blue: 0.65), Color(red: 0.35, green: 0.85, blue: 0.95), Color(red: 0.70, green: 0.50, blue: 0.95)]
+                        ForEach(0..<24, id: \.self) { i in
+                            let x = geo.size.width * CGFloat(i) / 23
+                            let y = ground * (0.22 + 0.1 * CGFloat(band)) + CGFloat(sin(Double(i) * 0.55 + Double(band))) * 10
+                            Rectangle().fill(colors[band].opacity(0.4)).frame(width: geo.size.width / 23 + 1, height: 7).position(x: x, y: y)
+                        }
+                    }
                 case "confetti":
                     ForEach(0..<16, id: \.self) { i in
                         let colors: [Color] = [.pink, .orange, .yellow, .green, .blue, .purple]
@@ -416,8 +573,22 @@ struct PetScene: View {
         }
     }
 
+    /// A blocky pixel cloud.
+    private func cloud(at point: CGPoint, color: Color) -> some View {
+        VStack(spacing: 0) {
+            color.frame(width: 18, height: 6)
+            color.frame(width: 36, height: 8)
+        }.position(point)
+    }
+
     private var sky: [Color] {
         switch item?.id {
+        case "rainy-day": [Color(red: 0.52, green: 0.58, blue: 0.68), Color(red: 0.70, green: 0.75, blue: 0.82)]
+        case "snowfall": [Color(red: 0.70, green: 0.80, blue: 0.92), Color(red: 0.88, green: 0.92, blue: 0.97)]
+        case "city-lights": [Color(red: 0.06, green: 0.08, blue: 0.22), Color(red: 0.30, green: 0.20, blue: 0.42)]
+        case "vault": [Color(red: 0.36, green: 0.27, blue: 0.20), Color(red: 0.50, green: 0.38, blue: 0.26)]
+        case "sunrise": [Color(red: 0.55, green: 0.75, blue: 0.95), Color(red: 1, green: 0.82, blue: 0.70), Color(red: 1, green: 0.70, blue: 0.50)]
+        case "aurora": [Color(red: 0.03, green: 0.06, blue: 0.16), Color(red: 0.08, green: 0.16, blue: 0.30)]
         case "sunset": [Color(red: 0.6, green: 0.45, blue: 0.75), Color(red: 1, green: 0.6, blue: 0.55), Color(red: 1, green: 0.8, blue: 0.5)]
         case "night-sky": [Color(red: 0.08, green: 0.10, blue: 0.25), Color(red: 0.20, green: 0.22, blue: 0.42)]
         case "fireworks": [Color(red: 0.05, green: 0.04, blue: 0.18), Color(red: 0.16, green: 0.10, blue: 0.34)]
@@ -429,6 +600,12 @@ struct PetScene: View {
 
     private var floor: Color {
         switch item?.id {
+        case "rainy-day": Color(red: 0.40, green: 0.48, blue: 0.52)
+        case "snowfall": Color(red: 0.96, green: 0.98, blue: 1)
+        case "city-lights": Color(red: 0.12, green: 0.12, blue: 0.20)
+        case "vault": Color(red: 0.28, green: 0.20, blue: 0.14)
+        case "sunrise": Color(red: 0.52, green: 0.72, blue: 0.40)
+        case "aurora": Color(red: 0.80, green: 0.88, blue: 0.94)
         case "sunset": Color(red: 0.55, green: 0.42, blue: 0.5)
         case "night-sky": Color(red: 0.18, green: 0.30, blue: 0.28)
         case "fireworks": Color(red: 0.12, green: 0.14, blue: 0.24)

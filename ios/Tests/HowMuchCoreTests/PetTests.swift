@@ -189,7 +189,7 @@ final class PetTests: XCTestCase {
 
     func testNewSkinsUnlockWithCoinsStagesAndBadges() throws {
         let skins = PetItem.catalog.filter { $0.slot == .skin }.map(\.id)
-        XCTAssertEqual(skins, ["classic", "pioneer", "rose-gold", "silver", "matcha", "sakura", "midnight", "rainbow", "terminal", "holo", "galaxy"])
+        XCTAssertEqual(skins, ["classic", "pioneer", "rose-gold", "copper", "bubblegum", "silver", "matcha", "ocean", "sakura", "midnight", "lava", "rainbow", "blaze", "terminal", "holo", "galaxy", "frost"])
         let shifts = try (1...10).map { try shift(daysAgo($0)) }
         let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
         XCTAssertEqual(pet.stage, .hatchling)
@@ -222,6 +222,38 @@ final class PetTests: XCTestCase {
         XCTAssertEqual(dressed.spent, 0)
         var wearing = PetCloset(); try wearing.toggle(PetItem.named("midnight")!, developer)
         XCTAssertEqual(wearing.wearing(.skin, developer)?.id, "midnight")
+    }
+
+    func testEveryCategoryHasCoinBadgeAndGiftCodeItems() throws {
+        XCTAssertEqual(Set(PetItem.catalog.map(\.id)).count, PetItem.catalog.count, "item ids are unique")
+        let badges = Set(PetProgress(shifts: [], pioneer: true, developer: true).achievements.map(\.id))
+        for slot in PetSlot.allCases {
+            let items = PetItem.catalog.filter { $0.slot == slot }
+            XCTAssertGreaterThanOrEqual(items.filter { $0.price != nil }.count, 4, slot.rawValue)
+            XCTAssertTrue(items.contains { if case .achievement = $0.unlock { return true }; return false }, slot.rawValue)
+            XCTAssertGreaterThanOrEqual(items.filter { $0.unlock == .code }.count, 2, slot.rawValue)
+            for item in items {
+                if case .achievement(let id) = item.unlock { XCTAssertTrue(badges.contains(id), item.id) }
+                if let price = item.price { XCTAssertTrue((40...400).contains(price), item.id); XCTAssertGreaterThan(item.stage, .egg, item.id) }
+            }
+        }
+        // Badge items come with the badge: the hard hat with Veteran, the sleep mask with Night owl.
+        let pet = PetProgress(shifts: try (1...50).map { try shift(daysAgo($0)) }, now: now, calendar: calendar)
+        var closet = PetCloset()
+        XCTAssertTrue(closet.owns(PetItem.named("hard-hat")!, pet))
+        XCTAssertTrue(closet.owns(PetItem.named("lanyard")!, pet))
+        XCTAssertFalse(closet.owns(PetItem.named("sleep-mask")!, pet))
+        XCTAssertEqual(PetItem.named("sleep-mask")!.requirement, "Badge: Night owl")
+        XCTAssertEqual(PetItem.named("frost")!.requirement, "Gift code")
+        XCTAssertTrue(PetItem.named("bunny-ears")!.exclusive)
+        // Treasure-stage items wait until Penny is a treasure.
+        XCTAssertLessThan(pet.stage, .treasure)
+        XCTAssertTrue(closet.locked(PetItem.named("gold-chain")!, pet))
+        XCTAssertThrowsError(try closet.buy(PetItem.named("vault")!, pet))
+        try closet.buy(PetItem.named("necktie")!, pet)
+        try closet.toggle(PetItem.named("hard-hat")!, pet)
+        XCTAssertEqual(petSlots(closet, pet), ["hat": "hard-hat", "neck": "necktie", "background": "mint"])
+        XCTAssertEqual(closet.spent, 60)
     }
 
     private func petSlots(_ closet: PetCloset, _ pet: PetProgress) -> [String: String] {
