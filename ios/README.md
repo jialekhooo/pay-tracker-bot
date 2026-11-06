@@ -180,3 +180,5 @@ Penny rework (SmartSpend-style): pixel-art Penny (`PetSprite`/`PetPixels`) in a 
 Build 49: Fixes from the full app review (sync, locked-phone logging, receipts, travel and Gmail safety), combined, some-shifts and short-paid payment matching, Share my availability, and Penny reworked in SmartSpend's style at the top of Overview; Delete shift is centred.
 
 Build 50: One type and button scale across the app: rounded headings, consistent amount sizes, chevrons, settings rows and text buttons, and bank setup buttons sized like the rest.
+
+Build 51: Penny no longer celebrates old progress on a new iPhone, nested settings merge across devices, correct coins-needed message, availability range matches the day grid, and a Developer badge with developer-only Terminal and Holographic skins and every skin unlocked.
