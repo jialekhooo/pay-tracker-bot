@@ -47,12 +47,20 @@ public enum JobMessageParser {
         var role: String?
         var items: [Item] = []
         var flat: Decimal?
+        // "19th: 3.30pm - 6pm" or "21,22nd: 9am - 6pm": times for days of the month listed on another line.
+        var dayTimes: [(days: [Int], time: (start: Int, end: Int))] = []
         let today = calendar.startOfDay(for: today)
 
         for raw in normalized(String(text.prefix(maximumLength))).components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: CharacterSet(charactersIn: " \t-•*>·").union(.whitespaces))
             guard !line.isEmpty else { continue }
             var content = line
+            if let (days, rest) = dayPrefix(line) {
+                var lower = rest.lowercased()
+                if readDates(&lower, today: today, calendar: calendar).isEmpty, let time = readTime(&lower) {
+                    dayTimes.append((days, time)); continue
+                }
+            }
             if let (key, value) = label(line) {
                 switch key {
                 case .location: if job.location == nil { job.location = clean(value) }; continue
@@ -92,19 +100,24 @@ public enum JobMessageParser {
             }
         }
 
+        // Day times that match no listed date are treated as a time on its own line.
+        let listed = Set(items.flatMap(\.days).compactMap { Int($0.suffix(2)) })
+        for entry in dayTimes where !entry.days.contains(where: listed.contains) { items.append(Item(days: [], time: entry.time)) }
         // Dates listed without times take the nearest time given on its own line.
         let loneTimes = items.enumerated().filter { $0.element.days.isEmpty }.compactMap { index, item in item.time.map { (index, $0) } }
         var seen = Set<String>()
         for (index, item) in items.enumerated() where !item.days.isEmpty {
-            guard let time = item.time ?? loneTimes.first(where: { $0.0 > index })?.1 ?? loneTimes.last(where: { $0.0 < index })?.1 else {
-                job.notes.append("No time found for " + item.days.map(display).joined(separator: ", ") + ".")
-                continue
-            }
+            let fallback = item.time ?? loneTimes.first(where: { $0.0 > index })?.1 ?? loneTimes.last(where: { $0.0 < index })?.1
+            var missing: [String] = []
             for day in item.days {
+                // A time written for this day of the month ("21,22nd: 9am - 6pm") wins over the shared one.
+                let dayOfMonth = Int(day.suffix(2)) ?? 0
+                guard let time = dayTimes.last(where: { $0.days.contains(dayOfMonth) })?.time ?? fallback else { missing.append(day); continue }
                 let key = "\(day)|\(time.start)|\(time.end)"
                 guard seen.insert(key).inserted, job.dates.count < maximumDates else { continue }
                 job.dates.append(PastedJobDate(day: day, startMinute: time.start, endMinute: time.end))
             }
+            if !missing.isEmpty { job.notes.append("No time found for " + missing.map(display).joined(separator: ", ") + ".") }
         }
         job.dates.sort { ($0.day, $0.startMinute) < ($1.day, $1.startMinute) }
 
@@ -161,6 +174,26 @@ public enum JobMessageParser {
                        "attire", "dress code", "dresscode", "remarks", "remark", "note", "notes", "requirements", "requirement",
                        "reporting time", "report time", "call time", "meal", "meals", "gender", "age", "pax", "headcount", "deadline"]
         return ignored.contains(key) ? (.ignored, value) : nil
+    }
+
+    /// "19th:", "21,22nd:", "12 & 13:", "21-22:" at the start of a line: days of the month, then the rest of the line.
+    /// A clock time such as "10:00" is never read as a day (the colon must not be followed by a digit).
+    private static func dayPrefix(_ line: String) -> ([Int], String)? {
+        guard let match = line.firstMatch(of: #/^((?:\d{1,2}(?:st|nd|rd|th)?\s*(?:,|&|and|-|to|/)\s*)*\d{1,2}(?:st|nd|rd|th)?)\s*:(?!\d)\s*(.+)$/#.ignoresCase()) else { return nil }
+        var days: [Int] = [], rangeNext = false
+        var number = ""
+        func flush() {
+            guard let value = Int(number) else { return }
+            if rangeNext, let previous = days.last, value > previous, value - previous <= 31 { days += Array((previous + 1)...value) } else { days.append(value) }
+            number = ""; rangeNext = false
+        }
+        for char in match.1.lowercased() {
+            if char.isNumber { number.append(char) }
+            else { flush(); if char == "-" || char == "t" { rangeNext = true } }
+        }
+        flush()
+        let valid = days.filter { (1...31).contains($0) }
+        return valid.isEmpty ? nil : (valid, String(match.2))
     }
 
     private static func clean(_ value: String) -> String? {
@@ -422,6 +455,15 @@ public enum JobMessageParser {
         var name = kept, venue: String?
         if let at = kept.range(of: #"(\s@\s*|@|\s+at\s+)"#, options: [.regularExpression, .caseInsensitive]) {
             name = String(kept[..<at.lowerBound]); venue = clean(String(kept[at.upperBound...]))
+        } else if kept.contains("|") {
+            // "Event crew for AI pop up | 19, 21 Nov | New Bahru": name first, venue last.
+            let parts = kept.split(separator: "|").compactMap { clean(String($0)) }
+            if parts.count > 1 { name = parts[0]; venue = parts.last }
+        }
+        // "Event crew wanted for AI pop up" is about the AI pop up: drop the recruiting words in front.
+        if let hiring = name.range(of: #"(?i)^.*?\b(?:wanted|needed|hiring|required|looking)\s+for\s+"#, options: .regularExpression),
+           name[hiring.upperBound...].filter(\.isLetter).count >= 3 {
+            name = String(name[hiring.upperBound...])
         }
         let filler = #"(?i)\b(from|on|hrs?|h|daily|each day|shift|shifts|and|available|anyone|need|needed|looking|pax|for|hi|hello|hey|free)\b|[()\[\]?!,&:]"#
         let words = name.replacingOccurrences(of: filler, with: " ", options: .regularExpression)

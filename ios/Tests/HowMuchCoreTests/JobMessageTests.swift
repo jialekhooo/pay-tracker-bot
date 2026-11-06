@@ -134,4 +134,39 @@ final class JobMessageTests: XCTestCase {
         XCTAssertEqual(WidgetLink.parse(url, accountID: account), .finish(id))
         XCTAssertNil(WidgetLink.parse(url, accountID: UUID().uuidString))
     }
+
+    func testEachDayCanHaveItsOwnTimeOnALaterLine() {
+        let job = parse("""
+        *LAST 3 SLOTS*
+        Event crew wanted for AI pop up | 19, 21, 22 Nov | New Bahru
+        $$13/h
+
+        Dates and time
+        19th: 3.30pm - 6pm (Briefing + private showcase)
+        21,22nd: 9am - 6pm
+
+        Attire: Plain black tshirt, black pants/ jeans (non-faded, non-ripped), plain black or white sneakers
+
+        Scope: Help to greet people and explain the activities within the space
+
+        Those available please PM me
+        """)
+        XCTAssertEqual(job.dates, [
+            PastedJobDate(day: "2026-11-19", startMinute: 15 * 60 + 30, endMinute: 18 * 60),
+            PastedJobDate(day: "2026-11-21", startMinute: 9 * 60, endMinute: 18 * 60),
+            PastedJobDate(day: "2026-11-22", startMinute: 9 * 60, endMinute: 18 * 60),
+        ])
+        XCTAssertEqual(job.rate, 13)
+        XCTAssertEqual(job.location, "New Bahru")
+        XCTAssertEqual(job.event, "AI pop up")
+    }
+
+    func testDayTimesAcceptRangesAndAmpersands() {
+        let job = parse("Roadshow 12-14 Nov @ VivoCity\n12 & 13: 10am-6pm\n14th: 2pm-10pm")
+        XCTAssertEqual(job.dates.map { "\($0.day) \($0.startMinute)-\($0.endMinute)" },
+                       ["2026-11-12 600-1080", "2026-11-13 600-1080", "2026-11-14 840-1320"])
+        // A clock time at the start of a line is not mistaken for a day.
+        let clock = parse("Roadshow 12 Nov\n10:00am - 6pm")
+        XCTAssertEqual(clock.dates, [PastedJobDate(day: "2026-11-12", startMinute: 600, endMinute: 1080)])
+    }
 }
