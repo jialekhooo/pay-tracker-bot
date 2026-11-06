@@ -2,6 +2,7 @@
 """Build and verify an App Store IPA using Xcode's cloud-managed signing."""
 import argparse
 import json
+import os
 import plistlib
 import subprocess
 import tempfile
@@ -27,7 +28,19 @@ def main():
     parser.add_argument('--skip-archive', action='store_true', help='Use the existing Release archive.')
     parser.add_argument('--upload', action='store_true',
                         help='After verifying the IPA, upload the same archive to App Store Connect using Xcode\'s signed-in account.')
+    parser.add_argument('--api-key-id', default=os.environ.get('ASC_KEY_ID'),
+                        help='App Store Connect API key ID; signs and uploads without an Xcode account.')
+    parser.add_argument('--api-issuer', default=os.environ.get('ASC_ISSUER_ID'),
+                        help='App Store Connect API issuer ID (needed with --api-key-id).')
     args = parser.parse_args()
+    auth = []
+    if args.api_key_id:
+        key = Path(os.environ.get('ASC_KEY_PATH') or
+                   Path.home()/'.appstoreconnect/private_keys'/f'AuthKey_{args.api_key_id}.p8')
+        if not args.api_issuer or not key.is_file():
+            raise SystemExit('API key needs --api-issuer and the key file at '+str(key))
+        auth = ['-authenticationKeyPath', key, '-authenticationKeyID', args.api_key_id,
+                '-authenticationKeyIssuerID', args.api_issuer]
     if not args.skip_archive:
         run('xcodebuild', '-project', IOS/'HowMuch.xcodeproj', '-scheme', 'HowMuch',
             '-configuration', 'Release', '-destination', 'generic/platform=iOS',
@@ -63,7 +76,7 @@ def main():
             'teamID': TEAM, 'signingStyle': 'automatic', 'manageAppVersionAndBuildNumber': True,
             'uploadSymbols': True}))
         run('xcodebuild', '-exportArchive', '-archivePath', ARCHIVE, '-exportPath', OUTPUT,
-            '-exportOptionsPlist', options, '-allowProvisioningUpdates')
+            '-exportOptionsPlist', options, '-allowProvisioningUpdates', *auth)
         with zipfile.ZipFile(OUTPUT/'HowMuch.ipa') as package:
             package.extractall(scratch/'package')
         app = scratch/'package/Payload/HowMuch.app'
@@ -134,7 +147,7 @@ def main():
                 'teamID': TEAM, 'signingStyle': 'automatic', 'manageAppVersionAndBuildNumber': False,
                 'uploadSymbols': True}))
             run('xcodebuild', '-exportArchive', '-archivePath', ARCHIVE, '-exportPath', scratch/'upload',
-                '-exportOptionsPlist', upload, '-allowProvisioningUpdates')
+                '-exportOptionsPlist', upload, '-allowProvisioningUpdates', *auth)
             print('Uploaded build', info['CFBundleVersion'], 'to App Store Connect')
 
 
