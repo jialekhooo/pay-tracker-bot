@@ -60,6 +60,8 @@ public struct PetProgress: Equatable, Sendable {
     public let overdueByCurrency: [String: Decimal]
     public let coinsEarned: Int
     public let achievements: [PetAchievement]
+    /// One of the people building HowMuch: every skin is theirs.
+    public let developer: Bool
     /// This week's missions. The rewards are the same coins the rules above pay out, shown as goals.
     public let missions: [PetMission]
 
@@ -84,7 +86,8 @@ public struct PetProgress: Equatable, Sendable {
 
     /// `pioneer`: the account was made before HowMuch's official launch.
     /// `currency`: the person's main currency; money badges only count pay in it. Defaults to the most used one.
-    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, currency: String? = nil) {
+    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, developer: Bool = false, currency: String? = nil) {
+        self.developer = developer
         let main = currency ?? Dictionary(grouping: shifts, by: \.currency).max { $0.value.count < $1.value.count }?.key ?? "SGD"
         let worked = shifts.filter { $0.endDate <= now }
         let paid = worked.filter(\.paid)
@@ -134,8 +137,9 @@ public struct PetProgress: Equatable, Sendable {
         mood = late.isEmpty ? feeling : .worried
 
         let paidTotal = paid.filter { $0.currency == main }.reduce(Decimal(0)) { $0 + $1.pay }
-        var list: [PetAchievement] = pioneer
-            ? [.init(id: "pioneer", title: "Pioneer", detail: "Joined HowMuch before launch", symbol: "star.circle.fill", current: 1, target: 1)] : []
+        var list: [PetAchievement] = developer
+            ? [.init(id: "developer", title: "Developer", detail: "Builds HowMuch", symbol: "hammer.circle.fill", current: 1, target: 1)] : []
+        if pioneer { list.append(.init(id: "pioneer", title: "Pioneer", detail: "Joined HowMuch before launch", symbol: "star.circle.fill", current: 1, target: 1)) }
         list += [
             .init(id: "first-shift", title: "First shift", detail: "Work your first shift", symbol: "briefcase.fill", current: worked.count, target: 1),
             .init(id: "regular", title: "Regular", detail: "Work 10 shifts", symbol: "calendar", current: worked.count, target: 10),
@@ -263,9 +267,13 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "sakura", name: "Sakura", slot: .skin, unlock: .coins(200), stage: .golden),
         .init(id: "midnight", name: "Midnight", slot: .skin, unlock: .coins(250), stage: .golden),
         .init(id: "rainbow", name: "Rainbow", slot: .skin, unlock: .achievement("regular")),
+        .init(id: "terminal", name: "Terminal", slot: .skin, unlock: .achievement("developer")),
+        .init(id: "holo", name: "Holographic", slot: .skin, unlock: .achievement("developer")),
     ]
     /// Only for people who joined before launch: hidden from everyone else.
     public var pioneerOnly: Bool { unlock == .achievement("pioneer") }
+    /// Only for pioneers or developers: hidden from everyone else.
+    public var exclusive: Bool { unlock == .achievement("pioneer") || unlock == .achievement("developer") }
     public static func named(_ id: String?) -> PetItem? { catalog.first { $0.id == id } }
     public var price: Int? { if case .coins(let price) = unlock { return price }; return nil }
 
@@ -292,6 +300,7 @@ public struct PetCloset: Codable, Equatable, Sendable {
     public func balance(_ pet: PetProgress) -> Int { pet.coinsEarned - spent }
 
     public func owns(_ item: PetItem, _ pet: PetProgress) -> Bool {
+        if pet.developer && item.slot == .skin { return true }
         switch item.unlock {
         case .free: return true
         case .coins: return bought.contains(item.id)

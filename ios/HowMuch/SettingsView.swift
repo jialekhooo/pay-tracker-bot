@@ -119,11 +119,19 @@ struct ProfileSettingsView: View {
                             }
                         if !naming { Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted).onTapGesture { naming = true } }
                     }.foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
+                    HStack(spacing: 8) {
+                    if store.developer {
+                        Label("Developer", systemImage: "hammer.circle.fill").font(.caption.weight(.bold)).foregroundStyle(Color(red: 0.3, green: 1, blue: 0.55))
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Color(red: 0.08, green: 0.11, blue: 0.11), in: Capsule())
+                            .accessibilityLabel("Developer: builds HowMuch").accessibilityIdentifier("profile.developer")
+                    }
                     if store.pioneer {
                         Label("Pioneer", systemImage: "star.circle.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(LinearGradient(colors: [Color(red: 0.16, green: 0.62, blue: 0.5), Palette.teal], startPoint: .leading, endPoint: .trailing), in: Capsule())
                             .accessibilityLabel("Pioneer: joined HowMuch before launch").accessibilityIdentifier("profile.pioneer")
+                    }
                     }
                     Text(stats.since.map { "Tracking pay since \($0)" } ?? "Add your first shift to start your story").font(.subheadline).foregroundStyle(Palette.muted)
                     if store.data.settings.avatar != nil {

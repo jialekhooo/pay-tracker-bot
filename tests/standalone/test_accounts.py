@@ -570,6 +570,17 @@ def test_accounts_made_before_launch_are_pioneers(setup,monkeypatch):
     assert setup.client.get('/v1/data',headers=headers(again)).json()['pioneer'] is False
 
 
+def test_only_listed_accounts_are_developers(setup,monkeypatch):
+    monkeypatch.delenv('HOWMUCH_DEVELOPERS',raising=False)
+    me,_=login(setup); other,_=login(setup,'apple-user-B')
+    assert me['account']['developer'] is False
+    monkeypatch.setenv('HOWMUCH_DEVELOPERS',' '+me['account']['id'].upper()+' , not-an-account')
+    assert setup.client.get('/v1/data',headers=headers(me)).json()['developer'] is True
+    assert setup.client.get('/v1/data',headers=headers(other)).json()['developer'] is False
+    again,_=login(setup)
+    assert again['account']['developer'] is True
+
+
 def test_sign_out_everywhere_and_rate_limits_are_per_client(setup):
     first,_=login(setup); second,_=login(setup)
     assert setup.client.post('/v1/auth/logout-all',headers=headers(first)).status_code==204

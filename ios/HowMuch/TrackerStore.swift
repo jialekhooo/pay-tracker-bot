@@ -24,6 +24,8 @@ final class TrackerStore: ObservableObject {
     @Published var usesRemotePush = false
     /// The account was made before HowMuch's official launch. The server decides; remembered here for offline use.
     @Published private(set) var pioneer = false
+    /// One of the people building HowMuch: a Developer badge and every Penny skin. The server decides.
+    @Published private(set) var developer = false
     private(set) var lastSyncedData: TrackerData?
     private(set) var syncRevision = 0
     var hasPendingChanges: Bool { lastSyncedData.map { $0 != data } ?? (data != TrackerData()) }
@@ -41,7 +43,12 @@ final class TrackerStore: ObservableObject {
         pioneer = value
         UserDefaults.standard.set(value, forKey: "pioneer.\(accountID)")
     }
-    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, currency: data.rules.currency) }
+    func setDeveloper(_ value: Bool?) {
+        guard let value, value != developer else { return }
+        developer = value
+        UserDefaults.standard.set(value, forKey: "developer.\(accountID)")
+    }
+    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, developer: developer, currency: data.rules.currency) }
 
     init(accountID: String, suppressNotifications: Bool = false) {
         self.accountID = UUID(uuidString: accountID)?.uuidString.lowercased() ?? "invalid"
@@ -50,9 +57,11 @@ final class TrackerStore: ObservableObject {
         url = folder.appending(path: "tracker.json")
         guard self.accountID != "invalid" else { writable = false; error = "The account identity is invalid."; return }
         pioneer = UserDefaults.standard.bool(forKey: "pioneer.\(self.accountID)")
+        developer = UserDefaults.standard.bool(forKey: "developer.\(self.accountID)")
         if isPreview {
             #if DEBUG
             pioneer = !CommandLine.arguments.contains("--ui-test-not-pioneer")
+            developer = CommandLine.arguments.contains("--ui-test-developer")
             #endif
             do { data = try Self.previewData() } catch { self.error = error.localizedDescription }
             return

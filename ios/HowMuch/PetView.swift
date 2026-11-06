@@ -34,6 +34,8 @@ struct PetSkin {
     /// A little mark on the forehead.
     var badge: Character?
     var rainbow = false, sparkles = false
+    /// Colour bands down the body (rainbow and holographic skins).
+    var rows: [Color]?
 
     init(_ item: PetItem?) {
         func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
@@ -53,10 +55,21 @@ struct PetSkin {
             ink = .white; badge = "m"; sparkles = true
         case "rainbow":
             light = .white; deep = rgb(0.62, 0.48, 0.90); outline = rgb(0.30, 0.22, 0.45); rainbow = true
+        case "terminal":
+            // Developer only: a dark screen with green text.
+            base = rgb(0.10, 0.13, 0.13); light = rgb(0.24, 0.30, 0.29); deep = rgb(0.05, 0.07, 0.07); outline = rgb(0.10, 0.75, 0.40)
+            ink = rgb(0.30, 1, 0.55); badge = ">"
+        case "holo":
+            // Developer only: shimmering like a hologram sticker.
+            light = .white; deep = rgb(0.45, 0.55, 0.85); outline = rgb(0.20, 0.25, 0.45); rows = PetSkin.holoRows; sparkles = true
         default: break
         }
     }
 
+    static let holoRows: [Color] = [
+        Color(red: 0.75, green: 0.95, blue: 1), Color(red: 0.80, green: 0.80, blue: 1), Color(red: 0.95, green: 0.80, blue: 1),
+        Color(red: 1, green: 0.85, blue: 0.92), Color(red: 0.85, green: 1, blue: 0.92), Color(red: 0.75, green: 0.90, blue: 1),
+    ]
     static let rainbowRows: [Color] = [
         Color(red: 1, green: 0.62, blue: 0.62), Color(red: 1, green: 0.78, blue: 0.5), Color(red: 1, green: 0.92, blue: 0.5),
         Color(red: 0.62, green: 0.9, blue: 0.62), Color(red: 0.55, green: 0.8, blue: 1), Color(red: 0.78, green: 0.64, blue: 1),
@@ -181,9 +194,9 @@ enum PetPixels {
         ellipse(Shape(cx: s.cx, cy: cy, rx: s.rx, ry: s.ry), into: &canvas, outline: skin.outline) { x, y, d in
             if ringed && d > 0.66 && d < 0.84 { return skin.deep }
             if d < 0.4 && Double(x) < s.cx - s.rx * 0.2 && Double(y) < cy - s.ry * 0.2 { return skin.light }
-            if skin.rainbow {
-                let row = Int((Double(y) - (cy - s.ry)) / (2 * s.ry) * Double(PetSkin.rainbowRows.count))
-                return PetSkin.rainbowRows[min(max(row, 0), PetSkin.rainbowRows.count - 1)]
+            if let bands = skin.rows ?? (skin.rainbow ? PetSkin.rainbowRows : nil) {
+                let row = Int((Double(y) - (cy - s.ry)) / (2 * s.ry) * Double(bands.count))
+                return bands[min(max(row, 0), bands.count - 1)]
             }
             if Double(y) > cy + s.ry * 0.5 { return skin.deep }
             return skin.base
@@ -222,6 +235,7 @@ enum PetPixels {
         case "*": stamp([".y.", "yyy", ".y."], x: cx - 1, y: top + 1, p)
         case "f": stamp([".f.", "fyf", ".f."], x: cx - 1, y: top + 1, p)
         case "m": stamp(["yy", "y."], x: cx - 1, y: top + 2, p)
+        case ">": stamp(["g...", ".g..", "g.gg"], x: cx - 2, y: top + 1, [Character("g"): skin.ink])
         default: break
         }
 
@@ -767,7 +781,7 @@ struct PetDetailView: View {
             SectionHeading(title: "Shop & wardrobe", detail: "Tap to buy or wear")
             PillPicker(values: PetSlot.allCases.map(\.title), selection: Binding(get: { slot.title }, set: { title in slot = PetSlot.allCases.first { $0.title == title } ?? .hat }))
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(PetItem.catalog.filter { $0.slot == slot && (!$0.pioneerOnly || closet.owns($0, pet)) }) { item in itemTile(item, pet, closet) }
+                ForEach(PetItem.catalog.filter { $0.slot == slot && (!$0.exclusive || closet.owns($0, pet)) }) { item in itemTile(item, pet, closet) }
             }
         }
     }

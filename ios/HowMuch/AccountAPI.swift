@@ -29,6 +29,8 @@ struct CloudEnvelope: Codable {
     let pushReady: Bool?
     /// Made before the official launch.
     let pioneer: Bool?
+    /// One of the people building HowMuch.
+    let developer: Bool?
 }
 
 struct AccountHTTPError: LocalizedError {

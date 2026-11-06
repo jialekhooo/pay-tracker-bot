@@ -189,7 +189,7 @@ final class PetTests: XCTestCase {
 
     func testNewSkinsUnlockWithCoinsStagesAndBadges() throws {
         let skins = PetItem.catalog.filter { $0.slot == .skin }.map(\.id)
-        XCTAssertEqual(skins, ["classic", "pioneer", "rose-gold", "silver", "matcha", "sakura", "midnight", "rainbow"])
+        XCTAssertEqual(skins, ["classic", "pioneer", "rose-gold", "silver", "matcha", "sakura", "midnight", "rainbow", "terminal", "holo"])
         let shifts = try (1...10).map { try shift(daysAgo($0)) }
         let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
         XCTAssertEqual(pet.stage, .hatchling)
@@ -200,5 +200,23 @@ final class PetTests: XCTestCase {
         try closet.buy(PetItem.named("rose-gold")!, pet)
         XCTAssertEqual(closet.wearing(.skin, pet)?.id, "rose-gold")
         XCTAssertFalse(PetItem.named("rose-gold")!.pioneerOnly)
+    }
+
+    func testDevelopersGetABadgeTheirOwnSkinsAndEverySkin() throws {
+        let developer = PetProgress(shifts: [], now: now, calendar: calendar, pioneer: true, developer: true)
+        let everyone = PetProgress(shifts: [], now: now, calendar: calendar, pioneer: true)
+        XCTAssertEqual(developer.achievements.first?.id, "developer")
+        XCTAssertFalse(everyone.achievements.contains { $0.id == "developer" })
+        XCTAssertEqual(developer.coinsEarned, everyone.coinsEarned + PetProgress.coinsPerAchievement)
+        let closet = PetCloset()
+        for skin in PetItem.catalog.filter({ $0.slot == .skin }) {
+            XCTAssertTrue(closet.owns(skin, developer), skin.id)
+            XCTAssertFalse(closet.locked(skin, developer), skin.id)
+        }
+        XCTAssertFalse(closet.owns(PetItem.named("terminal")!, everyone))
+        XCTAssertTrue(PetItem.named("holo")!.exclusive)
+        XCTAssertFalse(closet.owns(PetItem.named("party-hat")!, developer)) // hats are still bought
+        var wearing = PetCloset(); try wearing.toggle(PetItem.named("midnight")!, developer)
+        XCTAssertEqual(wearing.wearing(.skin, developer)?.id, "midnight")
     }
 }

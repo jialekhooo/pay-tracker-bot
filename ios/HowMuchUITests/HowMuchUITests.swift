@@ -437,6 +437,30 @@ final class HowMuchUITests: XCTestCase {
         attach("Overview with nothing today or tomorrow", app: app)
     }
     @MainActor
+    func testDevelopersGetTheirBadgeAndEverySkin() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-developer"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        app.buttons["Profile settings"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.developer"].waitForExistence(timeout: 5))
+        attach("Developer badge on the profile", app: app)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["nav.overview"].tap()
+        let card = app.buttons["pet.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()
+        app.buttons["Skins"].firstMatch.tap()
+        let terminal = app.buttons["pet.item.terminal"]
+        reveal(terminal, in: app)
+        XCTAssertTrue(terminal.exists)
+        terminal.tap()
+        XCTAssertTrue(terminal.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        attach("Developer skins, all unlocked", app: app)
+        let holo = app.buttons["pet.item.holo"]; holo.tap()
+        XCTAssertTrue(holo.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        attach("Penny in the Holographic skin", app: app)
+        let top = app.textFields["pet.name"]; reveal(top, in: app)
+        attach("Penny holographic at the top", app: app)
+    }
+    @MainActor
     func testPetCardOpensItsPage() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         let card = app.buttons["pet.card"]

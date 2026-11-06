@@ -231,7 +231,7 @@ final class AppleAccountStore: ObservableObject {
                 if target == remote.data {
                     try store.applySynced(remote, current: target)
                     pushReady = remote.pushReady ?? false
-                    store.setPioneer(remote.pioneer)
+                    store.setPioneer(remote.pioneer); store.setDeveloper(remote.developer)
                     await registerPushIfAllowed()
                     return
                 }
@@ -250,7 +250,7 @@ final class AppleAccountStore: ObservableObject {
                     }
                     try store.applySynced(uploaded, current: afterUpload)
                     pushReady = uploaded.pushReady ?? false
-                    store.setPioneer(uploaded.pioneer)
+                    store.setPioneer(uploaded.pioneer); store.setDeveloper(uploaded.developer)
                     await registerPushIfAllowed()
                     if store.hasPendingChanges { scheduleSync() }
                     return

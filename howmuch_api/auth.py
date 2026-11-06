@@ -85,9 +85,16 @@ def pioneer(account) -> bool:
     return int(account['created'])<until
 
 
+def developer(account) -> bool:
+    """The people building HowMuch: account IDs listed in HOWMUCH_DEVELOPERS (comma separated).
+    They get a Developer badge and every Penny skin."""
+    listed={item.strip().lower() for item in os.environ.get('HOWMUCH_DEVELOPERS','').split(',') if item.strip()}
+    return str(account['account_id']).lower() in listed
+
+
 def account_json(account):
     return {'id':account['account_id'],'email':account['email'],'displayName':account['display_name'],
-            'appleUserID':account['apple_sub'],'pioneer':pioneer(account)}
+            'appleUserID':account['apple_sub'],'pioneer':pioneer(account),'developer':developer(account)}
 
 
 def session_response(db, account, device_id):
