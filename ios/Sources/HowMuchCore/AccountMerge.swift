@@ -37,20 +37,72 @@ public enum AccountMerge {
     }
 
     /// Three-way merge of one record's fields, comparing exact JSON values (numbers as Decimal).
+    /// Nested settings merge the same way, so two devices changing different parts of Penny or the
+    /// notification options don't clash. Lists of plain values (finish times, blocked days) combine,
+    /// and lists of records with an "id" merge record by record.
     static func fieldMerge<T: Codable>(_ base: T, _ local: T, _ remote: T) -> T? {
         let encoder = JSONEncoder()
-        guard case .object(let a)? = try? JSONDecoder().decode(JSONValue.self, from: encoder.encode(base)),
-              case .object(let b)? = try? JSONDecoder().decode(JSONValue.self, from: encoder.encode(local)),
-              case .object(let c)? = try? JSONDecoder().decode(JSONValue.self, from: encoder.encode(remote)) else { return nil }
-        var result: [String: JSONValue] = [:]
-        for key in Set(a.keys).union(b.keys).union(c.keys) {
-            let (x, y, z) = (a[key], b[key], c[key])
-            let value: JSONValue?
-            if y == z || z == x { value = y } else if y == x { value = z } else { return nil }
-            if let value { result[key] = value }
-        }
-        guard let data = try? encoder.encode(JSONValue.object(result)) else { return nil }
+        guard let a = try? JSONDecoder().decode(JSONValue.self, from: encoder.encode(base)),
+              let b = try? JSONDecoder().decode(JSONValue.self, from: encoder.encode(local)),
+              let c = try? JSONDecoder().decode(JSONValue.self, from: encoder.encode(remote)),
+              case .object = b, case .some(.some(let merged)) = mergeValue(a, b, c),
+              let data = try? encoder.encode(merged) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// `.some(value)` is the merged value (`.some(nil)`: the field is absent); `nil` is a real clash.
+    static func mergeValue(_ x: JSONValue?, _ y: JSONValue?, _ z: JSONValue?) -> JSONValue?? {
+        if y == z || z == x { return .some(y) }
+        if y == x { return .some(z) }
+        switch (y, z) {
+        case (.object(let local)?, .object(let remote)?):
+            let base: [String: JSONValue]
+            switch x { case .object(let value)?: base = value; case nil, .null?: base = [:]; default: return nil }
+            var result: [String: JSONValue] = [:]
+            for key in Set(base.keys).union(local.keys).union(remote.keys) {
+                guard case .some(let value) = mergeValue(base[key], local[key], remote[key]) else { return nil }
+                if let value { result[key] = value }
+            }
+            return .some(.object(result))
+        case (.array(let local)?, .array(let remote)?):
+            let base: [JSONValue]
+            switch x { case .array(let value)?: base = value; case nil, .null?: base = []; default: return nil }
+            return mergeList(base, local, remote).map { .some(.array($0)) }
+        default:
+            return nil
+        }
+    }
+
+    private static func recordID(_ value: JSONValue) -> JSONValue? {
+        if case .object(let fields) = value, let id = fields["id"] { return id }
+        return nil
+    }
+
+    private static func mergeList(_ base: [JSONValue], _ local: [JSONValue], _ remote: [JSONValue]) -> [JSONValue]? {
+        let all = base + local + remote
+        if all.allSatisfy({ recordID($0) != nil }) {
+            // Records: merge each by id, keeping this phone's order and adding the other device's new ones.
+            func index(_ list: [JSONValue]) -> [JSONValue: JSONValue] {
+                var result: [JSONValue: JSONValue] = [:]
+                for item in list { if let id = recordID(item) { result[id] = item } }
+                return result
+            }
+            let (a, b, c) = (index(base), index(local), index(remote))
+            var order: [JSONValue] = []
+            for item in local + remote { if let id = recordID(item), !order.contains(id) { order.append(id) } }
+            var result: [JSONValue] = []
+            for id in order {
+                guard case .some(let value) = mergeValue(a[id], b[id], c[id]) else { return nil }
+                if let value { result.append(value) }
+            }
+            return result
+        }
+        guard !all.contains(where: { if case .object = $0 { return true }; if case .array = $0 { return true }; return false }) else { return nil }
+        // Plain values: keep what either side added, drop what either side removed.
+        let removed = Set(base).subtracting(local).union(Set(base).subtracting(remote))
+        var result: [JSONValue] = []
+        for item in local + remote where !removed.contains(item) && !result.contains(item) { result.append(item) }
+        return result
     }
 
     private static func mergeRecords<T: Identifiable & Equatable & Codable>(base: [T], local: [T], remote: [T]) throws -> [T] where T.ID == UUID {
@@ -64,7 +116,7 @@ public enum AccountMerge {
 }
 
 /// A JSON value that keeps numbers exact, for comparing and merging records field by field.
-indirect enum JSONValue: Codable, Equatable {
+indirect enum JSONValue: Codable, Hashable {
     case null, bool(Bool), number(Decimal), string(String), array([JSONValue]), object([String: JSONValue])
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()

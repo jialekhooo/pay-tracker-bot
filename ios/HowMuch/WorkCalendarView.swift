@@ -85,16 +85,20 @@ struct AvailabilitySheet: View {
     private var days: [Date] {
         var result: [Date] = []
         var cursor = TrackerCalendar.calendar.startOfDay(for: from)
-        while cursor <= max(from, to), result.count < 93 { result.append(cursor); cursor = TrackerCalendar.calendar.date(byAdding: .day, value: 1, to: cursor)! }
+        while cursor <= end, result.count < Self.maxDays { result.append(cursor); cursor = TrackerCalendar.calendar.date(byAdding: .day, value: 1, to: cursor)! }
         return result
     }
-    private var text: String { Availability.message(from: from, to: to, shifts: store.data.shifts, blocked: blocked) }
+    static let maxDays = 93
+    /// The last day covered: "To", kept within the grid even if "From" moved after "To" was picked.
+    private var end: Date { min(max(from, to), TrackerCalendar.calendar.date(byAdding: .day, value: Self.maxDays - 1, to: from)!) }
+    private var text: String { Availability.message(from: from, to: end, shifts: store.data.shifts, blocked: blocked) }
     var body: some View {
         NavigationStack {
             Form {
                 Section("Dates") {
                     DatePicker("From", selection: $from, displayedComponents: .date)
-                    DatePicker("To", selection: $to, in: from..., displayedComponents: .date)
+                    // The day grid below shows up to 93 days, so the message never covers days you can't see or block.
+                    DatePicker("To", selection: $to, in: from...TrackerCalendar.calendar.date(byAdding: .day, value: Self.maxDays - 1, to: from)!, displayedComponents: .date)
                 }
                 Section {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {

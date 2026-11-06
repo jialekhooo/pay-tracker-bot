@@ -82,6 +82,37 @@ final class FieldMergeTests: XCTestCase {
         XCTAssertEqual(merged.preferences?.remindersEnabled, true)
     }
 
+    func testNestedSettingsChangedOnEachDeviceBothSurvive() throws {
+        var base = TrackerData(); base.preferences = AppPreferences()
+        base.preferences?.pet = PetPreferences(name: "Penny", closet: PetCloset())
+        base.preferences?.eventRates = ["Roadshow": 20]
+        var live = LiveShiftPreferences(); let first = UUID(); live.confirm(first)
+        base.preferences?.liveShift = live
+        var local = base, remote = base
+        // This phone renames Penny, adds a rate and confirms a finish; the other buys a hat, adds a rate and confirms another.
+        local.preferences?.pet?.name = "Coco"
+        local.preferences?.eventRates["Gala"] = 25
+        let here = UUID(); local.preferences?.liveShift?.confirm(here)
+        var closet = PetCloset(); closet.bought = ["party-hat"]; closet.spent = 40
+        remote.preferences?.pet?.closet = closet
+        remote.preferences?.eventRates["Expo"] = 18
+        let there = UUID(); remote.preferences?.liveShift?.confirm(there)
+        remote.preferences?.blockedDays = ["2026-12-01"]
+        let merged = try AccountMerge.merge(base: base, local: local, remote: remote)
+        XCTAssertEqual(merged.preferences?.pet?.name, "Coco")
+        XCTAssertEqual(merged.preferences?.pet?.closet?.bought, ["party-hat"])
+        XCTAssertEqual(merged.preferences?.eventRates, ["Roadshow": 20, "Gala": 25, "Expo": 18])
+        XCTAssertEqual(merged.preferences?.liveShift?.confirmedFinishes, [first, here, there])
+        XCTAssertEqual(merged.preferences?.blockedDays, ["2026-12-01"])
+    }
+
+    func testTheSameNestedSettingChangedOnBothSidesStillAsks() throws {
+        var base = TrackerData(); base.preferences = AppPreferences(); base.preferences?.pet = PetPreferences(name: "Penny")
+        var local = base; local.preferences?.pet?.name = "Coco"
+        var remote = base; remote.preferences?.pet?.name = "Mochi"
+        XCTAssertThrowsError(try AccountMerge.merge(base: base, local: local, remote: remote))
+    }
+
     func testTheSameFieldChangedOnBothSidesStillAsks() throws {
         let shift = try Shift(event: "Roadshow", day: "2026-11-02", startMinute: 540, endMinute: 1080, rate: 20)
         var base = TrackerData(); base.shifts = [shift]

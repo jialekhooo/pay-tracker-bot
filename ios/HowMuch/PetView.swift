@@ -581,6 +581,9 @@ struct PetCard: View {
     /// Celebrates a new stage and shows coins gained since the last look, going by the balance you can
     /// spend (so buying something, or coins moving on another device, never shows a misleading "+N").
     private func check(_ pet: PetProgress, _ balance: Int) {
+        // Until the account's records have arrived on this iPhone (a new phone, a reinstall), Penny's
+        // numbers are only the empty starting state: comparing against them would celebrate old progress.
+        guard store.lastSyncedData != nil else { return }
         let defaults = UserDefaults.standard
         let stageKey = "pet.seenStage.\(store.accountID)", balanceKey = "pet.seenBalance.\(store.accountID)"
         let seenStage = defaults.object(forKey: stageKey) as? Int
@@ -807,7 +810,7 @@ struct PetDetailView: View {
         case .coins(let price):
             let balance = closet.balance(pet)
             if balance >= price { buying = item }
-            else { notice = "\(item.name) costs \(price) coins. Earn \(price - max(0, balance)) more by working shifts and finishing missions." }
+            else { notice = "\(item.name) costs \(price) coins. Earn \(price - balance) more by working shifts and finishing missions." }
         case .achievement: notice = "\(item.name) comes with the \(item.requirement.replacingOccurrences(of: "Badge: ", with: "")) badge."
         case .free: break
         }

@@ -135,6 +135,11 @@ final class PetTests: XCTestCase {
         let pet = PetProgress(shifts: [try shift("2026-11-02", paid: true), try shift("2026-11-03")], now: now, calendar: calendar)
         var closet = PetCloset(); closet.spent = 100
         XCTAssertEqual(closet.balance(pet), -30)
+        // A 40-coin hat at -30 coins needs 70 more, not 40.
+        let shifts = try (1...3).map { try shift(daysAgo($0)) }
+        let grown = PetProgress(shifts: shifts + [try shift(daysAgo(4), paid: true), try shift(daysAgo(5), paid: true)], now: now, calendar: calendar)
+        var owing = PetCloset(); owing.spent = grown.coinsEarned + 30
+        XCTAssertThrowsError(try owing.buy(PetItem.named("party-hat")!, grown)) { XCTAssertEqual($0 as? PetCloset.ClosetError, .notEnoughCoins(needed: 70)) }
     }
 
     func testAccountSettingsTravelWithTheAccountAsPlainJSON() throws {

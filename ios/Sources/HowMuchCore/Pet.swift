@@ -315,7 +315,7 @@ public struct PetCloset: Codable, Equatable, Sendable {
         guard !bought.contains(item.id) else { outfit[item.slot.rawValue] = item.id; return }
         guard pet.stage >= item.stage else { throw ClosetError.locked }
         let available = balance(pet)
-        guard available >= price else { throw ClosetError.notEnoughCoins(needed: price - max(0, available)) }
+        guard available >= price else { throw ClosetError.notEnoughCoins(needed: price - available) }
         bought.insert(item.id); spent += price; outfit[item.slot.rawValue] = item.id
     }
 
