@@ -843,6 +843,40 @@ final class HowMuchUITests: XCTestCase {
         attach("Payment scan review undo rules and disconnect", app: app)
     }
     @MainActor
+    func testGmailConnectsWithAnAppPassword() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments", "--ui-test-email-providers"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
+        tapTrailingArea(app.staticTexts["Pay-in tracking"], in: app)
+        let gmailButton = app.buttons["payment.connect.gmail"]
+        let icloudButton = app.buttons["payment.connect.icloud"]
+        for _ in 0..<6 where !icloudButton.exists { app.swipeUp() }
+        XCTAssertTrue(icloudButton.waitForExistence(timeout: 5))
+        attach("Connect Gmail, Outlook and iCloud", app: app)
+        XCTAssertTrue(gmailButton.exists)
+        app.swipeDown()
+        XCTAssertTrue(gmailButton.isHittable)
+        gmailButton.tap()
+        XCTAssertTrue(app.textFields["Gmail address"].waitForExistence(timeout: 5))
+        let email = app.textFields["payment.icloud.email"]
+        email.tap(); email.typeText("synthetic@gmail.com")
+        let password = app.secureTextFields["payment.icloud.password"]
+        password.tap(); password.typeText("abcd efgh ijkl mnop\n")
+        let consent = app.switches["payment.icloud.consent"]
+        reveal(consent, in: app); consent.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        attach("Gmail app password form", app: app)
+        let save = app.buttons["payment.icloud.save"]
+        XCTAssertTrue(save.isEnabled)
+        tapTrailingArea(save, in: app)
+        XCTAssertTrue(app.buttons["payment.disconnect"].waitForExistence(timeout: 5))
+        let connected = app.staticTexts["Gmail connected"]
+        for _ in 0..<6 where !connected.isHittable { app.swipeDown() }
+        XCTAssertTrue(connected.exists)
+        let automatic = app.switches["Mark exact verified matches paid"]
+        reveal(automatic, in: app)
+        XCTAssertFalse(automatic.isEnabled)
+        attach("Gmail connected with an app password", app: app)
+    }
+    @MainActor
     func testICloudConnectionRetryAndBankConfirmation() {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-payments", "--ui-test-email-providers"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()

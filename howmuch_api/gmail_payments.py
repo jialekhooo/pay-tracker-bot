@@ -80,7 +80,7 @@ def detection_status(store, user_id):
     from .email_providers import provider_ready
     conn = store.connection(user_id)
     provider = conn["provider"] if conn else "gmail"
-    providers = {name: provider_ready(name) for name in ("gmail", "microsoft", "icloud")}
+    providers = {name: provider_ready(name) for name in ("gmail", "gmail_imap", "microsoft", "icloud")}
     return {**store.status(user_id), "available": providers.get(provider, False) if conn else any(providers.values()), "providers": providers}
 
 

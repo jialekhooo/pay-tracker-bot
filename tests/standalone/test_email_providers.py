@@ -105,6 +105,60 @@ def test_icloud_uses_fixed_tls_readonly_and_peek(setup, monkeypatch):
     assert seen[-1] == ('logout',)
 
 
+def test_gmail_app_password_connects_without_google_verification(setup, monkeypatch):
+    a = prepare(setup, monkeypatch)
+    calls = []
+    monkeypatch.setattr(providers, 'check_gmail_imap', lambda *args: calls.append(args))
+    path = '/v1/payment-detection/gmail-imap/connect'
+    payload = {'email': 'Tester@Gmail.com', 'app_password': 'abcd efgh ijkl mnop', 'consent': True}
+    assert setup.client.post(path, headers=headers(a), json={**payload, 'consent': False}).status_code == 400
+    assert setup.client.post(path, headers=headers(a), json={**payload, 'app_password': 'my-google-password1'}).status_code == 400
+    assert setup.client.post(path, headers=headers(a), json={**payload, 'email': 'not-an-email'}).status_code == 400
+    assert not calls
+    response = setup.client.post(path, headers=headers(a), json=payload)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['provider'] == 'gmail_imap' and body['connected'] and body['providers']['gmail_imap'] is True
+    assert calls == [('tester@gmail.com', 'abcdefghijklmnop')]
+    assert 'abcd' not in response.text
+    conn = PaymentStore(setup.storage).connection(owner(setup, a))
+    assert gmail.cipher().decrypt(conn['refresh_token'].encode()) == b'abcdefghijklmnop'
+    # Like iCloud: never marks paid by itself, and disconnecting needs no Google revocation.
+    assert setup.client.patch('/v1/payment-detection', headers=headers(a), json={'auto_enabled': True}).status_code == 400
+    assert setup.client.delete('/v1/payment-detection/connection', headers=headers(a)).status_code == 200
+    assert PaymentStore(setup.storage).connection(owner(setup, a)) is None
+
+
+def test_gmail_app_password_scan_reads_gmail_imap_and_needs_confirmation(setup, monkeypatch):
+    session = prepare(setup, monkeypatch); write(setup, session, completed_work())
+    store = PaymentStore(setup.storage); uid = owner(setup, session)
+    store.save_connection(uid, 'tester@gmail.com', gmail.cipher().encrypt(b'abcdefghijklmnop').decode(), 'gmail_imap')
+    from howmuch_api.payment_detection import parse_dbs_alert
+    payload = mail()['payload']
+    parsed = parse_dbs_alert(DBS_SUBJECT, DBS_SENDER, base64.urlsafe_b64decode(payload['body']['data']).decode())
+    hosts = []
+    monkeypatch.setattr(providers, 'imap_messages', lambda conn, password, since, before, host: hosts.append((host, password)) or [('uid9', parsed)])
+    response = setup.client.post('/v1/payment-detection/scan', headers=headers(session))
+    assert response.status_code == 200, response.text
+    assert hosts == [('imap.gmail.com', 'abcdefghijklmnop')]
+    receipt = response.json()['receipts'][0]
+    assert receipt['trusted'] is False and receipt['status'] == 'review'
+    assert not setup.client.get('/v1/data', headers=headers(session)).json()['data']['shifts'][0]['paid']
+
+
+def test_gmail_imap_uses_the_fixed_google_host(setup, monkeypatch):
+    class FakeIMAP:
+        def __init__(self, host, port, **kwargs):
+            assert host == 'imap.gmail.com' and port == 993 and kwargs['ssl_context'].verify_mode == 2
+        def login(self, *args): pass
+        def select(self, folder, readonly): assert folder == 'INBOX' and readonly; return 'OK', []
+        def uid(self, command, *args): return 'OK', [b'']
+        def logout(self): pass
+    monkeypatch.setattr(providers.imaplib, 'IMAP4_SSL', FakeIMAP)
+    providers.check_gmail_imap('tester@gmail.com', 'abcdefghijklmnop')
+    assert providers.gmail_imap_messages({'email': 'tester@gmail.com'}, 'abcdefghijklmnop', int(time.time()) - 86400, int(time.time())) == []
+
+
 def test_microsoft_oauth_pkce_single_use_browser_binding_and_private_tokens(setup, monkeypatch):
     session=prepare(setup,monkeypatch); microsoft(monkeypatch)
     url=setup.client.post('/v1/payment-detection/microsoft/connect',headers=headers(session)).json()['url']
@@ -129,10 +183,10 @@ def test_microsoft_oauth_pkce_single_use_browser_binding_and_private_tokens(setu
     assert 'could not be verified' in setup.client.get('/v1/payment-detection/microsoft/callback',params={'state':state,'code':'replay'}).text
     public=setup.client.get('/v1/payment-detection',headers=headers(session)).json()
     # Gmail stays hidden until Google has verified the app.
-    assert public['providers']=={'gmail':False,'icloud':True,'microsoft':True}
+    assert public['providers']=={'gmail':False,'gmail_imap':True,'icloud':True,'microsoft':True}
     monkeypatch.setenv('HOWMUCH_GMAIL_PUBLIC','1')
     public=setup.client.get('/v1/payment-detection',headers=headers(session)).json()
-    assert public['providers']=={'gmail':True,'icloud':True,'microsoft':True}
+    assert public['providers']=={'gmail':True,'gmail_imap':True,'icloud':True,'microsoft':True}
 
 
 def test_microsoft_scan_rotates_token_and_does_not_autopay(setup,monkeypatch):

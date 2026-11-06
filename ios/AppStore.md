@@ -146,3 +146,13 @@ Already answered in the build (`ITSAppUsesNonExemptEncryption = NO`): only stand
 > • Calendar sync: Settings → Calendar sync creates a private calendar feed for Apple Calendar or Google Calendar.
 >
 > Accounts can be deleted in Settings → Account & sync → Delete account, which also revokes any connected Gmail access.
+
+**What's New in This Version (1.1)**:
+> • Pay-in tracking: HowMuch can mark jobs paid when your bank's notification or alert email says money arrived, including one payment for several jobs, part of a job, or slightly less than expected. You always confirm anything unusual.
+> • Penny, your pay pet, grows as you work and get paid: weekly missions, streaks, moods, coins and a shop of outfits, skins and scenes.
+> • Share your availability: a ready-to-send message of your free days, with days you can't work blocked.
+> • Calendar sync: your shifts in Apple Calendar, Google Calendar or TimeTree, updated as they change.
+> • Apple Intelligence reads job messages, bank alerts and receipts on your iPhone, and writes a monthly recap.
+> • A cleaner Settings page, a Profile with your work stats, and many fixes to sync, pay maths and reminders.
+
+**Screenshots for 1.1**: the 1.0 set still shows the current screens except Overview, which now has Penny at the top. Retake `01-overview.png` if you want it exact; everything the old set shows is still in the app.

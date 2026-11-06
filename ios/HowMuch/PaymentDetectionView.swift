@@ -10,7 +10,8 @@ struct PaymentDetectionView: View {
     @State private var message = ""
     @State private var busy = false
     @State private var disconnect = false
-    @State private var showICloud = false
+    /// The app-password mailbox being connected (iCloud Mail or Gmail), shown as a sheet.
+    @State private var mailboxSheet: AppPasswordMailbox?
     @State private var iCloudEmail = ""
     @State private var iCloudPassword = ""
     @State private var iCloudConsent = false
@@ -96,20 +97,23 @@ struct PaymentDetectionView: View {
                         // Hidden until Google has verified HowMuch; Gmail users can forward alerts instead.
                         if status.providers?["gmail"] ?? false {
                             Button("Connect Gmail") { Task { await connect() } }.rowAction().accessibilityIdentifier("payment.connect").disabled(busy)
+                        } else if status.gmailAppPasswordReady {
+                            // Gmail with an app password: works for everyone without Google's app verification.
+                            Button("Connect Gmail") { mailboxSheet = .gmail }.rowAction().accessibilityIdentifier("payment.connect.gmail").disabled(busy)
                         } else {
                             Text("Using Gmail? Forward your bank's emails to your HowMuch address above.").font(.caption).foregroundStyle(Palette.muted)
                         }
                         Button("Connect Outlook / Hotmail") { Task { await connect(provider: "microsoft") } }.rowAction().accessibilityIdentifier("payment.connect.microsoft").disabled(!(status.providers?["microsoft"] ?? false) || busy)
                         if !(status.providers?["microsoft"] ?? false) { Text("Outlook sign-in is awaiting Microsoft setup.").font(.caption).foregroundStyle(Palette.muted) }
-                        Button("Connect iCloud / me.com") { showICloud = true }.rowAction().accessibilityIdentifier("payment.connect.icloud").disabled(!(status.providers?["icloud"] ?? false) || busy)
+                        Button("Connect iCloud / me.com") { mailboxSheet = .icloud }.rowAction().accessibilityIdentifier("payment.connect.icloud").disabled(!(status.providers?["icloud"] ?? false) || busy)
                         Text("Choose the mailbox that receives your DBS alerts. One email connection per HowMuch account.").font(.caption).foregroundStyle(Palette.muted)
                     }
-                    Text("HowMuch checks DBS alerts against your unpaid jobs and exact company rules. It never sends or deletes emails. New Outlook and iCloud matches need your bank confirmation before marking paid.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("HowMuch checks DBS alerts against your unpaid jobs and exact company rules. It never sends or deletes emails. New Outlook, iCloud and Gmail app-password matches need your bank confirmation before marking paid.").font(.caption).foregroundStyle(Palette.muted)
                     if !status.error.isEmpty { Text(status.error).font(.caption).foregroundStyle(.orange) }
                 }
                 Section("Automatic marking") {
                     Toggle("Mark exact verified matches paid", isOn: Binding(get: { status.autoEnabled }, set: { enabled in Task { await action("", method: "PATCH", body: ["auto_enabled": enabled]) } })).disabled(!status.connected || !status.available || status.provider != nil && status.provider != "gmail" || busy)
-                    Text("Automatic marking is supported for verified Gmail alerts. Outlook and iCloud alerts require confirmation against your bank transaction. You can undo applied payments below.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Automatic marking is supported for verified alerts from Gmail connected with Google sign-in. Outlook, iCloud and Gmail app-password alerts need confirmation against your bank transaction. You can undo applied payments below.").font(.caption).foregroundStyle(Palette.muted)
                 }
                 Section("Saved payers") {
                     NavigationLink("Manage saved payers") { PayersSettingsView() }.accessibilityIdentifier("payment.payers")
@@ -176,7 +180,7 @@ struct PaymentDetectionView: View {
             .confirmationDialog("Disconnect email for this HowMuch account?", isPresented: $disconnect, titleVisibility: .visible) {
                 Button("Disconnect", role: .destructive) { Task { await action("/connection", method: "DELETE") } }
             }
-            .sheet(isPresented: $showICloud, onDismiss: { iCloudPassword = ""; iCloudConsent = false }) { iCloudForm }
+            .sheet(item: $mailboxSheet, onDismiss: { iCloudPassword = ""; iCloudConsent = false }) { mailboxForm($0) }
             .alert("Confirm bank payment", isPresented: $confirmBank) {
                 Button("Cancel", role: .cancel) { pendingReceipt = nil }
                 Button("I checked my bank · Mark paid") {
@@ -206,28 +210,35 @@ struct PaymentDetectionView: View {
             var sorted = group; sorted.events.sort { $0.localizedStandardCompare($1) == .orderedAscending }; return sorted
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
-    private var iCloudForm: some View {
-        NavigationStack {
+    private func mailboxForm(_ mailbox: AppPasswordMailbox) -> some View {
+        let gmail = mailbox == .gmail
+        let name = gmail ? "Gmail" : "iCloud Mail"
+        return NavigationStack {
             Form {
-                Section("Your iCloud Mail") {
-                    TextField("iCloud / me.com / mac.com email", text: $iCloudEmail).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.emailAddress).accessibilityIdentifier("payment.icloud.email")
-                    SecureField("App-specific password", text: $iCloudPassword).textContentType(.none).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("payment.icloud.password")
-                    Link("Create an app-specific password at Apple", destination: URL(string: "https://account.apple.com")!)
-                    Text("In Apple Account → Sign-In and Security → App-Specific Passwords, create one for HowMuch. Use that password here, never your main Apple Account password.").font(.caption)
+                Section("Your \(name)") {
+                    TextField(gmail ? "Gmail address" : "iCloud / me.com / mac.com email", text: $iCloudEmail).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.emailAddress).accessibilityIdentifier("payment.icloud.email")
+                    SecureField(gmail ? "App password (16 letters)" : "App-specific password", text: $iCloudPassword).textContentType(.none).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("payment.icloud.password")
+                    if gmail {
+                        Link("Create an app password at Google", destination: URL(string: "https://myaccount.google.com/apppasswords")!)
+                        Text("Turn on 2-Step Verification for your Google Account, then create an app password named HowMuch and paste the 16 letters here. Never use your main Google password. If Gmail says IMAP is off, turn it on in Gmail → Settings → Forwarding and POP/IMAP.").font(.caption)
+                    } else {
+                        Link("Create an app-specific password at Apple", destination: URL(string: "https://account.apple.com")!)
+                        Text("In Apple Account → Sign-In and Security → App-Specific Passwords, create one for HowMuch. Use that password here, never your main Apple Account password.").font(.caption)
+                    }
                 }
                 Section {
                     Toggle("Allow HowMuch to check my DBS emails", isOn: $iCloudConsent).accessibilityIdentifier("payment.icloud.consent")
-                    Text("Your app-specific password is sent securely to HowMuch and stored encrypted to check your inbox while the app is closed. HowMuch reads mail without changing it. Apple's password can permit broader IMAP access; you can revoke it at Apple anytime. Detected payments require bank confirmation.").font(.caption).foregroundStyle(Palette.muted)
-                    Button(busy ? "Connecting…" : "Connect iCloud Mail") { Task { await connectICloud() } }.rowAction().disabled(busy || !iCloudConsent || iCloudEmail.isEmpty || iCloudPassword.isEmpty).accessibilityIdentifier("payment.icloud.save")
+                    Text("Your app password is sent securely to HowMuch and stored encrypted to check your inbox while the app is closed. HowMuch reads mail without changing it. \(gmail ? "Google" : "Apple")'s app password can permit broader mail access; you can revoke it at \(gmail ? "Google" : "Apple") anytime. Detected payments require bank confirmation.").font(.caption).foregroundStyle(Palette.muted)
+                    Button(busy ? "Connecting…" : "Connect \(name)") { Task { await connectMailbox(mailbox) } }.rowAction().disabled(busy || !iCloudConsent || iCloudEmail.isEmpty || iCloudPassword.isEmpty).accessibilityIdentifier("payment.icloud.save")
                     if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.muted) }
                 }
-            }.scrollDismissesKeyboard(.interactively).navigationTitle("Connect iCloud Mail").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showICloud = false }.disabled(busy) } }.interactiveDismissDisabled(busy)
+            }.scrollDismissesKeyboard(.interactively).navigationTitle("Connect \(name)").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { mailboxSheet = nil }.disabled(busy) } }.interactiveDismissDisabled(busy)
         }
     }
-    private func connectICloud() async {
+    private func connectMailbox(_ mailbox: AppPasswordMailbox) async {
         guard !busy else { return }
-        if await action("/icloud/connect", body: ["email": iCloudEmail, "app_password": iCloudPassword, "consent": iCloudConsent]) {
-            iCloudPassword = ""; showICloud = false
+        if await action(mailbox == .gmail ? "/gmail-imap/connect" : "/icloud/connect", body: ["email": iCloudEmail, "app_password": iCloudPassword, "consent": iCloudConsent]) {
+            iCloudPassword = ""; mailboxSheet = nil
         }
     }
     private func decode(_ data: Data) throws -> DetectionStatus {
@@ -310,10 +321,14 @@ struct PaymentDetectionView: View {
 }
 
 private struct ConnectURL: Decodable { let url: String }
+/// Mailboxes connected with an app password over IMAP.
+private enum AppPasswordMailbox: String, Identifiable { case icloud, gmail; var id: String { rawValue } }
 private struct DetectionStatus: Decodable {
     let provider: String?
     let providers: [String: Bool]?
-    var providerName: String { provider == "icloud" ? "iCloud Mail" : provider == "microsoft" ? "Outlook" : "Gmail" }
+    var providerName: String { provider == "icloud" ? "iCloud Mail" : provider == "microsoft" ? "Outlook" : "Gmail" }  // gmail and gmail_imap are both Gmail
+    /// Snake-case decoding also renames dictionary keys, so the server's "gmail_imap" arrives as "gmailImap".
+    var gmailAppPasswordReady: Bool { providers?["gmailImap"] ?? providers?["gmail_imap"] ?? false }
     let available: Bool
     let connected: Bool
     let email: String?

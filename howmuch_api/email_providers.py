@@ -1,4 +1,4 @@
-"""Optional read-only iCloud IMAP and delegated Microsoft Graph connectors.
+"""Optional read-only IMAP (iCloud Mail, Gmail with an app password) and delegated Microsoft Graph connectors.
 
 Only Gmail's established receiver authentication can authorize automatic payment.
 Other providers import candidates for explicit bank-confirmed review.
@@ -48,7 +48,7 @@ def provider_ready(provider: str) -> bool:
         Fernet(os.environ.get("HOWMUCH_GMAIL_TOKEN_KEY", "").encode())
     except (ValueError, TypeError):
         return False
-    if provider == "icloud":
+    if provider in IMAP_HOSTS:
         return True
     return provider == "microsoft" and bool(os.getenv("MICROSOFT_CLIENT_ID") and os.getenv("MICROSOFT_CLIENT_SECRET") and os.getenv("HOWMUCH_MICROSOFT_REDIRECT_URI", "").startswith("https://"))
 
@@ -74,13 +74,16 @@ def mail_text(message):
     return "\n".join(plain or rich).replace("\xa0", " ")
 
 
-def icloud_client(email, password):
-    # Fixed Apple endpoint: never accept arbitrary IMAP hosts or ports.
-    client = imaplib.IMAP4_SSL("imap.mail.me.com", 993, ssl_context=ssl.create_default_context(), timeout=15)
+# Fixed endpoints: never accept arbitrary IMAP hosts or ports.
+IMAP_HOSTS = {"icloud": "imap.mail.me.com", "gmail_imap": "imap.gmail.com"}
+
+
+def imap_client(email, password, host):
+    client = imaplib.IMAP4_SSL(host, 993, ssl_context=ssl.create_default_context(), timeout=15)
     try:
         client.login(email, password)
         if client.select("INBOX", readonly=True)[0] != "OK":
-            raise ValueError("The iCloud inbox could not be opened.")
+            raise ValueError("The inbox could not be opened.")
         return client
     except Exception:
         try: client.logout()
@@ -88,9 +91,18 @@ def icloud_client(email, password):
         raise
 
 
+def icloud_client(email, password):
+    return imap_client(email, password, IMAP_HOSTS["icloud"])
+
+
 def check_icloud(email, password):
     client = icloud_client(email, password)
     client.logout()
+
+
+def check_gmail_imap(email, password):
+    # Gmail with an app password (2-Step Verification on): no Google OAuth verification needed.
+    imap_client(email, password, IMAP_HOSTS["gmail_imap"]).logout()
 
 
 class ICloudConnection(BaseModel):
@@ -101,36 +113,52 @@ class ICloudConnection(BaseModel):
 
 @router.post("/icloud/connect")
 async def connect_icloud(payload: ICloudConnection, request: Request, authorization: str | None = Header(default=None)):
-    store, user_id = gmail.store_for(request, authorization)
-    limit(request, "icloud-connect", maximum=5, key=str(user_id))  # each try is a real iCloud login
-    if not provider_ready("icloud"):
-        raise HTTPException(503, "iCloud connection is not configured.")
     email = payload.email.strip().casefold()
     password = payload.app_password.get_secret_value().strip()
     if not re.fullmatch(r"[a-z0-9._+%-]+@(icloud\.com|me\.com|mac\.com)", email) or not re.fullmatch(r"[a-z]{4}(?:-[a-z]{4}){3}", password):
         raise HTTPException(400, "Enter your iCloud Mail address and an Apple app-specific password (xxxx-xxxx-xxxx-xxxx). Do not use your Apple Account password.")
-    if not payload.consent:
+    return await connect_imap("icloud", "iCloud", check_icloud, email, password, payload.consent, request, authorization)
+
+
+@router.post("/gmail-imap/connect")
+async def connect_gmail_imap(payload: ICloudConnection, request: Request, authorization: str | None = Header(default=None)):
+    email = payload.email.strip().casefold()
+    # Google shows app passwords as four groups of four letters; spaces are optional.
+    password = re.sub(r"\s+", "", payload.app_password.get_secret_value()).lower()
+    if not re.fullmatch(r"[a-z0-9._+%-]+@[a-z0-9-]+(\.[a-z0-9-]+)+", email) or not re.fullmatch(r"[a-z]{16}", password):
+        raise HTTPException(400, "Enter your Gmail address and a 16-letter Google app password. Do not use your Google Account password.")
+    return await connect_imap("gmail_imap", "Gmail", check_gmail_imap, email, password, payload.consent, request, authorization)
+
+
+async def connect_imap(provider, name, check, email, password, consent, request, authorization):
+    store, user_id = gmail.store_for(request, authorization)
+    limit(request, provider + "-connect", maximum=5, key=str(user_id))  # each try is a real mailbox login
+    if not provider_ready(provider):
+        raise HTTPException(503, name + " connection is not configured.")
+    if not consent:
         raise HTTPException(400, "Approve private email scanning before connecting.")
     async with gmail._locks.setdefault(user_id, asyncio.Lock()):
         if store.connection(user_id):
             raise HTTPException(409, "Disconnect your current email before connecting another mailbox.")
         ticket = gmail.digest(secrets.token_urlsafe(32))
+        stage = provider + "_connect"
         with store.db:
             store.db.execute("DELETE FROM payment_oauth WHERE user_id=?", (user_id,))
-            store.db.execute("INSERT INTO payment_oauth(token_hash,user_id,stage,expires) VALUES(?,?,'icloud_connect',?)", (ticket, user_id, int(time.time()) + 120))
+            store.db.execute("INSERT INTO payment_oauth(token_hash,user_id,stage,expires) VALUES(?,?,?,?)", (ticket, user_id, stage, int(time.time()) + 120))
         try:
-            await asyncio.to_thread(check_icloud, email, password)
+            await asyncio.to_thread(check, email, password)
             # Sign-out/deletion while the network operation was in flight must win.
             gmail.store_for(request, authorization)
             with store.db:
-                active = store.db.execute("DELETE FROM payment_oauth WHERE token_hash=? AND stage='icloud_connect' AND expires>=? RETURNING user_id", (ticket, int(time.time()))).fetchone()
+                active = store.db.execute("DELETE FROM payment_oauth WHERE token_hash=? AND stage=? AND expires>=? RETURNING user_id", (ticket, stage, int(time.time()))).fetchone()
                 if not active or store.connection(user_id):
                     raise HTTPException(409, "The connection was cancelled or changed. Start again from HowMuch.")
-            store.save_connection(user_id, email, gmail.cipher().encrypt(password.encode()).decode(), "icloud")
+            store.save_connection(user_id, email, gmail.cipher().encrypt(password.encode()).decode(), provider)
         except sqlite3.IntegrityError:
             raise HTTPException(409, "This mailbox is already connected to another HowMuch account.")
         except (imaplib.IMAP4.error, OSError, ValueError):
-            raise HTTPException(400, "iCloud could not connect. Check the Mail address and app-specific password, then retry.") from None
+            hint = "app password, and that IMAP is on in Gmail settings" if provider == "gmail_imap" else "app-specific password"
+            raise HTTPException(400, f"{name} could not connect. Check the email address and {hint}, then retry.") from None
         finally:
             with store.db: store.db.execute("DELETE FROM payment_oauth WHERE token_hash=?", (ticket,))
     return gmail.detection_status(store, user_id)
@@ -231,7 +259,15 @@ async def microsoft_callback(request: Request, state: str = "", code: str = "", 
 
 
 def icloud_messages(connection, password, since, before):
-    client = icloud_client(connection["email"], password)
+    return imap_messages(connection, password, since, before, IMAP_HOSTS["icloud"])
+
+
+def gmail_imap_messages(connection, password, since, before):
+    return imap_messages(connection, password, since, before, IMAP_HOSTS["gmail_imap"])
+
+
+def imap_messages(connection, password, since, before, host):
+    client = imap_client(connection["email"], password, host)
     deadline = time.monotonic() + 60
     try:
         start = datetime.fromtimestamp(since, timezone.utc).strftime("%d-%b-%Y")
@@ -290,18 +326,19 @@ async def scan_other_mailbox(storage, user_id):
         store = PaymentStore(storage); conn = store.connection(user_id)
         if not conn or not conn["refresh_token"]: raise ValueError("Connect email first.")
         provider = conn["provider"]
-        if provider not in {"icloud", "microsoft"}: return
+        if provider not in {"icloud", "gmail_imap", "microsoft"}: return
         if not provider_ready(provider): raise ValueError("This email provider is not configured yet.")
         payers = store.allowed_payers(user_id)
         if not payers: return
         started = int(time.time()); since = max(conn["connected_at"] - 30 * 86400, conn["last_scan"] - 300)
         try:
             credential = gmail.cipher().decrypt(conn["refresh_token"].encode()).decode()
-            if provider == "icloud":
-                results = await asyncio.to_thread(icloud_messages, conn, credential, since, started)
+            if provider in IMAP_HOSTS:
+                read = icloud_messages if provider == "icloud" else gmail_imap_messages
+                results = await asyncio.to_thread(read, conn, credential, since, started)
                 for message_id, parsed in results:
                     if not current(store, user_id, conn, payers): return
-                    if store.accepts_payer(user_id, parsed["payer"]): store.ingest(user_id, "icloud:" + message_id, parsed, False)
+                    if store.accepts_payer(user_id, parsed["payer"]): store.ingest(user_id, provider + ":" + message_id, parsed, False)
             else:
                 async with httpx.AsyncClient(timeout=20) as client:
                     response = await client.post(MS + "/token", data=ms_token_data(grant_type="refresh_token", refresh_token=credential, scope=MS_SCOPE))

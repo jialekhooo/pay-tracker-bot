@@ -168,7 +168,10 @@ private enum PaymentDetectionUITestFixture {
             throw AccountHTTPError(status: 503, message: "Couldn’t save this payer rule. Please try again.")
         }
         let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        if path.hasSuffix("/icloud/connect") {
+        if path.hasSuffix("/gmail-imap/connect") {
+            connected = true; provider = "gmail_imap"
+            receipts[0]["trusted"] = false
+        } else if path.hasSuffix("/icloud/connect") {
             iCloudAttempts += 1
             if iCloudAttempts == 1 { throw AccountHTTPError(status: 400, message: "Synthetic iCloud connection failed. Check the app-specific password.") }
             connected = true; provider = "icloud"
@@ -192,7 +195,7 @@ private enum PaymentDetectionUITestFixture {
             }
         } else if method == "PATCH" { autoEnabled = body["auto_enabled"] as? Bool ?? false }
         return try JSONSerialization.data(withJSONObject: ["available": true, "connected": connected,
-            "provider": provider, "providers": ["gmail": true, "microsoft": false, "icloud": true],
+            "provider": provider, "providers": ["gmail": !CommandLine.arguments.contains("--ui-test-email-providers"), "gmail_imap": true, "microsoft": false, "icloud": true],
             "email": connected ? "synthetic@example.test" : NSNull(), "auto_enabled": autoEnabled,
             "error": "", "rules": rules, "receipts": receipts, "events": ["Roadshow", "Brand launch"]])
     }
