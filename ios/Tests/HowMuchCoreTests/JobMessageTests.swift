@@ -169,4 +169,24 @@ final class JobMessageTests: XCTestCase {
         let clock = parse("Roadshow 12 Nov\n10:00am - 6pm")
         XCTAssertEqual(clock.dates, [PastedJobDate(day: "2026-11-12", startMinute: 600, endMinute: 1080)])
     }
+
+    func testHeadingLineNamesTheEventWhenNoDateLineDoes() {
+        let job = parse("Nike Pop-up\n19 Nov 3.30pm-6pm\n$15/h")
+        XCTAssertEqual(job.event, "Nike Pop-up")
+        XCTAssertEqual(job.rate, 15)
+        XCTAssertEqual(slots(job), ["2026-11-19 15:30-18:00"])
+        // Recruiting words in front of the heading are dropped.
+        XCTAssertEqual(parse("Crew wanted for Nike Pop-up\n19th Nov: 3.30pm - 6pm\n21,22nd Nov: 9am - 6pm").event, "Nike Pop-up")
+        // A name on the date line still wins over the heading.
+        XCTAssertEqual(parse("Weekend gigs\nWedding gig 12/11 6pm-11pm").event, "Wedding gig")
+        // An event label wins too.
+        XCTAssertEqual(parse("Weekend gigs\nEvent: Hermes Sale\n12 Nov 9am-6pm").event, "Hermes Sale")
+    }
+
+    func testGreetingsQuestionsAndLaterPlainLinesAreNotEventNames() {
+        XCTAssertNil(parse("Hi all\n12 Nov 9am-6pm").event)
+        XCTAssertNil(parse("Anyone free this weekend?\n12 Nov 9am-6pm").event)
+        XCTAssertNil(parse("Looking for promoters\n12 Nov 9am-6pm").event)
+        XCTAssertNil(parse("12 Nov 9am-6pm\nDates and time\nThose available please PM me").event)
+    }
 }

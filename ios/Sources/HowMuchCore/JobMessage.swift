@@ -45,6 +45,9 @@ public enum JobMessageParser {
         var job = PastedJob()
         var address: String?
         var role: String?
+        // A heading line with no dates, times or pay ("Nike Pop-up"), used when no other line names the event.
+        var title: String?
+        var sawLine = false
         var items: [Item] = []
         var flat: Decimal?
         // "19th: 3.30pm - 6pm" or "21,22nd: 9am - 6pm": times for days of the month listed on another line.
@@ -54,6 +57,8 @@ public enum JobMessageParser {
         for raw in normalized(String(text.prefix(maximumLength))).components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: CharacterSet(charactersIn: " \t-•*>·").union(.whitespaces))
             guard !line.isEmpty else { continue }
+            let isFirstLine = !sawLine
+            sawLine = true
             var content = line
             if let (days, rest) = dayPrefix(line) {
                 var lower = rest.lowercased()
@@ -89,6 +94,7 @@ public enum JobMessageParser {
             let time = readTime(&lower)
             if days.isEmpty && time == nil {
                 if pay == nil, content.rangeOfCharacter(from: .decimalDigits) != nil { job.skipped.append(line) }
+                if isFirstLine, pay == nil, content == line { title = heading(line) }
                 continue
             }
             items.append(Item(days: days, time: time))
@@ -121,6 +127,7 @@ public enum JobMessageParser {
         }
         job.dates.sort { ($0.day, $0.startMinute) < ($1.day, $1.startMinute) }
 
+        if job.event == nil, let title { job.event = title }
         if job.event == nil, let role { job.event = role }
         if let address {
             if let location = job.location {
@@ -470,6 +477,16 @@ public enum JobMessageParser {
             .split(whereSeparator: \.isWhitespace).joined(separator: " ")
         let letters = words.filter(\.isLetter).count
         return (letters >= 3 ? clean(words) : nil, venue)
+    }
+
+    /// A short heading such as "Nike Pop-up" or "Crew wanted for Nike Pop-up". Greetings, questions,
+    /// sentences and lines with numbers are not headings.
+    private static func heading(_ line: String) -> String? {
+        guard line.count <= 60, line.rangeOfCharacter(from: .decimalDigits) == nil, !line.hasSuffix("?"),
+              line.range(of: #"(?i)^(hi|hello|hey|dear|urgent|good\s+(morning|afternoon|evening)|thank|thanks|pm|dm|whatsapp|text|looking|hiring|need|needed|seeking|urgently|anyone|available|calling)\b"#,
+                         options: .regularExpression) == nil
+        else { return nil }
+        return leftover(line.lowercased(), original: line).name
     }
 
     private static func blank(_ line: inout String, _ range: NSRange) {

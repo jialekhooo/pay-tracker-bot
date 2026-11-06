@@ -1278,7 +1278,8 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Search shifts"].waitForExistence(timeout: 5)); openShift("Brand launch", in: app)
         tapTrailingArea(app.buttons["Add claim"], in: app)
         app.buttons["claim.category.food"].tap()
-        let note = app.textFields["claim.note"]; reveal(note, in: app); note.tap(); note.typeText("Photo QA")
+        // Return closes the keyboard so it cannot cover the receipt buttons below the note.
+        let note = app.textFields["claim.note"]; reveal(note, in: app); note.tap(); note.typeText("Photo QA\n")
         tapTrailingArea(app.buttons["receipt.sample"], in: app)
         XCTAssertTrue(app.images["receipt.preview"].waitForExistence(timeout: 15))
         let save = app.buttons["claim.save"]
@@ -1293,7 +1294,9 @@ final class HowMuchUITests: XCTestCase {
         attach("Receipt retained after upload failure", app: app)
         save.tap()
         XCTAssertTrue(app.staticTexts["Photo QA"].waitForExistence(timeout: 5))
-        tapTrailingArea(app.buttons["Food claim actions: Photo QA"], in: app); app.buttons["Edit claim"].tap()
+        // A 44-point icon, so tap it directly: a fixed screen-width offset misses it on wider phones.
+        let actions = app.buttons["Food claim actions: Photo QA"]; reveal(actions, in: app); actions.tap()
+        XCTAssertTrue(app.buttons["Edit claim"].waitForExistence(timeout: 5)); app.buttons["Edit claim"].tap()
         reveal(app.images["receipt.preview"], in: app); XCTAssertTrue(app.images["receipt.preview"].waitForExistence(timeout: 10))
         attach("Private receipt attachment", app: app)
         tapTrailingArea(app.buttons["receipt.view"], in: app)
