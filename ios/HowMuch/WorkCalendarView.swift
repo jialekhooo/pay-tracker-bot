@@ -94,8 +94,8 @@ struct AvailabilitySheet: View {
     private var text: String { Availability.message(from: from, to: end, shifts: store.data.shifts, blocked: blocked) }
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Dates") {
+            AppForm {
+                Section(styled: "Dates") {
                     DatePicker("From", selection: $from, displayedComponents: .date)
                     // The day grid below shows up to 93 days, so the message never covers days you can't see or block.
                     DatePicker("To", selection: $to, in: from...TrackerCalendar.calendar.date(byAdding: .day, value: Self.maxDays - 1, to: from)!, displayedComponents: .date)
@@ -109,11 +109,11 @@ struct AvailabilitySheet: View {
                         ForEach(0..<((TrackerCalendar.calendar.component(.weekday, from: from) + 5) % 7), id: \.self) { _ in Color.clear.frame(height: 36) }
                         ForEach(days, id: \.self) { date in dayButton(date) }
                     }.padding(.vertical, 4)
-                } header: { Text("Tap a day you can't work") } footer: {
-                    Text("Teal days have a shift booked. Blocked days are saved, and HowMuch warns you if you book a shift on one.")
+                } header: { FormHeader("Tap a day you can't work") } footer: {
+                    Text("Teal days have a shift booked. Blocked days are saved, and HowMuch warns you if you book a shift on one.").formFootnote()
                 }
-                Section("Your message") {
-                    Text(text).font(.callout).textSelection(.enabled).accessibilityIdentifier("availability.text")
+                Section(styled: "Your message") {
+                    Text(text).font(.appBody).textSelection(.enabled).accessibilityIdentifier("availability.text")
                     ShareLink(item: text) { Label("Share to WhatsApp or Telegram", systemImage: "square.and.arrow.up") }
                     Button(copied ? "Copied" : "Copy message", systemImage: copied ? "checkmark" : "doc.on.doc") { UIPasteboard.general.string = text; copied = true }
                         .accessibilityIdentifier("availability.copy")

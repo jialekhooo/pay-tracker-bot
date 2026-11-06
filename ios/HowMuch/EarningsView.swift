@@ -235,7 +235,7 @@ struct EventDetailsEditor: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Card {
                         Label("EVENT DETAILS", systemImage: "briefcase").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
-                        TextField("Event name", text: $name).font(.title2.weight(.semibold)).frame(minHeight: 48)
+                        TextField("Event name", text: $name).font(.system(.title3, design: .rounded, weight: .semibold)).frame(minHeight: 48)
                         Divider()
                         TextField("Location (optional)", text: $location).font(.subheadline).frame(minHeight: 48)
                         Button("Find a place in Apple Maps", systemImage: "map") { findingLocation = true }.glassAction().accessibilityIdentifier("event.findLocation")

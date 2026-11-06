@@ -17,15 +17,15 @@ struct JobNotificationSettingsView: View {
     @State private var testMessage = ""
     @State private var testing = false
     var body: some View {
-        Form {
-            Section("Job alerts") {
+        AppForm {
+            Section(styled: "Job alerts") {
                 Toggle("Job notifications", isOn: $options.enabled)
                 Toggle("Upcoming shifts · day before", isOn: $options.upcoming)
                 Toggle("Job start reminders", isOn: $options.starts)
                 Toggle("End-of-shift reminders", isOn: $options.ends)
                 Toggle("Payment due reminders", isOn: $options.paymentDue)
             }
-            Section("Before a job starts") {
+            Section(styled: "Before a job starts") {
                 ForEach(startChoices, id: \.self) { minutes in
                     Toggle(startLabel(minutes), isOn: Binding(get: { options.startReminderMinutes.contains(minutes) }, set: { selected in
                         var values = options.startReminderMinutes
@@ -36,14 +36,14 @@ struct JobNotificationSettingsView: View {
                 Text(options.startReminderMinutes.isEmpty ? "Choose at least one time, or turn Job start reminders off." : "Choose as many as you like. Each selected time sends one reminder per job. Passed times are skipped.")
                     .font(.caption).foregroundStyle(Palette.muted)
             }
-            Section("Other timing & privacy") {
+            Section(styled: "Other timing & privacy") {
                 DatePicker("Day-before alert", selection: $dayBefore, displayedComponents: .hourAndMinute)
                 DatePicker("Payment due alert", selection: $paymentTime, displayedComponents: .hourAndMinute)
                 LabeledContent("Timezone", value: TimeZone.current.identifier)
                 Toggle("Show job names and locations", isOn: $options.showDetails).accessibilityIdentifier("notifications.details")
                 Text("Turn this off to keep job names and locations off your lock screen. Times and reminder types remain visible.").font(.caption).foregroundStyle(Palette.muted)
             }
-            Section("Lock-screen preview") {
+            Section(styled: "Lock-screen preview") {
                 HStack(alignment: .top, spacing: 12) {
                     Image("BrandLogo").resizable().frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 10))
                     VStack(alignment: .leading, spacing: 4) {
@@ -53,7 +53,7 @@ struct JobNotificationSettingsView: View {
                 }.padding(.vertical, 6)
                 Text("Touch and hold a reminder to open its job or review a payment. Notifications are grouped by job.").font(.caption).foregroundStyle(Palette.muted)
             }
-            Section("Delivery") {
+            Section(styled: "Delivery") {
                 Label(deliveryTitle, systemImage: notificationsAllowed ? "checkmark.circle.fill" : "bell.slash")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(notificationsAllowed ? Palette.teal : Palette.ink)
                     .accessibilityIdentifier("notifications.deliveryStatus")
@@ -179,7 +179,7 @@ struct TravelReminderSettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Card {
                     Label("A LITTLE LESS RUSH", systemImage: "car.side").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.teal)
-                    Text("Arrive with time to spare.").font(.appTitle)
+                    Text("Arrive with time to spare.").font(.cardTitle)
                     Text("Route estimates help plan your departure. Receive a heads-up, a time-to-leave reminder, and an update if your journey gets longer.").font(.subheadline).foregroundStyle(Palette.muted)
                     Toggle("Time to leave reminders", isOn: $options.enabled).accessibilityIdentifier("travel.enabled")
                 }
@@ -190,11 +190,13 @@ struct TravelReminderSettingsView: View {
                     Text("This saved address is used for every job. HowMuch does not track where you are. Include a city and country to avoid a wrong match.").font(.caption).foregroundStyle(Palette.muted)
                 }
                 Card {
+                    LabeledContent("Travel by") {
                     Picker("Travel by", selection: Binding(get: { options.effectiveMode }, set: { value in options.transit = value == "transit" ? true : nil; options.mode = value == "transit" ? "automobile" : value })) {
                         Text("Driving").tag("automobile"); Text("Walking").tag("walking"); Text("Cycling").tag("cycling"); Text("Public transport · bus/MRT").tag("transit")
-                    }.accessibilityIdentifier("travel.mode")
-                    Stepper("Arrive \(options.arrivalBuffer) min early", value: $options.arrivalBuffer, in: 0...120, step: 5)
-                    Stepper(options.prepareMinutes == 0 ? "No preparation reminder" : "Heads-up \(options.prepareMinutes) min before leaving", value: $options.prepareMinutes, in: 0...60, step: 5)
+                    }.pickerStyle(.menu).labelsHidden().accessibilityIdentifier("travel.mode")
+                    }
+                    Stepper("Arrive \(options.arrivalBuffer) min early", value: $options.arrivalBuffer, in: 0...120, step: 5).controlSize(.small)
+                    Stepper(options.prepareMinutes == 0 ? "No preparation reminder" : "Heads-up \(options.prepareMinutes) min before leaving", value: $options.prepareMinutes, in: 0...60, step: 5).controlSize(.small)
                     if options.transit != true { Toggle("Check for journey changes", isOn: $options.trafficUpdates) }
                     Text("Public transport uses Apple Maps estimates refreshed when HowMuch opens. Planned reminders can fire while the app is closed; live bus/MRT delay updates require opening the app again.").font(.caption).foregroundStyle(Palette.muted)
                 }

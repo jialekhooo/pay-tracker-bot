@@ -167,7 +167,7 @@ struct ShiftEditor: View {
                 Text("Name and location changes apply to all \(count) shifts in this event. Schedule and pay changes apply only to this shift.").font(.caption).foregroundStyle(Palette.muted)
             }
             TextField("Event name", text: $event)
-                .font(.system(.title2, design: .rounded, weight: .semibold)).frame(minHeight: 48)
+                .font(.system(.title3, design: .rounded, weight: .semibold)).frame(minHeight: 48)
             Divider()
             HStack(spacing: 12) {
                 Image(systemName: "mappin.and.ellipse").foregroundStyle(Palette.teal).frame(width: 20)
@@ -205,7 +205,7 @@ struct ShiftEditor: View {
                     Text("No repeat").tag(0); Text("Daily").tag(1); Text("Weekly").tag(7); Text("Fortnightly").tag(14)
                 }.accessibilityIdentifier("shift.repeat")
                 if repeatDays > 0 {
-                    Stepper("\(repeatCount) shifts, including the first", value: $repeatCount, in: 2...52).accessibilityIdentifier("shift.repeatCount")
+                    Stepper("\(repeatCount) shifts, including the first", value: $repeatCount, in: 2...52).controlSize(.small).accessibilityIdentifier("shift.repeatCount")
                     Text("All dates are created now with the same times and pay rules. You can edit or delete each shift afterwards.").font(.caption).foregroundStyle(Palette.muted)
                 }
             }

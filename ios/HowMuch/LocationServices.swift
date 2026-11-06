@@ -97,7 +97,7 @@ struct JobLocationPicker: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Card {
                         Label(purpose, systemImage: "mappin.and.ellipse").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
-                        TextField("Place, address or postal code", text: $query).font(.title3).frame(minHeight: 48)
+                        TextField("Place, address or postal code", text: $query).font(.appBody).frame(minHeight: 48)
                             .autocorrectionDisabled().focused($focused).submitLabel(.search).accessibilityIdentifier("location.query")
                             .onSubmit { focused = false; Task { await search.find(query) } }
                         Text("Place searches are sent to Apple Maps. You can also keep a location you type yourself.").font(.caption).foregroundStyle(Palette.muted)

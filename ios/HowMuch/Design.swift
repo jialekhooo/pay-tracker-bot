@@ -7,6 +7,10 @@ extension Font {
     static let appTitle = Font.system(.title2, design: .rounded, weight: .bold)
     /// Card and row titles.
     static let appHeadline = Font.system(.headline, design: .rounded)
+    /// The big line at the top of a card (one step under a page title).
+    static let cardTitle = Font.system(.title3, design: .rounded, weight: .bold)
+    /// Everyday text, rows and controls: the same size on cards and in forms.
+    static let appBody = Font.subheadline
     /// The big amount at the top of a screen (earnings, a shift's pay).
     static let heroAmount = Font.system(size: 40, weight: .bold, design: .rounded)
     /// Amounts inside a card or sheet.
@@ -63,6 +67,7 @@ struct Card<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 14) { content }
+            .font(.appBody)
             .padding(18).frame(maxWidth: .infinity, alignment: .leading)
             .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 20))
             .contentShape(RoundedRectangle(cornerRadius: 20))
@@ -231,7 +236,37 @@ struct PeriodNavigator: View {
     }
 }
 
+private struct InAppFormKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// True inside a settings-style Form, where rows set their own height.
+    var inAppForm: Bool { get { self[InAppFormKey.self] } set { self[InAppFormKey.self] = newValue } }
+}
+
+/// A Form section title styled like `SectionHeading`, so form pages and card pages match.
+struct FormHeader: View {
+    let title: String
+    init(_ title: String) { self.title = title }
+    var body: some View { Text(title).font(.appHeadline).foregroundStyle(Palette.ink).textCase(nil) }
+}
+
+extension Section where Parent == FormHeader, Footer == EmptyView, Content: View {
+    /// `Section(styled: "Title") { … }`: a section with the app's heading style.
+    init(styled title: String, @ViewBuilder content: () -> Content) {
+        self.init(content: content, header: { FormHeader(title) })
+    }
+}
+
+/// The app's settings-style form: compact sections, styled headers and rows that size themselves.
+struct AppForm<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View { Form { content }.appForm() }
+}
+
 extension View {
+    /// Settings-style forms: compact section spacing and rows that size themselves.
+    func appForm() -> some View { self.environment(\.inAppForm, true).listSectionSpacing(.compact) }
+    /// A Form footer note: caption size and muted, matching notes on card pages.
+    func formFootnote() -> some View { self.font(.caption).foregroundStyle(Palette.muted) }
     func glassChrome<S: Shape>(in shape: S, tint: Color? = nil) -> some View { modifier(GlassChrome(shape: shape, tint: tint)) }
     func glassAction() -> some View { self.buttonStyle(GlassActionButtonStyle()) }
     func primaryButton() -> some View { self.buttonStyle(PrimaryActionButtonStyle()) }
@@ -240,6 +275,9 @@ extension View {
     func detailStyle(_ title: String) -> some View {
         self.navigationTitle(title).navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
             .scrollContentBackground(.hidden).background { AppBackdrop() }.foregroundStyle(Palette.ink)
+            // Forms and cards share one text size and a compact row height, so no page looks oversized.
+            .font(.appBody)
+            .environment(\.defaultMinListRowHeight, 44)
     }
 }
 
@@ -258,10 +296,12 @@ private struct PrimaryActionButtonStyle: ButtonStyle {
 }
 private struct RowActionButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.inAppForm) private var inForm
     func makeBody(configuration: Configuration) -> some View {
         // Same type as the app's other buttons, so text actions don't look bigger or lighter than boxed ones.
         configuration.label.font(.system(.subheadline, design: .rounded, weight: .semibold))
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            // Form rows are already at least 44 points tall; adding 44 more left big gaps between actions.
+            .frame(maxWidth: .infinity, minHeight: inForm ? nil : 44, alignment: .leading)
             .contentShape(Rectangle())
             .foregroundStyle(configuration.role == .destructive ? Color.red : Palette.teal)
             .opacity(enabled ? (configuration.isPressed ? 0.65 : 1) : 0.45)

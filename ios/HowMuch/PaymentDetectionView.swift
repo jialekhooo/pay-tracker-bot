@@ -33,11 +33,11 @@ struct PaymentDetectionView: View {
     @State private var pendingDismiss: String?
     @State private var settingUpBank = false
     var body: some View {
-        Form {
+        AppForm {
             if previewOnly {
                 Section { Text("Sign in to your own Apple account to track pay coming in. The preview doesn't read any notifications or email.").foregroundStyle(Palette.muted) }
             } else if let status {
-                Section("Bank app notifications") {
+                Section(styled: "Bank app notifications") {
                   if #unavailable(iOS 27) {
                     // The Shortcuts "When I receive a notification" trigger arrived in iOS 27.
                     Text("Reading bank app notifications needs iOS 27. Until then, forward your bank's payment emails below.").font(.subheadline).foregroundStyle(Palette.muted)
@@ -51,7 +51,7 @@ struct PaymentDetectionView: View {
                     Text("When your bank app says money came in, a Shortcuts automation passes it to HowMuch. Pay from a saved payer that exactly matches an event's unpaid total is marked paid; anything else waits below for you to check.").font(.caption).foregroundStyle(Palette.muted)
                   }
                 }
-                Section("Email forwarding") {
+                Section(styled: "Email forwarding") {
                     if let address = payIn?.forwarding.address {
                         HStack {
                             Text(address).font(.subheadline.monospaced()).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
@@ -86,7 +86,7 @@ struct PaymentDetectionView: View {
                         Text("Coming soon: a private address you can forward bank alert emails to.").font(.subheadline).foregroundStyle(Palette.muted)
                     }
                 }
-                Section("Connect your email") {
+                Section(styled: "Connect your email") {
                     Label(status.connected ? "\(status.providerName) connected" : "No email connected", systemImage: status.connected ? "checkmark.shield" : "envelope")
                     if let email = status.email { Text(email).font(.caption).foregroundStyle(Palette.muted) }
                     if !status.available { Text("Email connection is not available yet for this app. Manual payment tracking remains available.").font(.caption).foregroundStyle(Palette.muted) }
@@ -111,11 +111,11 @@ struct PaymentDetectionView: View {
                     Text("HowMuch checks DBS alerts against your unpaid jobs and exact company rules. It never sends or deletes emails. New Outlook, iCloud and Gmail app-password matches need your bank confirmation before marking paid.").font(.caption).foregroundStyle(Palette.muted)
                     if !status.error.isEmpty { Text(status.error).font(.caption).foregroundStyle(.orange) }
                 }
-                Section("Automatic marking") {
+                Section(styled: "Automatic marking") {
                     Toggle("Mark exact verified matches paid", isOn: Binding(get: { status.autoEnabled }, set: { enabled in Task { await action("", method: "PATCH", body: ["auto_enabled": enabled]) } })).disabled(!status.connected || !status.available || status.provider != nil && status.provider != "gmail" || busy)
                     Text("Automatic marking is supported for verified alerts from Gmail connected with Google sign-in. Outlook, iCloud and Gmail app-password alerts need confirmation against your bank transaction. You can undo applied payments below.").font(.caption).foregroundStyle(Palette.muted)
                 }
-                Section("Saved payers") {
+                Section(styled: "Saved payers") {
                     NavigationLink("Manage saved payers") { PayersSettingsView() }.accessibilityIdentifier("payment.payers")
                     Text("Save companies once in Settings → Payers. Choose ‘Paid by’ when adding/editing an event or from Earnings. Every saved bank name for the selected company is used for exact matching.").font(.caption).foregroundStyle(Palette.muted)
                     ForEach(payerGroups(status.rules)) { group in
@@ -132,7 +132,7 @@ struct PaymentDetectionView: View {
                         }.accessibilityIdentifier("payment.payerGroup." + group.id)
                     }
                 }
-                Section("Payment review & history") {
+                Section(styled: "Payment review & history") {
                     if status.receipts.isEmpty { Text("No pay received yet. Payments from saved payers appear here.").foregroundStyle(Palette.muted) }
                     ForEach(status.receipts) { receipt in
                         VStack(alignment: .leading, spacing: 10) {
@@ -214,8 +214,8 @@ struct PaymentDetectionView: View {
         let gmail = mailbox == .gmail
         let name = gmail ? "Gmail" : "iCloud Mail"
         return NavigationStack {
-            Form {
-                Section("Your \(name)") {
+            AppForm {
+                Section(styled: "Your \(name)") {
                     TextField(gmail ? "Gmail address" : "iCloud / me.com / mac.com email", text: $iCloudEmail).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.emailAddress).accessibilityIdentifier("payment.icloud.email")
                     SecureField(gmail ? "App password (16 letters)" : "App-specific password", text: $iCloudPassword).textContentType(.none).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("payment.icloud.password")
                     if gmail {
@@ -376,16 +376,16 @@ private struct PayInStatus: Decodable {
 struct EmailForwardingGuide: View {
     let address: String
     var body: some View {
-        Form {
-            Section("Your private address") {
+        AppForm {
+            Section(styled: "Your private address") {
                 Text(address).font(.callout.monospaced()).textSelection(.enabled)
                 Button("Copy address", systemImage: "doc.on.doc") { UIPasteboard.general.string = address }.rowAction()
                 Text("Only forward bank alerts here. Anyone with this address could send you emails to check, so forwarded payments always wait for your OK.").font(.caption).foregroundStyle(Palette.muted)
             }
-            Section("Forward one email") {
+            Section(styled: "Forward one email") {
                 Text("Open a DBS \u{201C}You\u{2019}ve received a transfer\u{201D} email, tap Forward, and send it to your address. It appears in Pay-in tracking within a minute.").font(.subheadline)
             }
-            Section("Forward automatically (Gmail)") {
+            Section(styled: "Forward automatically (Gmail)") {
                 Text("On a computer, open Gmail Settings → Forwarding and POP/IMAP → Add a forwarding address, and enter your HowMuch address exactly (it starts with pay+). Gmail sends a confirmation code, which appears in Pay-in tracking within a minute (tap Refresh at the bottom).").font(.subheadline)
                 Text("Then create a filter: From ibanking.alert@dbs.com, Subject \u{201C}You\u{2019}ve received a transfer\u{201D} → Forward it to your HowMuch address.").font(.subheadline)
             }

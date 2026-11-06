@@ -51,12 +51,12 @@ struct CalendarSettingsView: View {
     @State private var linkMessage = ""
     @State private var document = TextFile("")
     var body: some View {
-        Form {
+        AppForm {
             Section {
                 Label("Your shifts in any calendar", systemImage: "calendar.badge.clock").font(.appHeadline)
                 Text("Create a private live link once, and your shifts show up in Apple Calendar, Google Calendar or TimeTree, updating as you add or change jobs.").font(.subheadline).foregroundStyle(Palette.muted)
             }
-            Section("Live calendar") {
+            Section(styled: "Live calendar") {
                 if let link, let url = URL(string: link) {
                     Button { openURL(Self.webcal(url)) } label: { Label("Subscribe in Apple Calendar", systemImage: "calendar") }
                         .accessibilityIdentifier("calendar.subscribeApple")
@@ -72,7 +72,7 @@ struct CalendarSettingsView: View {
                 if !linkMessage.isEmpty { Text(linkMessage).font(.caption).foregroundStyle(Palette.muted) }
             }
             if link != nil {
-                Section("Using TimeTree?") {
+                Section(styled: "Using TimeTree?") {
                     step(1, "Subscribe in Apple Calendar", "Tap Subscribe in Apple Calendar above, then Subscribe. A calendar called HowMuch shifts appears on your iPhone.")
                     step(2, "Show it in TimeTree", "TimeTree can show the calendars on your iPhone. In TimeTree's calendar settings, turn on your iPhone's calendars and pick HowMuch shifts.")
                     Text("TimeTree closed its API to other apps in 2023, so this is the way to see your shifts there.").font(.caption).foregroundStyle(Palette.muted)
@@ -80,10 +80,10 @@ struct CalendarSettingsView: View {
                 Section {
                     Button("Replace link", role: .destructive) { rotateLink = true }.disabled(auth.isDemo)
                 } footer: {
-                    Text("Anyone with the link can see your shifts and pay. Replacing it stops the old link working; subscribe again with the new one.")
+                    Text("Anyone with the link can see your shifts and pay. Replacing it stops the old link working; subscribe again with the new one.").formFootnote()
                 }
             }
-            Section("One-off export") {
+            Section(styled: "One-off export") {
                 Picker("Include", selection: $scope) { Text("Upcoming").tag("Upcoming"); Text("This month").tag("This month"); Text("All shifts").tag("All shifts") }
                 Button("Export calendar (.ics)", systemImage: "square.and.arrow.up") {
                     let shifts = store.data.shifts.filter { shift in

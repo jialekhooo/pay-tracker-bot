@@ -830,7 +830,7 @@ struct PetDetailView: View {
                 ForEach(pet.missions) { mission in
                     HStack(spacing: 12) {
                         Image(systemName: mission.done ? "checkmark.circle.fill" : mission.symbol)
-                            .font(.title3).foregroundStyle(mission.done ? PetPalette.leaf : Palette.muted).frame(width: 30)
+                            .font(.body).foregroundStyle(mission.done ? PetPalette.leaf : Palette.muted).frame(width: 26)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(mission.title).font(.subheadline).strikethrough(mission.done, color: Palette.muted)
                                 .foregroundStyle(mission.done ? Palette.muted : Palette.ink)
@@ -983,26 +983,19 @@ struct PetCodesView: View {
     @State private var busy = false
 
     var body: some View {
-        Form {
+        AppForm {
             Section {
-                Text("Choose up to 12 items. Specials (Golden halo, Heart glasses, Flower lei, Fireworks, Galaxy) can only be unlocked with a code.")
+                Text("Choose up to 12 items. Items marked ✦ are specials that only a code can unlock.")
                     .font(.caption).foregroundStyle(Palette.muted)
-            } header: { Text("What the code unlocks · \(selected.count) chosen") }
+            } header: { FormHeader("What the code unlocks · \(selected.count) chosen") }
             ForEach(PetSlot.allCases, id: \.self) { slot in
                 Section(slot.title) {
-                    ForEach(PetItem.catalog.filter { $0.slot == slot }) { item in
-                        Button { if selected.contains(item.id) { selected.remove(item.id) } else if selected.count < 12 { selected.insert(item.id) } } label: {
-                            HStack {
-                                Text(item.name).foregroundStyle(Palette.ink)
-                                if item.unlock == .code { Text("Special").font(.caption2.weight(.bold)).foregroundStyle(PetPalette.goldDark) }
-                                Spacer()
-                                Image(systemName: selected.contains(item.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(selected.contains(item.id) ? Palette.teal : Palette.muted)
-                            }.frame(minHeight: 44).contentShape(Rectangle())
-                        }.buttonStyle(.plain).accessibilityIdentifier("code.item." + item.id)
-                    }
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                        ForEach(PetItem.catalog.filter { $0.slot == slot }) { item in chip(item) }
+                    }.padding(.vertical, 4)
                 }
             }
-            Section("Code") {
+            Section(styled: "Code") {
                 Picker("How many people can use it", selection: $uses) { ForEach([1, 5, 10, 50, 100, 1000], id: \.self) { Text("\($0)").tag($0) } }
                 Picker("Expires", selection: $days) { Text("Never").tag(0); Text("In 7 days").tag(7); Text("In 30 days").tag(30); Text("In 90 days").tag(90) }
                 TextField("Note for you (optional)", text: $label)
@@ -1013,14 +1006,14 @@ struct PetCodesView: View {
                 if !message.isEmpty { Text(message).font(.caption).foregroundStyle(.orange) }
             }
             if let made {
-                Section("New code") {
+                Section(styled: "New code") {
                     Text(made.code).font(.system(.title2, design: .monospaced, weight: .bold)).textSelection(.enabled).accessibilityIdentifier("code.new")
                     Text(made.itemNames).font(.caption).foregroundStyle(Palette.muted)
                     Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = made.code }.rowAction()
                     ShareLink(item: made.shareText) { Label("Share code", systemImage: "square.and.arrow.up") }
                 }
             }
-            Section("Your codes") {
+            Section(styled: "Your codes") {
                 if codes.isEmpty { Text("No codes yet.").font(.caption).foregroundStyle(Palette.muted) }
                 ForEach(codes) { code in
                     VStack(alignment: .leading, spacing: 4) {
@@ -1038,6 +1031,24 @@ struct PetCodesView: View {
         }
         .detailStyle("Gift codes")
         .task { await load() }
+    }
+
+    /// A compact tap-to-choose chip for one wardrobe item.
+    private func chip(_ item: PetItem) -> some View {
+        let chosen = selected.contains(item.id)
+        return Button { if chosen { selected.remove(item.id) } else if selected.count < 12 { selected.insert(item.id) } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: chosen ? "checkmark.circle.fill" : "circle").font(.footnote)
+                Text(item.name).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                if item.unlock == .code { Image(systemName: "sparkles").font(.caption2).foregroundStyle(PetPalette.goldDark) }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(chosen ? Color.white : Palette.ink)
+            .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 40)
+            .background(chosen ? Palette.teal : Palette.mint.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }.buttonStyle(.plain).accessibilityIdentifier("code.item." + item.id)
+            .accessibilityAddTraits(chosen ? .isSelected : [])
     }
 
     private func load() async {

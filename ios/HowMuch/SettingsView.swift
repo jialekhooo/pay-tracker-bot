@@ -263,14 +263,14 @@ struct PaySettingsView: View {
     @State private var event = ""
     @State private var eventRate = ""
     var body: some View {
-        Form {
-            Section("Pay defaults") {
+        AppForm {
+            Section(styled: "Pay defaults") {
                 LabeledContent("Rate / hour") { TextField("Rate", text: $rate).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 LabeledContent("Currency") { TextField("SGD", text: $currency).textInputAutocapitalization(.characters).autocorrectionDisabled().multilineTextAlignment(.trailing) }
                 Toggle("Overtime", isOn: $overtime)
                 if overtime { TextField("After hours", text: $threshold).keyboardType(.decimalPad); TextField("Multiplier", text: $multiplier).keyboardType(.decimalPad) }
             }
-            Section("Default break") { TextField("Minutes", text: $breaks).keyboardType(.numberPad); Toggle("Paid break", isOn: $paidBreak) }
+            Section(styled: "Default break") { TextField("Minutes", text: $breaks).keyboardType(.numberPad); Toggle("Paid break", isOn: $paidBreak) }
             Button("Save defaults") { save() }.rowAction()
             Section {
                 ForEach(store.data.settings.eventRates.keys.sorted(), id: \.self) { key in
@@ -282,7 +282,7 @@ struct PaySettingsView: View {
                     guard !event.trimmingCharacters(in: .whitespaces).isEmpty, let amount = ShiftCSV.decimal(eventRate) else { store.error = "Enter an event name and a valid rate."; return }
                     if store.updatePreferences({ $0.eventRates[event.trimmingCharacters(in: .whitespaces).lowercased()] = amount }) { event = ""; eventRate = "" }
                 }.rowAction()
-            } header: { Text("Event rates") } footer: { Text("Defaults apply to new shifts. Existing payouts retain their saved rules.") }
+            } header: { FormHeader("Event rates") } footer: { Text("Defaults apply to new shifts. Existing payouts retain their saved rules.").formFootnote() }
         }.detailStyle("Pay & breaks").onAppear {
             rate = "\(store.data.rules.rate)"; currency = store.data.rules.currency; threshold = "\(store.data.rules.overtimeAfter ?? 8)"
             multiplier = "\(store.data.rules.overtimeMultiplier)"; overtime = store.data.rules.overtimeAfter != nil
@@ -322,20 +322,20 @@ struct DataToolsView: View {
     @State private var pending: TrackerData?
     @State private var message: String?
     var body: some View {
-        Form {
-            Section("Import & export") {
+        AppForm {
+            Section(styled: "Import & export") {
                 Button("Import Telegram CSV", systemImage: "square.and.arrow.down") { archiveImport = false; importing = true }.rowAction()
                 Button("Export shifts as CSV", systemImage: "tablecells") { document = TextFile(ShiftCSV.encode(store.data.shifts)); exportType = .commaSeparatedText; exporting = true }.rowAction()
                 NavigationLink("Export calendar (.ics)") { CalendarSettingsView() }
                 Text("Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.caption).foregroundStyle(Palette.muted)
             }
             if store.hasLegacyImport {
-                Section("Earlier iPhone records") {
+                Section(styled: "Earlier iPhone records") {
                     Button("Import earlier iPhone records") { legacyImport = true }.rowAction()
                     Text("Move the unassigned records from the earlier version of HowMuch into this Apple account. This does not connect to Telegram or alter its data.").font(.caption).foregroundStyle(Palette.muted)
                 }
             }
-            Section("Full backups") {
+            Section(styled: "Full backups") {
                 Button("Export full archive", systemImage: "externaldrive") {
                     do { let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; document = TextFile(String(decoding: try encoder.encode(store.data), as: UTF8.self)); exportType = .json; exporting = true }
                     catch { store.error = error.localizedDescription }
@@ -405,9 +405,9 @@ struct SavedPayerEditor: View {
     @State private var error = ""
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Company") { TextField("Company display name", text: $name).accessibilityIdentifier("payers.name") }
-                Section("Bank-transfer payer names") {
+            AppForm {
+                Section(styled: "Company") { TextField("Company display name", text: $name).accessibilityIdentifier("payers.name") }
+                Section(styled: "Bank-transfer payer names") {
                     TextField("Exact payer name · one per line", text: $bankNames, axis: .vertical).lineLimit(3...8).textInputAutocapitalization(.characters).autocorrectionDisabled().accessibilityIdentifier("payers.bankNames")
                     Text("Enter each exact name shown after ‘From’ in your DBS alert, one per line. These names are used for matching; the company display name is for you.").font(.caption).foregroundStyle(Palette.muted)
                 }

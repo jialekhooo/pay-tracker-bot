@@ -114,14 +114,14 @@ struct AccountSettingsView: View {
     @State private var deleteConfirm = false
     @State private var deleting = false
     var body: some View {
-        Form {
-            Section("Your account") {
+        AppForm {
+            Section(styled: "Your account") {
                 Label("Signed in with Apple", systemImage: "apple.logo")
                 if let email = auth.account?.email { LabeledContent("Email", value: email) }
                 LabeledContent("Account", value: auth.account?.id ?? "")
                 Text("Each Apple sign-in owns a separate HowMuch account. Your account records sync through the independent iOS service.").font(.caption).foregroundStyle(Palette.muted)
             }
-            Section("Sync") {
+            Section(styled: "Sync") {
                 Text(store.syncMessage).font(.subheadline)
                 Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { Task { await auth.synchronize() } }.rowAction().disabled(auth.isDemo)
                 Text("Offline edits stay in this account’s cache on your phone. Shared edits are kept for review instead of overwriting another device.").font(.caption).foregroundStyle(Palette.muted)
@@ -130,7 +130,7 @@ struct AccountSettingsView: View {
                 Button("Sign out", role: .destructive) { signOut = true }.rowAction().accessibilityIdentifier("account.signOut")
                 Button("Sign out of all devices", role: .destructive) { signOutEverywhere = true }.rowAction().disabled(auth.isDemo).accessibilityIdentifier("account.signOutAll")
                 Button("Delete account", role: .destructive) { deleteConfirm = true }.rowAction().disabled(auth.isDemo)
-            } footer: { Text("Signing out keeps your account’s cache separate from other users. Deleting your account removes its cloud records, devices and payment connections, and this phone’s account cache.") }
+            } footer: { Text("Signing out keeps your account’s cache separate from other users. Deleting your account removes its cloud records, devices and payment connections, and this phone’s account cache.").formFootnote() }
         }.detailStyle("Account & sync")
             .confirmationDialog("Sign out on every iPhone using this account? Use this if a phone was lost or stolen.", isPresented: $signOutEverywhere, titleVisibility: .visible) {
                 Button("Sign out everywhere", role: .destructive) { Task { await auth.signOutEverywhere() } }
