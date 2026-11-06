@@ -182,3 +182,5 @@ Build 49: Fixes from the full app review (sync, locked-phone logging, receipts, 
 Build 50: One type and button scale across the app: rounded headings, consistent amount sizes, chevrons, settings rows and text buttons, and bank setup buttons sized like the rest.
 
 Build 51: Penny no longer celebrates old progress on a new iPhone, nested settings merge across devices, correct coins-needed message, availability range matches the day grid, and a Developer badge with developer-only Terminal and Holographic skins and every skin unlocked.
+
+Build 52: Connect Gmail with a Google app password (no Google verification needed), and each Connect button opens its own form.
