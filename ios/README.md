@@ -186,3 +186,5 @@ Build 51: Penny no longer celebrates old progress on a new iPhone, nested settin
 Build 52: Connect Gmail with a Google app password (no Google verification needed), and each Connect button opens its own form.
 
 Build 53: Penny gift codes (developers make codes, anyone redeems them) with five code-only specials, and developer accounts own the whole wardrobe.
+
+Build 54: Consistent sizing on every page: one text size, compact rows, matching section titles and notes on form and card pages.
