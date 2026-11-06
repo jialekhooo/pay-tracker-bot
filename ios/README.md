@@ -192,3 +192,5 @@ Build 54: Consistent sizing on every page: one text size, compact rows, matching
 Build 55: Job messages with a time for each day ("19th: 3.30pm - 6pm", "21,22nd: 9am - 6pm") are read correctly, plus the venue after a "|".
 
 Build 56: Job messages with the event name on its own first line ("Nike Pop-up", "Crew wanted for Nike Pop-up") now fill in the event name.
+
+Build 57: Penny has 30 new items across every category: hats, glasses, neckwear, scenes and skins.
