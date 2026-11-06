@@ -184,3 +184,5 @@ Build 50: One type and button scale across the app: rounded headings, consistent
 Build 51: Penny no longer celebrates old progress on a new iPhone, nested settings merge across devices, correct coins-needed message, availability range matches the day grid, and a Developer badge with developer-only Terminal and Holographic skins and every skin unlocked.
 
 Build 52: Connect Gmail with a Google app password (no Google verification needed), and each Connect button opens its own form.
+
+Build 53: Penny gift codes (developers make codes, anyone redeems them) with five code-only specials, and developer accounts own the whole wardrobe.
