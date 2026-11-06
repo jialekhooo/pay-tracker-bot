@@ -457,6 +457,16 @@ final class HowMuchUITests: XCTestCase {
         let holo = app.buttons["pet.item.holo"]; holo.tap()
         XCTAssertTrue(holo.staticTexts["Wearing"].waitForExistence(timeout: 5))
         attach("Penny in the Holographic skin", app: app)
+        // Every hat, pair of glasses, neckwear and scene is unlocked too, with no coins spent.
+        app.buttons["Hats"].firstMatch.tap()
+        let crown = app.buttons["pet.item.royal-crown"]
+        reveal(crown, in: app); crown.tap()
+        XCTAssertTrue(crown.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        app.buttons["Scenes"].firstMatch.tap()
+        let confetti = app.buttons["pet.item.confetti"]
+        reveal(confetti, in: app); confetti.tap()
+        XCTAssertTrue(confetti.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        attach("Developer wardrobe, all unlocked", app: app)
         let top = app.textFields["pet.name"]; reveal(top, in: app)
         attach("Penny holographic at the top", app: app)
     }

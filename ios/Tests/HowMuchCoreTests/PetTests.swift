@@ -209,14 +209,22 @@ final class PetTests: XCTestCase {
         XCTAssertFalse(everyone.achievements.contains { $0.id == "developer" })
         XCTAssertEqual(developer.coinsEarned, everyone.coinsEarned + PetProgress.coinsPerAchievement)
         let closet = PetCloset()
-        for skin in PetItem.catalog.filter({ $0.slot == .skin }) {
-            XCTAssertTrue(closet.owns(skin, developer), skin.id)
-            XCTAssertFalse(closet.locked(skin, developer), skin.id)
+        for item in PetItem.catalog {
+            XCTAssertTrue(closet.owns(item, developer), item.id)
+            XCTAssertFalse(closet.locked(item, developer), item.id)
         }
         XCTAssertFalse(closet.owns(PetItem.named("terminal")!, everyone))
         XCTAssertTrue(PetItem.named("holo")!.exclusive)
-        XCTAssertFalse(closet.owns(PetItem.named("party-hat")!, developer)) // hats are still bought
+        XCTAssertFalse(closet.owns(PetItem.named("party-hat")!, everyone)) // everyone else still buys hats
+        var dressed = PetCloset()
+        for id in ["royal-crown", "star-glasses", "medal", "confetti"] { try dressed.toggle(PetItem.named(id)!, developer) }
+        XCTAssertEqual(petSlots(dressed, developer), ["hat": "royal-crown", "face": "star-glasses", "neck": "medal", "background": "confetti"])
+        XCTAssertEqual(dressed.spent, 0)
         var wearing = PetCloset(); try wearing.toggle(PetItem.named("midnight")!, developer)
         XCTAssertEqual(wearing.wearing(.skin, developer)?.id, "midnight")
+    }
+
+    private func petSlots(_ closet: PetCloset, _ pet: PetProgress) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: [PetSlot.hat, .face, .neck, .background].compactMap { slot in closet.wearing(slot, pet).map { (slot.rawValue, $0.id) } })
     }
 }

@@ -60,7 +60,7 @@ public struct PetProgress: Equatable, Sendable {
     public let overdueByCurrency: [String: Decimal]
     public let coinsEarned: Int
     public let achievements: [PetAchievement]
-    /// One of the people building HowMuch: every skin is theirs.
+    /// One of the people building HowMuch: every item in the wardrobe is theirs.
     public let developer: Bool
     /// This week's missions. The rewards are the same coins the rules above pay out, shown as goals.
     public let missions: [PetMission]
@@ -300,7 +300,8 @@ public struct PetCloset: Codable, Equatable, Sendable {
     public func balance(_ pet: PetProgress) -> Int { pet.coinsEarned - spent }
 
     public func owns(_ item: PetItem, _ pet: PetProgress) -> Bool {
-        if pet.developer && item.slot == .skin { return true }
+        // Developers have the whole wardrobe: every hat, pair of glasses, neckwear, scene and skin.
+        if pet.developer { return true }
         switch item.unlock {
         case .free: return true
         case .coins: return bought.contains(item.id)
