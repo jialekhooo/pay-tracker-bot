@@ -161,6 +161,12 @@ private enum PetCodesUITestFixture {
             codes.insert(code, at: 0)
             return try JSONSerialization.data(withJSONObject: code)
         }
+        if path.hasPrefix("/v1/pet/codes/"), request.httpMethod == "DELETE" {
+            let target = String(path.dropFirst("/v1/pet/codes/".count)).uppercased()
+            guard let index = codes.firstIndex(where: { ($0["code"] as? String) == target }) else { throw AccountHTTPError(status: 404, message: "Code not found.") }
+            codes[index]["disabled"] = true
+            return try JSONSerialization.data(withJSONObject: codes[index])
+        }
         return try JSONSerialization.data(withJSONObject: ["codes": codes])
     }
 }

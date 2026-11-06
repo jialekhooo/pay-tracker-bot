@@ -1195,14 +1195,22 @@ struct PetCodesView: View {
                 ForEach(codes) { code in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(code.code).font(.system(.subheadline, design: .monospaced, weight: .semibold)).textSelection(.enabled)
+                            // No text selection here: its press-and-drag gesture swallows the swipe that revokes a code.
+                            Text(code.code).font(.system(.subheadline, design: .monospaced, weight: .semibold))
                             Spacer()
-                            Text(code.disabled ? "Off" : "\(code.uses)/\(code.maxUses) used").font(.caption.weight(.semibold)).foregroundStyle(code.disabled ? Palette.muted : Palette.teal)
+                            Text(code.disabled ? "Revoked" : "\(code.uses)/\(code.maxUses) used").font(.caption.weight(.semibold))
+                                .foregroundStyle(code.disabled ? Palette.muted : Palette.teal).accessibilityIdentifier("code.status." + code.code)
                         }
                         Text([code.label, code.itemNames].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted)
                         if code.expires > 0 { Text("Expires " + Date(timeIntervalSince1970: TimeInterval(code.expires)).formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(Palette.muted) }
                     }
-                    .swipeActions { if !code.disabled { Button("Turn off", role: .destructive) { Task { await turnOff(code) } } } }
+                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    .accessibilityElement(children: .contain).accessibilityIdentifier("code.row." + code.code)
+                    .contextMenu { Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = code.code } }
+                    // Revoking stops new redemptions; people who already redeemed keep their items.
+                    .swipeActions(allowsFullSwipe: false) {
+                        if !code.disabled { Button("Revoke", systemImage: "nosign", role: .destructive) { Task { await turnOff(code) } } }
+                    }
                 }
             }
         }
@@ -1245,7 +1253,12 @@ struct PetCodesView: View {
     }
 
     private func turnOff(_ code: PetGiftCode) async {
-        do { _ = try await auth.api.request("/v1/pet/codes/" + code.code, method: "DELETE"); await load() }
+        do {
+            _ = try await auth.api.request("/v1/pet/codes/" + code.code, method: "DELETE")
+            // A revoked code must not stay on the New code card, ready to copy or share.
+            if made?.code == code.code { made = nil }
+            await load()
+        }
         catch { message = error.localizedDescription }
     }
 }

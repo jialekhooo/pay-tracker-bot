@@ -506,6 +506,16 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(dev.staticTexts["code.new"].waitForExistence(timeout: 5))
         XCTAssertEqual(dev.staticTexts["code.new"].label, "STARS2026")
         attach("Developer made a gift code", app: dev)
+        // Swiping a code in Your codes revokes it.
+        let row = dev.descendants(matching: .any).matching(identifier: "code.row.STARS2026").firstMatch
+        reveal(row, in: dev); XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.swipeLeft()
+        let revoke = dev.buttons["Revoke"]
+        XCTAssertTrue(revoke.waitForExistence(timeout: 5)); revoke.tap()
+        XCTAssertTrue(dev.staticTexts["code.status.STARS2026"].waitForExistence(timeout: 5))
+        XCTAssertEqual(dev.staticTexts["code.status.STARS2026"].label, "Revoked")
+        XCTAssertFalse(dev.staticTexts["code.new"].exists)  // nothing left to share
+        attach("Developer revoked a gift code", app: dev)
     }
     @MainActor
     func testPetCardOpensItsPage() {
