@@ -188,3 +188,5 @@ Build 52: Connect Gmail with a Google app password (no Google verification neede
 Build 53: Penny gift codes (developers make codes, anyone redeems them) with five code-only specials, and developer accounts own the whole wardrobe.
 
 Build 54: Consistent sizing on every page: one text size, compact rows, matching section titles and notes on form and card pages.
+
+Build 55: Job messages with a time for each day ("19th: 3.30pm - 6pm", "21,22nd: 9am - 6pm") are read correctly, plus the venue after a "|".
