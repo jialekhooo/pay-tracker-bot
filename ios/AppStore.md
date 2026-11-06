@@ -156,3 +156,12 @@ Already answered in the build (`ITSAppUsesNonExemptEncryption = NO`): only stand
 > • A cleaner Settings page, a Profile with your work stats, and many fixes to sync, pay maths and reminders.
 
 **Screenshots for 1.1**: the 1.0 set still shows the current screens except Overview, which now has Penny at the top. Retake `01-overview.png` if you want it exact; everything the old set shows is still in the app.
+
+## Next update (1.1.1): Gmail with an app password
+
+Version 1.1 went to review with **build 51**, which has no Gmail connection (Gmail users forward bank emails to their private address). The review notes say so. The server already supports Gmail app passwords (`/payment-detection/gmail-imap/connect`); builds 52 and later show **Connect Gmail**.
+
+Build 52 is marked version 1.1, so it can't be submitted after 1.1 is approved. To ship it:
+1. Set `MARKETING_VERSION` to 1.1.1 and bump the build number, then upload.
+2. In App Store Connect, add version 1.1.1, attach that build and set What's New to: "Connect Gmail with a Google app password to find your bank alerts automatically."
+3. Replace the review notes' Email forwarding and Mailbox connection lines with: "Mailbox connection: Gmail connects with a Google app password (2-Step Verification required), iCloud Mail with an Apple app-specific password, and Outlook with Microsoft sign-in. HowMuch opens the inbox read-only and only looks for DBS bank alerts; matches always need the user's confirmation before a job is marked paid."
