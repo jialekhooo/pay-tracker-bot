@@ -59,6 +59,10 @@ struct PetSkin {
             // Developer only: a dark screen with green text.
             base = rgb(0.10, 0.13, 0.13); light = rgb(0.24, 0.30, 0.29); deep = rgb(0.05, 0.07, 0.07); outline = rgb(0.10, 0.75, 0.40)
             ink = rgb(0.30, 1, 0.55); badge = ">"
+        case "galaxy":
+            // Gift-code special: deep space with stars.
+            light = rgb(0.55, 0.45, 0.95); deep = rgb(0.10, 0.06, 0.25); outline = rgb(0.04, 0.02, 0.12)
+            ink = .white; rows = PetSkin.galaxyRows; sparkles = true
         case "holo":
             // Developer only: shimmering like a hologram sticker.
             light = .white; deep = rgb(0.45, 0.55, 0.85); outline = rgb(0.20, 0.25, 0.45); rows = PetSkin.holoRows; sparkles = true
@@ -66,6 +70,10 @@ struct PetSkin {
         }
     }
 
+    static let galaxyRows: [Color] = [
+        Color(red: 0.12, green: 0.08, blue: 0.32), Color(red: 0.22, green: 0.12, blue: 0.48), Color(red: 0.38, green: 0.20, blue: 0.62),
+        Color(red: 0.30, green: 0.22, blue: 0.66), Color(red: 0.16, green: 0.20, blue: 0.52), Color(red: 0.10, green: 0.10, blue: 0.34),
+    ]
     static let holoRows: [Color] = [
         Color(red: 0.75, green: 0.95, blue: 1), Color(red: 0.80, green: 0.80, blue: 1), Color(red: 0.95, green: 0.80, blue: 1),
         Color(red: 1, green: 0.85, blue: 0.92), Color(red: 0.85, green: 1, blue: 0.92), Color(red: 0.75, green: 0.90, blue: 1),
@@ -304,6 +312,13 @@ enum PetPixels {
             case "royal-crown": stamp(["y.y.y.y", "yoyoyoy", "yyyryyy", "YYYYYYY"], x: cx - 3, y: top - 3, p)
             case "round-glasses": stamp(["ooo.ooo", "o.ooo.o", "ooo.ooo"], x: lx - 1, y: eyeY - 1, p)
             case "sunglasses": stamp(["oooooooo", "okkookko", ".kk..kk."], x: lx - 2, y: eyeY - 1, p)
+            case "halo": stamp([".yyyyy.", "y.....y", ".yyyyy."], x: cx - 3, y: top - 5, p)
+            case "heart-glasses": stamp(["r.r.r.r", "rrr.rrr", ".r...r."], x: lx - 1, y: eyeY - 1, p)
+            case "lei":
+                let colors = [PetPalette.pink, PetPalette.gold, PetPalette.flower, PetPalette.red]
+                for (i, x) in ((cx - Int(s.rx) + 1)...(cx + Int(s.rx) - 1)).enumerated() where neckY < grid && canvas[neckY][x] != nil {
+                    put(x, neckY, colors[i % colors.count])
+                }
             case "star-glasses": stamp([".p...p.", "ppp.ppp", ".p...p."], x: lx - 1, y: eyeY - 1, p)
             case "scarf":
                 for x in (cx - Int(s.rx) + 1)...(cx + Int(s.rx) - 1) where neckY + 1 < grid && canvas[neckY][x] != nil {
@@ -359,6 +374,17 @@ struct PetScene: View {
             ZStack(alignment: .top) {
                 LinearGradient(colors: sky, startPoint: .top, endPoint: .bottom)
                 switch item?.id {
+                case "fireworks":
+                    ForEach(0..<5, id: \.self) { i in
+                        let colors: [Color] = [.pink, .yellow, .cyan, .orange, .green]
+                        let x = geo.size.width * CGFloat([18, 42, 66, 84, 30][i]) / 100, y = ground * CGFloat([22, 12, 26, 14, 48][i]) / 100
+                        ForEach(0..<8, id: \.self) { ray in
+                            let angle = Double(ray) * .pi / 4
+                            Rectangle().fill(colors[i]).frame(width: 3, height: 3)
+                                .position(x: x + CGFloat(cos(angle)) * 9, y: y + CGFloat(sin(angle)) * 9)
+                        }
+                        Rectangle().fill(.white).frame(width: 3, height: 3).position(x: x, y: y)
+                    }
                 case "night-sky":
                     ForEach(0..<14, id: \.self) { i in
                         Rectangle().fill(.white.opacity(0.85)).frame(width: 3, height: 3)
@@ -394,6 +420,7 @@ struct PetScene: View {
         switch item?.id {
         case "sunset": [Color(red: 0.6, green: 0.45, blue: 0.75), Color(red: 1, green: 0.6, blue: 0.55), Color(red: 1, green: 0.8, blue: 0.5)]
         case "night-sky": [Color(red: 0.08, green: 0.10, blue: 0.25), Color(red: 0.20, green: 0.22, blue: 0.42)]
+        case "fireworks": [Color(red: 0.05, green: 0.04, blue: 0.18), Color(red: 0.16, green: 0.10, blue: 0.34)]
         case "beach": [Color(red: 0.55, green: 0.82, blue: 0.97), Color(red: 0.80, green: 0.93, blue: 0.99)]
         case "confetti": [Color(red: 1, green: 0.97, blue: 0.9), Color(red: 1, green: 0.99, blue: 0.95)]
         default: [Palette.mint, Color(red: 0.95, green: 0.98, blue: 0.96)]
@@ -404,6 +431,7 @@ struct PetScene: View {
         switch item?.id {
         case "sunset": Color(red: 0.55, green: 0.42, blue: 0.5)
         case "night-sky": Color(red: 0.18, green: 0.30, blue: 0.28)
+        case "fireworks": Color(red: 0.12, green: 0.14, blue: 0.24)
         case "beach": Color(red: 0.96, green: 0.86, blue: 0.62)
         case "confetti": Color(red: 0.98, green: 0.85, blue: 0.75)
         default: Color(red: 0.72, green: 0.86, blue: 0.80)
@@ -647,6 +675,10 @@ struct EvolutionSheet: View {
 /// Penny's page: stats, this week's missions, the shop and wardrobe, badges and the rules.
 struct PetDetailView: View {
     @EnvironmentObject private var store: TrackerStore
+    @EnvironmentObject private var auth: AppleAccountStore
+    @State private var redeeming = false
+    @State private var giftCode = ""
+    @State private var checkingCode = false
     @State private var name = ""
     @State private var slot: PetSlot = .hat
     @State private var buying: PetItem?
@@ -668,6 +700,7 @@ struct PetDetailView: View {
                 statsCard(pet)
                 missions(pet)
                 shop(pet, closet)
+                codes
                 SectionHeading(title: "Badges", detail: "+\(PetProgress.coinsPerAchievement) coins each")
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                     ForEach(pet.achievements) { badge($0) }
@@ -685,6 +718,42 @@ struct PetDetailView: View {
             if let item = buying { Button("Buy \(item.name)") { buy(item, pet) } }
         }
         .alert(notice ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) { Button("OK", role: .cancel) {} }
+        .alert("Redeem a gift code", isPresented: $redeeming) {
+            TextField("PENNY-XXXX-XXXX", text: $giftCode).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                .accessibilityIdentifier("pet.code.field")
+            Button("Redeem") { Task { await redeem() } }
+            Button("Cancel", role: .cancel) { giftCode = "" }
+        } message: { Text("Codes unlock special outfits, skins and scenes for \(displayName).") }
+    }
+
+    /// Gift codes: anyone can redeem one; developers can also make them.
+    private var codes: some View {
+        Card {
+            Button { giftCode = ""; redeeming = true } label: {
+                Label(checkingCode ? "Checking code…" : "Redeem a gift code", systemImage: "gift.fill")
+            }.rowAction().disabled(checkingCode).accessibilityIdentifier("pet.code.redeem")
+            if store.developer {
+                NavigationLink { PetCodesView() } label: {
+                    HStack { Label("Make gift codes", systemImage: "wand.and.stars"); Spacer(); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.teal).frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("pet.code.make")
+            }
+        }
+    }
+
+    private func redeem() async {
+        let code = giftCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty, !checkingCode else { return }
+        checkingCode = true; defer { checkingCode = false }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["code": code])
+            let result = try JSONDecoder().decode(RedeemedCode.self, from: await auth.api.request("/v1/pet/redeem", method: "POST", body: body))
+            store.setPetUnlocks(result.unlocked)
+            let names = result.items.compactMap { PetItem.named($0)?.name }
+            notice = names.isEmpty ? "Code redeemed." : "Unlocked " + ListFormatter.localizedString(byJoining: names) + (names.count > 1 ? "! Find them in the wardrobe." : "! Find it in the wardrobe.")
+            if let first = result.items.compactMap({ PetItem.named($0) }).first { slot = first.slot }
+            purchased += 1; giftCode = ""
+        } catch { notice = error.localizedDescription }
     }
 
     private func stage(_ pet: PetProgress, _ closet: PetCloset) -> some View {
@@ -825,6 +894,7 @@ struct PetDetailView: View {
             let balance = closet.balance(pet)
             if balance >= price { buying = item }
             else { notice = "\(item.name) costs \(price) coins. Earn \(price - balance) more by working shifts and finishing missions." }
+        case .code: notice = "\(item.name) is a gift-code special. Redeem a code below to unlock it."
         case .achievement: notice = "\(item.name) comes with the \(item.requirement.replacingOccurrences(of: "Badge: ", with: "")) badge."
         case .free: break
         }
@@ -880,5 +950,114 @@ struct PetDetailView: View {
             Image(systemName: symbol).foregroundStyle(Palette.teal).frame(width: 22)
             Text(text).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+private struct RedeemedCode: Decodable { let items: [String]; let unlocked: [String] }
+
+struct PetGiftCode: Decodable, Identifiable {
+    let code: String
+    let items: [String]
+    let label: String
+    let maxUses: Int
+    let uses: Int
+    let expires: Int
+    let disabled: Bool
+    var id: String { code }
+    var itemNames: String { ListFormatter.localizedString(byJoining: items.map { PetItem.named($0)?.name ?? $0 }) }
+    var shareText: String { "Use the code \(code) in HowMuch (Penny → Redeem a gift code) to unlock \(itemNames)." }
+}
+private struct PetGiftCodes: Decodable { let codes: [PetGiftCode] }
+
+/// Developers only: make codes that unlock wardrobe items, then share them.
+struct PetCodesView: View {
+    @EnvironmentObject private var auth: AppleAccountStore
+    @State private var selected: Set<String> = []
+    @State private var uses = 1
+    @State private var days = 0
+    @State private var label = ""
+    @State private var custom = ""
+    @State private var made: PetGiftCode?
+    @State private var codes: [PetGiftCode] = []
+    @State private var message = ""
+    @State private var busy = false
+
+    var body: some View {
+        Form {
+            Section {
+                Text("Choose up to 12 items. Specials (Golden halo, Heart glasses, Flower lei, Fireworks, Galaxy) can only be unlocked with a code.")
+                    .font(.caption).foregroundStyle(Palette.muted)
+            } header: { Text("What the code unlocks · \(selected.count) chosen") }
+            ForEach(PetSlot.allCases, id: \.self) { slot in
+                Section(slot.title) {
+                    ForEach(PetItem.catalog.filter { $0.slot == slot }) { item in
+                        Button { if selected.contains(item.id) { selected.remove(item.id) } else if selected.count < 12 { selected.insert(item.id) } } label: {
+                            HStack {
+                                Text(item.name).foregroundStyle(Palette.ink)
+                                if item.unlock == .code { Text("Special").font(.caption2.weight(.bold)).foregroundStyle(PetPalette.goldDark) }
+                                Spacer()
+                                Image(systemName: selected.contains(item.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(selected.contains(item.id) ? Palette.teal : Palette.muted)
+                            }.frame(minHeight: 44).contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityIdentifier("code.item." + item.id)
+                    }
+                }
+            }
+            Section("Code") {
+                Picker("How many people can use it", selection: $uses) { ForEach([1, 5, 10, 50, 100, 1000], id: \.self) { Text("\($0)").tag($0) } }
+                Picker("Expires", selection: $days) { Text("Never").tag(0); Text("In 7 days").tag(7); Text("In 30 days").tag(30); Text("In 90 days").tag(90) }
+                TextField("Note for you (optional)", text: $label)
+                TextField("Custom code, e.g. LAUNCH2026 (optional)", text: $custom).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    .accessibilityIdentifier("code.custom")
+                Button(busy ? "Making…" : "Make code") { Task { await make() } }.primaryButton().disabled(busy || selected.isEmpty)
+                    .listRowBackground(Color.clear).listRowInsets(EdgeInsets()).accessibilityIdentifier("code.make")
+                if !message.isEmpty { Text(message).font(.caption).foregroundStyle(.orange) }
+            }
+            if let made {
+                Section("New code") {
+                    Text(made.code).font(.system(.title2, design: .monospaced, weight: .bold)).textSelection(.enabled).accessibilityIdentifier("code.new")
+                    Text(made.itemNames).font(.caption).foregroundStyle(Palette.muted)
+                    Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = made.code }.rowAction()
+                    ShareLink(item: made.shareText) { Label("Share code", systemImage: "square.and.arrow.up") }
+                }
+            }
+            Section("Your codes") {
+                if codes.isEmpty { Text("No codes yet.").font(.caption).foregroundStyle(Palette.muted) }
+                ForEach(codes) { code in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(code.code).font(.system(.subheadline, design: .monospaced, weight: .semibold)).textSelection(.enabled)
+                            Spacer()
+                            Text(code.disabled ? "Off" : "\(code.uses)/\(code.maxUses) used").font(.caption.weight(.semibold)).foregroundStyle(code.disabled ? Palette.muted : Palette.teal)
+                        }
+                        Text([code.label, code.itemNames].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted)
+                        if code.expires > 0 { Text("Expires " + Date(timeIntervalSince1970: TimeInterval(code.expires)).formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(Palette.muted) }
+                    }
+                    .swipeActions { if !code.disabled { Button("Turn off", role: .destructive) { Task { await turnOff(code) } } } }
+                }
+            }
+        }
+        .detailStyle("Gift codes")
+        .task { await load() }
+    }
+
+    private func load() async {
+        do { codes = try JSONDecoder().decode(PetGiftCodes.self, from: await auth.api.request("/v1/pet/codes")).codes }
+        catch { message = error.localizedDescription }
+    }
+
+    private func make() async {
+        busy = true; defer { busy = false }; message = ""
+        var payload: [String: Any] = ["items": PetItem.catalog.map(\.id).filter(selected.contains), "max_uses": uses, "days": days, "label": label]
+        let trimmed = custom.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { payload["code"] = trimmed }
+        do {
+            made = try JSONDecoder().decode(PetGiftCode.self, from: await auth.api.request("/v1/pet/codes", method: "POST", body: JSONSerialization.data(withJSONObject: payload)))
+            custom = ""; await load()
+        } catch { message = error.localizedDescription }
+    }
+
+    private func turnOff(_ code: PetGiftCode) async {
+        do { _ = try await auth.api.request("/v1/pet/codes/" + code.code, method: "DELETE"); await load() }
+        catch { message = error.localizedDescription }
     }
 }

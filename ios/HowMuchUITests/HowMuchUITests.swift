@@ -471,6 +471,43 @@ final class HowMuchUITests: XCTestCase {
         attach("Penny holographic at the top", app: app)
     }
     @MainActor
+    func testGiftCodesUnlockSpecialItemsAndDevelopersMakeThem() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-pet-codes"]; app.launch()
+        let card = app.buttons["pet.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()
+        XCTAssertFalse(app.buttons["pet.item.halo"].exists) // specials are hidden until unlocked
+        XCTAssertFalse(app.buttons["pet.code.make"].exists)  // only developers make codes
+        let redeem = app.buttons["pet.code.redeem"]
+        reveal(redeem, in: app); redeem.tap()
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5)); field.typeText("launch2026")
+        app.alerts.buttons["Redeem"].tap()
+        _ = app.alerts.firstMatch.waitForExistence(timeout: 5)
+        attach("Gift code result", app: app)
+        XCTAssertTrue(app.alerts.staticTexts["Unlocked Golden halo and Fireworks! Find them in the wardrobe."].waitForExistence(timeout: 5))
+        app.alerts.buttons["OK"].tap()
+        let halo = app.buttons["pet.item.halo"]
+        reveal(halo, in: app); halo.tap()
+        XCTAssertTrue(halo.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        attach("Golden halo unlocked with a gift code", app: app)
+        app.terminate()
+
+        let dev = XCUIApplication(); dev.launchArguments = ["--preview", "--ui-test-pet-codes", "--ui-test-developer"]; dev.launch()
+        XCTAssertTrue(dev.buttons["pet.card"].waitForExistence(timeout: 10)); dev.buttons["pet.card"].tap()
+        let make = dev.buttons["pet.code.make"]
+        reveal(make, in: dev); make.tap()
+        let galaxy = dev.buttons["code.item.galaxy"]
+        for _ in 0..<12 where !galaxy.isHittable { dev.swipeUp() }
+        galaxy.tap()
+        let custom = dev.textFields["code.custom"]
+        reveal(custom, in: dev); custom.tap(); custom.typeText("STARS2026\n")
+        let makeCode = dev.buttons["code.make"]
+        reveal(makeCode, in: dev); makeCode.tap()
+        XCTAssertTrue(dev.staticTexts["code.new"].waitForExistence(timeout: 5))
+        XCTAssertEqual(dev.staticTexts["code.new"].label, "STARS2026")
+        attach("Developer made a gift code", app: dev)
+    }
+    @MainActor
     func testPetCardOpensItsPage() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         let card = app.buttons["pet.card"]

@@ -58,7 +58,7 @@ final class AppleAccountStore: ObservableObject {
             account = AccountIdentity(id: id, email: nil, displayName: "Preview", appleUserID: "ui-test")
             tracker = TrackerStore(accountID: id, suppressNotifications: true)
             if CommandLine.arguments.contains("--ui-test-widgets") { tracker?.activateWidgets() }
-            if (CommandLine.arguments.contains("--ui-test-payments") || CommandLine.arguments.contains("--ui-test-travel") || CommandLine.arguments.contains("--ui-test-receipts")), let account {
+            if (CommandLine.arguments.contains("--ui-test-payments") || CommandLine.arguments.contains("--ui-test-travel") || CommandLine.arguments.contains("--ui-test-receipts") || CommandLine.arguments.contains("--ui-test-pet-codes")), let account {
                 api.setSession(AccountSession(accessToken: "synthetic-ui-test", refreshToken: "unused-ui-test", expiresAt: Date().timeIntervalSince1970 + 86400, account: account))
             }
             PushCenter.shared.currentAccountID = id
@@ -231,7 +231,7 @@ final class AppleAccountStore: ObservableObject {
                 if target == remote.data {
                     try store.applySynced(remote, current: target)
                     pushReady = remote.pushReady ?? false
-                    store.setPioneer(remote.pioneer); store.setDeveloper(remote.developer)
+                    store.setPioneer(remote.pioneer); store.setDeveloper(remote.developer); store.setPetUnlocks(remote.petUnlocks)
                     await registerPushIfAllowed()
                     return
                 }
@@ -250,7 +250,7 @@ final class AppleAccountStore: ObservableObject {
                     }
                     try store.applySynced(uploaded, current: afterUpload)
                     pushReady = uploaded.pushReady ?? false
-                    store.setPioneer(uploaded.pioneer); store.setDeveloper(uploaded.developer)
+                    store.setPioneer(uploaded.pioneer); store.setDeveloper(uploaded.developer); store.setPetUnlocks(uploaded.petUnlocks)
                     await registerPushIfAllowed()
                     if store.hasPendingChanges { scheduleSync() }
                     return

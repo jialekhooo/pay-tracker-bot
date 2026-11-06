@@ -189,7 +189,7 @@ final class PetTests: XCTestCase {
 
     func testNewSkinsUnlockWithCoinsStagesAndBadges() throws {
         let skins = PetItem.catalog.filter { $0.slot == .skin }.map(\.id)
-        XCTAssertEqual(skins, ["classic", "pioneer", "rose-gold", "silver", "matcha", "sakura", "midnight", "rainbow", "terminal", "holo"])
+        XCTAssertEqual(skins, ["classic", "pioneer", "rose-gold", "silver", "matcha", "sakura", "midnight", "rainbow", "terminal", "holo", "galaxy"])
         let shifts = try (1...10).map { try shift(daysAgo($0)) }
         let pet = PetProgress(shifts: shifts, now: now, calendar: calendar)
         XCTAssertEqual(pet.stage, .hatchling)
@@ -226,5 +226,20 @@ final class PetTests: XCTestCase {
 
     private func petSlots(_ closet: PetCloset, _ pet: PetProgress) -> [String: String] {
         Dictionary(uniqueKeysWithValues: [PetSlot.hat, .face, .neck, .background].compactMap { slot in closet.wearing(slot, pet).map { (slot.rawValue, $0.id) } })
+    }
+
+    func testGiftCodesUnlockSpecialsOnlyForThatAccount() throws {
+        let gifted = PetProgress(shifts: [], now: now, calendar: calendar, unlocked: ["halo", "wizard-hat"])
+        let everyone = PetProgress(shifts: [], now: now, calendar: calendar)
+        let closet = PetCloset()
+        XCTAssertTrue(closet.owns(PetItem.named("halo")!, gifted))
+        XCTAssertTrue(closet.owns(PetItem.named("wizard-hat")!, gifted)) // codes can also give shop items, even before the stage
+        XCTAssertFalse(closet.locked(PetItem.named("wizard-hat")!, gifted))
+        XCTAssertFalse(closet.owns(PetItem.named("halo")!, everyone))
+        XCTAssertTrue(PetItem.named("galaxy")!.exclusive)
+        XCTAssertEqual(PetItem.named("fireworks")!.requirement, "Gift code")
+        var wearing = PetCloset(); try wearing.toggle(PetItem.named("halo")!, gifted)
+        XCTAssertEqual(wearing.wearing(.hat, gifted)?.id, "halo")
+        XCTAssertNil(wearing.wearing(.hat, everyone))
     }
 }

@@ -31,6 +31,8 @@ struct CloudEnvelope: Codable {
     let pioneer: Bool?
     /// One of the people building HowMuch.
     let developer: Bool?
+    /// Penny items unlocked with gift codes.
+    let petUnlocks: [String]?
 }
 
 struct AccountHTTPError: LocalizedError {
@@ -129,6 +131,7 @@ final class AccountAPI {
         if let data = try ReceiptUITestFixture.response(for: request) { return data }
         if let data = try TravelReminderUITestFixture.response(for: request) { return data }
         if let data = try PaymentDetectionUITestFixture.response(for: request) { return data }
+        if let data = try PetCodesUITestFixture.response(for: request) { return data }
         #endif
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -141,6 +144,27 @@ final class AccountAPI {
 }
 
 #if DEBUG
+/// Penny gift codes for UI tests: making codes, and redeeming one.
+@MainActor
+private enum PetCodesUITestFixture {
+    static var codes: [[String: Any]] = []
+    static func response(for request: URLRequest) throws -> Data? {
+        guard CommandLine.arguments.contains("--ui-test-pet-codes"), let path = request.url?.path, path.hasPrefix("/v1/pet/") else { return nil }
+        let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        if path == "/v1/pet/redeem" {
+            guard (body["code"] as? String)?.uppercased() == "LAUNCH2026" else { throw AccountHTTPError(status: 404, message: "That code isn't valid. Check it and try again.") }
+            return try JSONSerialization.data(withJSONObject: ["items": ["halo", "fireworks"], "unlocked": ["fireworks", "halo"]])
+        }
+        if path == "/v1/pet/codes", request.httpMethod == "POST" {
+            let code: [String: Any] = ["code": (body["code"] as? String)?.uppercased() ?? "PENNY-TEST-CODE", "items": body["items"] ?? [], "label": body["label"] ?? "",
+                                       "maxUses": body["max_uses"] ?? 1, "uses": 0, "expires": 0, "created": 0, "disabled": false]
+            codes.insert(code, at: 0)
+            return try JSONSerialization.data(withJSONObject: code)
+        }
+        return try JSONSerialization.data(withJSONObject: ["codes": codes])
+    }
+}
+
 // Synthetic transport for native UI tests only. It cannot exist in a Release
 // build and fails closed rather than sending test tokens to a real service.
 @MainActor

@@ -345,7 +345,8 @@ async def get_data(request: Request, authorization: str | None=Header(default=No
     result=read_document(request.app.state.storage,account)
     from .push import configured
     from .auth import developer, pioneer
-    return json_response({**result,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account)})
+    from .pet_codes import unlocks
+    return json_response({**result,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(request.app.state.storage._conn,account['account_id'])})
 
 
 @router.put('/data')
@@ -420,7 +421,8 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
     from .receipts import collect_unused
     collect_unused(db,account['account_id'],data)
     from .auth import developer, pioneer
-    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account)})
+    from .pet_codes import unlocks
+    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id'])})
 
 
 def normalize(value):

@@ -62,6 +62,8 @@ public struct PetProgress: Equatable, Sendable {
     public let achievements: [PetAchievement]
     /// One of the people building HowMuch: every item in the wardrobe is theirs.
     public let developer: Bool
+    /// Items unlocked with gift codes (kept on the server, so they can't be typed into the account).
+    public let unlocked: Set<String>
     /// This week's missions. The rewards are the same coins the rules above pay out, shown as goals.
     public let missions: [PetMission]
 
@@ -86,8 +88,9 @@ public struct PetProgress: Equatable, Sendable {
 
     /// `pioneer`: the account was made before HowMuch's official launch.
     /// `currency`: the person's main currency; money badges only count pay in it. Defaults to the most used one.
-    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, developer: Bool = false, currency: String? = nil) {
+    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, developer: Bool = false, unlocked: Set<String> = [], currency: String? = nil) {
         self.developer = developer
+        self.unlocked = unlocked
         let main = currency ?? Dictionary(grouping: shifts, by: \.currency).max { $0.value.count < $1.value.count }?.key ?? "SGD"
         let worked = shifts.filter { $0.endDate <= now }
         let paid = worked.filter(\.paid)
@@ -228,7 +231,7 @@ public enum PetSlot: String, CaseIterable, Codable, Sendable {
 }
 
 public struct PetItem: Identifiable, Equatable, Sendable {
-    public enum Unlock: Equatable, Sendable { case free, coins(Int), achievement(String) }
+    public enum Unlock: Equatable, Sendable { case free, coins(Int), achievement(String), code }
     public let id: String
     public let name: String
     public let slot: PetSlot
@@ -269,11 +272,17 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "rainbow", name: "Rainbow", slot: .skin, unlock: .achievement("regular")),
         .init(id: "terminal", name: "Terminal", slot: .skin, unlock: .achievement("developer")),
         .init(id: "holo", name: "Holographic", slot: .skin, unlock: .achievement("developer")),
+        // Gift-code specials: only from a code (or for developers).
+        .init(id: "halo", name: "Golden halo", slot: .hat, unlock: .code),
+        .init(id: "heart-glasses", name: "Heart glasses", slot: .face, unlock: .code),
+        .init(id: "lei", name: "Flower lei", slot: .neck, unlock: .code),
+        .init(id: "fireworks", name: "Fireworks", slot: .background, unlock: .code),
+        .init(id: "galaxy", name: "Galaxy", slot: .skin, unlock: .code),
     ]
     /// Only for people who joined before launch: hidden from everyone else.
     public var pioneerOnly: Bool { unlock == .achievement("pioneer") }
     /// Only for pioneers or developers: hidden from everyone else.
-    public var exclusive: Bool { unlock == .achievement("pioneer") || unlock == .achievement("developer") }
+    public var exclusive: Bool { unlock == .achievement("pioneer") || unlock == .achievement("developer") || unlock == .code }
     public static func named(_ id: String?) -> PetItem? { catalog.first { $0.id == id } }
     public var price: Int? { if case .coins(let price) = unlock { return price }; return nil }
 
@@ -283,6 +292,7 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         case .free: return "Free"
         case .coins(let price): return "\(price) coins"
         case .achievement(let id): return "Badge: " + (PetProgress(shifts: []).achievements.first { $0.id == id }?.title ?? id)
+        case .code: return "Gift code"
         }
     }
 }
@@ -301,11 +311,12 @@ public struct PetCloset: Codable, Equatable, Sendable {
 
     public func owns(_ item: PetItem, _ pet: PetProgress) -> Bool {
         // Developers have the whole wardrobe: every hat, pair of glasses, neckwear, scene and skin.
-        if pet.developer { return true }
+        if pet.developer || pet.unlocked.contains(item.id) { return true }
         switch item.unlock {
         case .free: return true
         case .coins: return bought.contains(item.id)
         case .achievement(let id): return pet.hasAchievement(id)
+        case .code: return false
         }
     }
 
