@@ -189,4 +189,18 @@ final class JobMessageTests: XCTestCase {
         XCTAssertNil(parse("Looking for promoters\n12 Nov 9am-6pm").event)
         XCTAssertNil(parse("12 Nov 9am-6pm\nDates and time\nThose available please PM me").event)
     }
+
+    func testHeadingVenuesAndPinnedLocationsAreRead() {
+        let today = TrackerCalendar.localDate("2026-11-07")!
+        let roadshow = JobMessageParser.parse("Roadshow at VivoCity\n15 Nov (Sat) 10am-10pm\n$12/hr\n1hr break", today: today)
+        XCTAssertEqual(roadshow.event, "Roadshow")
+        XCTAssertEqual(roadshow.location, "VivoCity")
+        XCTAssertEqual(roadshow.breakMinutes, 60)
+        XCTAssertEqual(roadshow.skipped, [], "a break that was read is not skipped")
+        XCTAssertEqual(JobMessageParser.parse("Sampling @ NEX\n28 Nov, 11am to 9pm\n$11.50 per hour", today: today).location, "NEX")
+        let pinned = JobMessageParser.parse("Crew needed\n📍 Marina Bay Sands\n📅 20-21 Nov\n⏰ 9am - 6pm\n💰 $13/h", today: today)
+        XCTAssertEqual(pinned.location, "Marina Bay Sands")
+        XCTAssertEqual(pinned.dates.count, 2)
+        XCTAssertEqual(pinned.rate, 13)
+    }
 }

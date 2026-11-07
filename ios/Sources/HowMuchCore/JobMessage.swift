@@ -47,6 +47,7 @@ public enum JobMessageParser {
         var role: String?
         // A heading line with no dates, times or pay ("Nike Pop-up"), used when no other line names the event.
         var title: String?
+        var titleVenue: String?
         var sawLine = false
         var items: [Item] = []
         var flat: Decimal?
@@ -60,6 +61,11 @@ public enum JobMessageParser {
             let isFirstLine = !sawLine
             sawLine = true
             var content = line
+            // "📍 Marina Bay Sands": a pin marks the venue, as WhatsApp job posts often do.
+            if let pin = line.firstMatch(of: #/^(?:📍|📌)\s*(.+)$/#) {
+                if job.location == nil { job.location = clean(String(pin.1)) }
+                continue
+            }
             if let (days, rest) = dayPrefix(line) {
                 var lower = rest.lowercased()
                 if readDates(&lower, today: today, calendar: calendar).isEmpty, let time = readTime(&lower) {
@@ -93,8 +99,9 @@ public enum JobMessageParser {
             let days = readDates(&lower, today: today, calendar: calendar)
             let time = readTime(&lower)
             if days.isEmpty && time == nil {
-                if pay == nil, content.rangeOfCharacter(from: .decimalDigits) != nil { job.skipped.append(line) }
-                if isFirstLine, pay == nil, content == line { title = heading(line) }
+                // Only lines with numbers left unread are skipped; a break already read ("1hr break") is not.
+                if pay == nil, lower.rangeOfCharacter(from: .decimalDigits) != nil { job.skipped.append(line) }
+                if isFirstLine, pay == nil, content == line, let found = heading(line) { title = found.name; titleVenue = found.venue }
                 continue
             }
             items.append(Item(days: days, time: time))
@@ -128,6 +135,7 @@ public enum JobMessageParser {
         job.dates.sort { ($0.day, $0.startMinute) < ($1.day, $1.startMinute) }
 
         if job.event == nil, let title { job.event = title }
+        if job.location == nil, let titleVenue { job.location = titleVenue }
         if job.event == nil, let role { job.event = role }
         if let address {
             if let location = job.location {
@@ -481,12 +489,13 @@ public enum JobMessageParser {
 
     /// A short heading such as "Nike Pop-up" or "Crew wanted for Nike Pop-up". Greetings, questions,
     /// sentences and lines with numbers are not headings.
-    private static func heading(_ line: String) -> String? {
+    private static func heading(_ line: String) -> (name: String?, venue: String?)? {
         guard line.count <= 60, line.rangeOfCharacter(from: .decimalDigits) == nil, !line.hasSuffix("?"),
               line.range(of: #"(?i)^(hi|hello|hey|dear|urgent|good\s+(morning|afternoon|evening)|thank|thanks|pm|dm|whatsapp|text|looking|hiring|need|needed|seeking|urgently|anyone|available|calling)\b"#,
                          options: .regularExpression) == nil
         else { return nil }
-        return leftover(line.lowercased(), original: line).name
+        let found = leftover(line.lowercased(), original: line)
+        return found.name == nil ? nil : found
     }
 
     private static func blank(_ line: inout String, _ range: NSRange) {
