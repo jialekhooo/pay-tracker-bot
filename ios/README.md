@@ -204,3 +204,4 @@ Build 63: Link Telegram in Settings → Telegram. After tapping Start in @paytra
 Build 64: Dark Mode: the launch screen stays light (no black flash), the Face ID lock stays light like the app, and the share sheet uses a readable jade.
 Build 65: Full Dark Mode. Theme colors adapt (deep green-black canvas, dark jade cards, bright jade text, deep accent for filled buttons), Penny's room turns to night, and Settings → Appearance offers Match iPhone, Light or Dark.
 Build 66: The Appearance caption describes the chosen option (Match iPhone, Light or Dark).
+Build 67: Friends. Add friends by code or invite link (both must agree), visit their pet, and say hi once a day: they get a notification and you both earn 2 coins. Friends see only the pet, never shifts or pay.
