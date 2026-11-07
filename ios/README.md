@@ -197,3 +197,4 @@ Build 57: Penny has 30 new items across every category: hats, glasses, neckwear,
 
 Build 58: Swipe a gift code in Your codes to revoke it.
 Build 59: Press and hold a revoked gift code in Your codes to delete it. Active codes have to be revoked first, and anyone who redeemed a code keeps its items.
+Build 60: Penny is the new app icon. Shifts can carry an extra (bonus, allowance or tip) that counts in earnings and in bank-transfer matching; older app versions keep it. Optional Face ID lock in Settings → Privacy. Pasted job posts now keep the venue from "at"/"@" headings and 📍 lines.
