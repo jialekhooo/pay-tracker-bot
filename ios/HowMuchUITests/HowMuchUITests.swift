@@ -85,6 +85,49 @@ final class HowMuchUITests: XCTestCase {
         let item = XCTAttachment(screenshot: app.screenshot())
         item.name = name; item.lifetime = .keepAlways; add(item)
     }
+    /// App Store screenshots. Skipped unless STORE_SHOTS_DIR is set:
+    /// TEST_RUNNER_STORE_SHOTS_DIR=/path xcodebuild test -only-testing:HowMuchUITests/HowMuchUITests/testStoreScreenshots
+    @MainActor
+    func testStoreScreenshots() throws {
+        guard let folder = ProcessInfo.processInfo.environment["STORE_SHOTS_DIR"], !folder.isEmpty else { throw XCTSkip("STORE_SHOTS_DIR not set") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        func shot(_ name: String) {
+            sleep(2)
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent(name + ".png"))
+        }
+        func launch(_ arguments: [String]) -> XCUIApplication {
+            let app = XCUIApplication(); app.launchArguments = arguments; app.launch()
+            XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 15) || app.staticTexts["paste.summary"].waitForExistence(timeout: 5))
+            return app
+        }
+        var app = launch(["--preview", "-appearance", "light"])
+        shot("overview")
+        app.buttons["nav.calendar"].tap(); shot("calendar")
+        app.buttons["nav.earnings"].tap(); shot("earnings")
+        app.buttons["nav.overview"].tap()
+        let card = app.buttons["pet.card"]; XCTAssertTrue(card.waitForExistence(timeout: 5)); card.tap()
+        shot("penny")
+        app.terminate()
+        app = launch(["--preview", "--ui-test-shared-job", "-appearance", "light"])
+        XCTAssertTrue(app.staticTexts["paste.summary"].waitForExistence(timeout: 10))
+        shot("paste-job")
+        app.terminate()
+        app = launch(["--preview", "-appearance", "dark"])
+        shot("overview-dark")
+        app.buttons["nav.calendar"].tap(); shot("calendar-dark")
+        app.terminate()
+        app = launch(["--ui-test-account", "--ui-test-friends", "-appearance", "light"])
+        let petCard = app.buttons["pet.card"]; XCTAssertTrue(petCard.waitForExistence(timeout: 10)); petCard.tap()
+        let friends = app.buttons["pet.friends"]; reveal(friends, in: app); friends.tap()
+        XCTAssertTrue(app.staticTexts["PENNY-MYCODE"].waitForExistence(timeout: 5))
+        shot("friends")
+        let sam = app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-SAMSAM").firstMatch
+        reveal(sam, in: app); sam.tap()
+        XCTAssertTrue(app.staticTexts["Mochi"].waitForExistence(timeout: 5))
+        app.buttons["friend.hello"].tap()
+        XCTAssertTrue(app.staticTexts["Mochi waved back! You and Sam each got 2 coins."].waitForExistence(timeout: 5))
+        shot("friend-visit")
+    }
     @MainActor
     func testFoodMiscAndCabClaimsPersistEditDeleteAndUndo() {
         let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()
