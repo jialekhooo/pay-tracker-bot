@@ -91,7 +91,7 @@ def main():
             raise RuntimeError('Incorrect release push environment or bundle identifier')
         primary_icon = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})
         if primary_icon.get('CFBundleIconName') != 'HowMuchHIcon':
-            raise RuntimeError('Release must use the H app icon set')
+            raise RuntimeError('Release must use the Penny app icon set (HowMuchHIcon)')
         icon_assets = json.loads(run('xcrun', 'assetutil', '--info', app/'Assets.car',
                                     capture_output=True).stdout)
         for pixels, scale in ((40, 2), (60, 3)):
@@ -99,8 +99,8 @@ def main():
                        and asset.get('Idiom') == 'phone' and asset.get('Scale') == scale
                        and asset.get('PixelWidth') == pixels and asset.get('PixelHeight') == pixels
                        and asset.get('RenditionName') == f'HowMuch-H-{pixels}.png' for asset in icon_assets):
-                raise RuntimeError(f'Missing H notification icon: {pixels}px @{scale}x')
-        print('Verified H primary icon and explicit 20pt notification icons at 2x and 3x')
+                raise RuntimeError(f'Missing notification icon: {pixels}px @{scale}x')
+        print('Verified Penny primary icon and explicit 20pt notification icons at 2x and 3x')
         profile = plistlib.loads(run('security', 'cms', '-D', '-i', app/'embedded.mobileprovision',
                                     capture_output=True).stdout)
         if profile.get('ProvisionedDevices') or not profile['Entitlements'].get('beta-reports-active'):
