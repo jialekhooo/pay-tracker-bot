@@ -15,6 +15,9 @@ from .feed import feed_body
 from .webapp import router as webapp_router
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s - %(message)s", level=logging.INFO)
+# httpx logs each request URL at INFO, and Telegram API URLs contain the bot token.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static" / "webapp"

@@ -1715,6 +1715,7 @@ def main() -> None:
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s - %(message)s", level=logging.INFO
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # request URLs contain the bot token
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN before starting the bot.")
