@@ -230,8 +230,50 @@ async def bot_add_shifts(payload: BotShifts, request: Request, x_howmuch_bot: st
     data['shifts'] = data.get('shifts', []) + added
     model = Document.model_validate(data)
     commit_document(storage, account, model, current['timezone'], current)
-    return {'added': [{k: s[k] for k in ('event', 'location', 'day', 'startMinute', 'endMinute', 'breakMinutes', 'pay', 'currency')}
+    return {'added': [{k: s[k] for k in ('id', 'event', 'location', 'day', 'startMinute', 'endMinute', 'breakMinutes', 'pay', 'currency')}
                       for s in added], 'clashes': clashes}
+
+
+class BotShiftIds(BotUser):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=30)
+
+
+def change_shifts(request, payload: BotShiftIds, change):
+    """Apply `change(shift) -> shift | None` (None removes it) to the listed shifts of the linked account."""
+    db = db_for(request)
+    account = linked_account(db, payload.telegramUserId)
+    from .documents import Document, read_document, commit_document
+    storage = request.app.state.storage
+    current = read_document(storage, account)
+    data = json.loads(json.dumps(current['data'], use_decimal=True), use_decimal=True)
+    wanted = {str(i) for i in payload.ids}
+    kept, changed = [], 0
+    for shift in data.get('shifts', []):
+        if shift['id'] in wanted:
+            changed += 1
+            shift = change(shift)
+            if shift is None:
+                continue
+        kept.append(shift)
+    if not changed:
+        raise HTTPException(404, 'Those shifts are no longer in HowMuch.')
+    data['shifts'] = kept
+    data['claims'] = [c for c in data.get('claims', []) if c['shiftID'] in {s['id'] for s in kept}]
+    commit_document(storage, account, Document.model_validate(data), current['timezone'], current)
+    return {'changed': changed}
+
+
+@router.post('/bot/shifts/undo')
+async def bot_undo_shifts(payload: BotShiftIds, request: Request, x_howmuch_bot: str | None = Header(default=None)):
+    """Undo: remove shifts the bot just added."""
+    require_bot(x_howmuch_bot)
+    return change_shifts(request, payload, lambda shift: None)
+
+
+@router.post('/bot/shifts/paid')
+async def bot_mark_paid(payload: BotShiftIds, request: Request, x_howmuch_bot: str | None = Header(default=None)):
+    require_bot(x_howmuch_bot)
+    return change_shifts(request, payload, lambda shift: {**shift, 'paid': True})
 
 
 class BotSummary(BotUser):

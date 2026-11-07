@@ -1788,6 +1788,10 @@ class _FakeUpdate:
         self.message = _FakeMessage()
         self.effective_user = type("U", (), {"id": user_id})()
 
+    @property
+    def effective_message(self):
+        return self.message
+
 
 class _FakeContext:
     def __init__(self, storage: Storage, args=None):

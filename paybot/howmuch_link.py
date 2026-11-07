@@ -26,6 +26,7 @@ class LinkError(Exception):
 
 @dataclass(frozen=True)
 class Added:
+    id: str
     event: str
     location: str
     day: str
@@ -114,9 +115,15 @@ class HowMuchLink:
         except LinkError:
             self._status.pop(telegram_user_id, None)  # recheck the link next time (it may have been removed in the app)
             raise
-        added = [Added(a["event"], a.get("location", ""), a["day"], a["startMinute"], a["endMinute"],
+        added = [Added(a.get("id", ""), a["event"], a.get("location", ""), a["day"], a["startMinute"], a["endMinute"],
                        a.get("breakMinutes", 0), Decimal(str(a["pay"])), a["currency"]) for a in result["added"]]
         return added, result.get("clashes", [])
+
+    async def undo(self, telegram_user_id: int, ids: list[str]) -> int:
+        return (await self._post("/v1/bot/shifts/undo", {"telegramUserId": telegram_user_id, "ids": ids}))["changed"]
+
+    async def mark_paid(self, telegram_user_id: int, ids: list[str]) -> int:
+        return (await self._post("/v1/bot/shifts/paid", {"telegramUserId": telegram_user_id, "ids": ids}))["changed"]
 
     async def summary(self, telegram_user_id: int, days: int = 14) -> dict:
         return await self._post("/v1/bot/summary", {"telegramUserId": telegram_user_id, "days": days})

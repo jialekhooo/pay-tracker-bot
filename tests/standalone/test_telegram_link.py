@@ -96,3 +96,19 @@ def test_a_telegram_account_links_to_one_howmuch_account_at_a_time(setup, monkey
     link(setup, friend, 99)
     assert setup.client.get('/v1/telegram', headers=headers(me)).json()['linked'] is False
     assert setup.client.get('/v1/telegram', headers=headers(friend)).json()['linked'] is True
+
+
+def test_buttons_under_a_logged_shift_undo_it_or_mark_it_paid(setup, monkeypatch):
+    me = prepare(setup, monkeypatch)
+    assert write(setup, me, document()).status_code == 200
+    link(setup, me)
+    added = setup.client.post('/v1/bot/shifts', headers=BOT, json={'telegramUserId': 4242, 'shifts': [
+        {'event': 'Done gig', 'day': '2026-01-05', 'startMinute': 600, 'endMinute': 720},
+        {'event': 'Oops gig', 'day': '2026-01-06', 'startMinute': 600, 'endMinute': 720}]}).json()['added']
+    done, oops = added[0]['id'], added[1]['id']
+    assert setup.client.post('/v1/bot/shifts/paid', headers=BOT, json={'telegramUserId': 4242, 'ids': [done]}).json() == {'changed': 1}
+    assert setup.client.post('/v1/bot/shifts/undo', headers=BOT, json={'telegramUserId': 4242, 'ids': [oops]}).json() == {'changed': 1}
+    shifts = {s['event']: s for s in setup.client.get('/v1/data', headers=headers(me)).json()['data']['shifts']}
+    assert shifts['Done gig']['paid'] is True and 'Oops gig' not in shifts and 'Roadshow' in shifts
+    assert setup.client.post('/v1/bot/shifts/undo', headers=BOT, json={'telegramUserId': 4242, 'ids': [oops]}).status_code == 404
+    assert setup.client.post('/v1/bot/shifts/undo', json={'telegramUserId': 4242, 'ids': [done]}).status_code == 403

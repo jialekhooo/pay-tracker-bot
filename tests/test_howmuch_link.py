@@ -44,8 +44,11 @@ class Server:
         if request.url.path == "/v1/bot/shifts":
             return httpx.Response(200, json={"added": [
                 {"event": s["event"], "location": s.get("location", ""), "day": s["day"], "startMinute": s["startMinute"],
-                 "endMinute": s["endMinute"], "breakMinutes": 0, "pay": 100, "currency": "SGD"} for s in body["shifts"]],
+                 "endMinute": s["endMinute"], "breakMinutes": 0, "pay": 100, "currency": "SGD", "id": f"id-{i}"}
+                for i, s in enumerate(body["shifts"])],
                 "clashes": []})
+        if request.url.path in ("/v1/bot/shifts/undo", "/v1/bot/shifts/paid"):
+            return httpx.Response(200, json={"changed": len(body["ids"])})
         if request.url.path == "/v1/bot/summary":
             return httpx.Response(200, json={"displayName": "Jia", "owed": [{"currency": "SGD", "amount": 130, "shifts": 2}],
                                              "upcoming": []})
@@ -59,8 +62,14 @@ def harness(tmp_path, server, text="", args=None):
         replies.append(message)
     link = HowMuchLink("secret-1", "https://howmuch.test", httpx.AsyncClient(transport=httpx.MockTransport(server.handler)))
     application = SimpleNamespace(bot_data={"storage": Storage(tmp_path / "bot.sqlite3"), "howmuch": link})
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=77, username="jia"),
-                             message=SimpleNamespace(text=text, reply_text=reply_text))
+    message = SimpleNamespace(text=text, reply_text=reply_text, markups=[])
+
+    async def reply_with_markup(text, reply_markup=None, **_):
+        message.markups.append(reply_markup)
+        replies.append(text)
+    message.reply_text = reply_with_markup
+    update = SimpleNamespace(effective_user=SimpleNamespace(id=77, username="jia", first_name="Jia"),
+                             message=message, effective_message=message, callback_query=None)
     context = SimpleNamespace(application=application, args=args or [], bot_data=application.bot_data)
     return update, context, replies
 
@@ -105,3 +114,64 @@ def test_unlinked_chats_keep_using_the_bot_records(tmp_path):
     assert "Logged 1 shift" in replies[-1]
     assert not any(path == "/v1/bot/shifts" for path, _, _ in server.requests)
     assert len(context.application.bot_data["storage"].list_shifts(77)) == 1
+
+
+def press(update, data):
+    answers = []
+
+    async def answer(text=None, **_):
+        answers.append(text)
+
+    async def edit_message_reply_markup(**_):
+        answers.append("edited")
+    update.callback_query = SimpleNamespace(data=data, answer=answer, edit_message_reply_markup=edit_message_reply_markup)
+    return answers
+
+
+def test_welcome_has_buttons_and_the_keyboard(tmp_path):
+    server = Server()
+    update, context, replies = harness(tmp_path, server)
+    asyncio.run(bot.start(update, context))
+    assert "Hi Jia, I'm HowMuch" in replies[0]
+    buttons = [b.callback_data for row in update.message.markups[0].inline_keyboard for b in row]
+    assert buttons == ["menu:link", "menu:log", "menu:owed", "menu:help"]
+    assert update.message.markups[1] is bot.MAIN_KEYBOARD
+
+
+def test_undo_and_mark_paid_buttons_on_bot_records(tmp_path):
+    server = Server()
+    update, context, replies = harness(tmp_path, server, text="Wedding gig 1/1/2026 6pm-11pm 20/h")
+    asyncio.run(bot.log_shift(update, context))
+    markup = update.message.markups[-1]
+    labels = [b.text for b in markup.inline_keyboard[0]]
+    assert labels == ["↩️ Undo", "✅ Mark paid"]
+    storage = context.application.bot_data["storage"]
+    answers = press(update, markup.inline_keyboard[0][1].callback_data)
+    asyncio.run(bot.action_button(update, context))
+    assert storage.list_shifts(77)[0].paid and "Marked 1 shift paid" in replies[-1]
+    assert "Marked paid" in answers
+    # Each button works once.
+    answers = press(update, markup.inline_keyboard[0][0].callback_data)
+    asyncio.run(bot.action_button(update, context))
+    assert answers == ["This button has expired."]
+
+
+def test_undo_button_on_a_linked_chat_removes_it_from_the_app(tmp_path):
+    server = Server(); server.linked.add(77)
+    update, context, replies = harness(tmp_path, server, text="Gig 1/1/2026 6pm-11pm")
+    asyncio.run(bot.log_shift(update, context))
+    undo = update.message.markups[-1].inline_keyboard[0][0]
+    press(update, undo.callback_data)
+    asyncio.run(bot.action_button(update, context))
+    assert ("/v1/bot/shifts/undo", "secret-1", {"telegramUserId": 77, "ids": ["id-0"]}) in server.requests
+    assert "Undone" in replies[-1]
+
+
+def test_keyboard_buttons_route_to_their_commands(tmp_path):
+    server = Server()
+    update, context, replies = harness(tmp_path, server, text="💰 Owed")
+    asyncio.run(bot.keyboard_button(update, context))
+    assert "Nothing owed" in replies[-1]
+    update.message.text = "➕ Log a shift"
+    asyncio.run(bot.keyboard_button(update, context))
+    assert "Send the shift as a message" in replies[-1]

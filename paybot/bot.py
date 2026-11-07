@@ -17,6 +17,8 @@ from telegram import (
     BotCommand,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
     MenuButtonWebApp,
     Update,
     WebAppInfo,
@@ -25,6 +27,7 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -165,8 +168,8 @@ def _shift_table(records: list[ShiftRecord]) -> str:
     return _block(_entries(heads, details, right=set()))
 
 
-async def _send_html(update: Update, lines: list[str]) -> None:
-    await update.message.reply_text("\n".join(lines).strip(), parse_mode=ParseMode.HTML)
+async def _send_html(update: Update, lines: list[str], reply_markup=None) -> None:
+    await update.effective_message.reply_text("\n".join(lines).strip(), parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
 
 def _decimal(raw: str) -> Decimal:
@@ -193,19 +196,90 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if context.args and context.args[0].startswith("link-"):
         await _link_from_app(update, context, context.args[0][len("link-"):])
         return
-    await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN)
+    await welcome(update, context)
+
+
+async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.effective_message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN)
+
+
+# The keyboard under the chat box, so people rarely need to type a command.
+KEY_LOG, KEY_OWED, KEY_UPCOMING, KEY_EARNINGS, KEY_HELP = "➕ Log a shift", "💰 Owed", "🗓 Upcoming", "📊 Earnings", "❓ Help"
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [[KeyboardButton(KEY_LOG)], [KeyboardButton(KEY_OWED), KeyboardButton(KEY_UPCOMING)], [KeyboardButton(KEY_EARNINGS), KeyboardButton(KEY_HELP)]],
+    resize_keyboard=True, is_persistent=True, input_field_placeholder="Type a shift, e.g. Roadshow today 9am-6pm",
+)
+LOG_EXAMPLE = (
+    "Send the shift as a message — any order works:\n"
+    "<code>Wedding gig 12/8 6pm-11.30pm 25/h @ Marina Bay Sands</code>\n"
+    "<code>Roadshow today 9am-6pm 1h unpaid break</code>\n"
+    "<code>Promo 15/8 10am-4pm $120 flat</code>\n"
+    "Several lines log several shifts."
+)
+
+
+async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    name = escape(update.effective_user.first_name or "there") if update.effective_user else "there"
+    linked = await _is_linked(update, context)
+    lines = [
+        f"👋 <b>Hi {name}, I'm HowMuch.</b>",
+        "I keep track of your shifts and what you're owed.",
+        "",
+        "Send a shift like <code>Roadshow today 9am-6pm 15/h</code> and I'll work out the pay.",
+    ]
+    if linked:
+        lines.append("\n🔗 Linked with your HowMuch app — shifts you send go straight into it.")
+    rows = [[InlineKeyboardButton("➕ Log a shift", callback_data="menu:log"), InlineKeyboardButton("💰 What I'm owed", callback_data="menu:owed")]]
+    if not linked:
+        rows.insert(0, [InlineKeyboardButton("🔗 Link the HowMuch app", callback_data="menu:link")])
+    rows.append([InlineKeyboardButton("❓ How it works", callback_data="menu:help")])
+    await _send_html(update, lines, InlineKeyboardMarkup(rows))
+    await update.effective_message.reply_text("Tap a button below any time.", reply_markup=MAIN_KEYBOARD)
+
+
+async def keyboard_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (update.effective_message.text or "").strip()
+    context.args = []
+    if text == KEY_LOG:
+        await _send_html(update, [LOG_EXAMPLE])
+    elif text == KEY_OWED:
+        await owed(update, context)
+    elif text == KEY_UPCOMING:
+        await upcoming(update, context)
+    elif text == KEY_EARNINGS:
+        if await _is_linked(update, context):
+            await owed(update, context)
+        else:
+            await earnings(update, context)
+    else:
+        await show_help(update, context)
+
+
+async def menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    context.args = []
+    action = (query.data or "").split(":", 1)[1] if ":" in (query.data or "") else ""
+    if action == "log":
+        await _send_html(update, [LOG_EXAMPLE])
+    elif action == "owed":
+        await owed(update, context)
+    elif action == "link":
+        await link_info(update, context)
+    else:
+        await show_help(update, context)
 
 
 async def _link_from_app(update: Update, context: ContextTypes.DEFAULT_TYPE, code: str) -> None:
     link = _howmuch(context)
     if link is None:
-        await update.message.reply_text("Linking with the HowMuch app isn't available right now.")
+        await update.effective_message.reply_text("Linking with the HowMuch app isn't available right now.")
         return
     user = update.effective_user
     try:
         name = await link.link(user.id, code, user.username or "")
     except LinkError as error:
-        await update.message.reply_text(f"❌ {error}")
+        await update.effective_message.reply_text(f"❌ {error}")
         return
     who = f" to {escape(name)}'s HowMuch account" if name else " to your HowMuch account"
     await _send_html(update, [
@@ -220,9 +294,9 @@ async def _link_from_app(update: Update, context: ContextTypes.DEFAULT_TYPE, cod
 
 async def link_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await _is_linked(update, context):
-        await update.message.reply_text("You're linked with the HowMuch app. Shifts you send here go into the app. /unlink to stop.")
+        await update.effective_message.reply_text("You're linked with the HowMuch app. Shifts you send here go into the app. /unlink to stop.")
         return
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "To link with the HowMuch iPhone app:\n"
         "1. Open HowMuch → Settings → Telegram.\n"
         "2. Tap Link Telegram. It opens this chat.\n"
@@ -233,14 +307,59 @@ async def link_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     link = _howmuch(context)
     if link is None or not await _is_linked(update, context):
-        await update.message.reply_text("This chat isn't linked to the HowMuch app.")
+        await update.effective_message.reply_text("This chat isn't linked to the HowMuch app.")
         return
     try:
         await link.unlink(update.effective_user.id)
     except LinkError as error:
-        await update.message.reply_text(f"❌ {error}")
+        await update.effective_message.reply_text(f"❌ {error}")
         return
-    await update.message.reply_text("Unlinked. Shifts you send here are kept in the bot again, not in the app.")
+    await update.effective_message.reply_text("Unlinked. Shifts you send here are kept in the bot again, not in the app.")
+
+
+ACTION_SECONDS = 24 * 60 * 60
+
+
+def _action_buttons(context: ContextTypes.DEFAULT_TYPE, user_id: int, linked: bool, ids: list, finished: bool) -> InlineKeyboardMarkup:
+    """Undo (and Mark paid, once the work is done) under a just-logged message. Kept in memory for a day."""
+    actions = context.application.bot_data.setdefault("actions", {})
+    now = time_module.time()
+    for key in [k for k, v in actions.items() if v["expires"] < now]:
+        actions.pop(key, None)
+    token = os.urandom(6).hex()
+    actions[token] = {"user": user_id, "linked": linked, "ids": ids, "expires": now + ACTION_SECONDS}
+    row = [InlineKeyboardButton("↩️ Undo", callback_data=f"act:{token}:undo")]
+    if finished:
+        row.append(InlineKeyboardButton("✅ Mark paid", callback_data=f"act:{token}:paid"))
+    return InlineKeyboardMarkup([row])
+
+
+async def action_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    _, token, verb = (query.data or "::").split(":", 2)
+    action = context.application.bot_data.get("actions", {}).get(token)
+    if not action or action["user"] != update.effective_user.id or action["expires"] < time_module.time():
+        await query.answer("This button has expired.", show_alert=True)
+        return
+    try:
+        if action["linked"]:
+            link = _howmuch(context)
+            done = await (link.undo if verb == "undo" else link.mark_paid)(update.effective_user.id, action["ids"])
+        else:
+            storage = _storage(context)
+            if verb == "undo":
+                done = sum(storage.delete_shift(update.effective_user.id, i) for i in action["ids"])
+            else:
+                done = sum(storage.update_shift(update.effective_user.id, i, paid=1) for i in action["ids"])
+    except LinkError as error:
+        await query.answer(str(error), show_alert=True)
+        return
+    context.application.bot_data["actions"].pop(token, None)
+    await query.answer("Undone" if verb == "undo" else "Marked paid")
+    await query.edit_message_reply_markup(reply_markup=None)
+    note = (f"↩️ Undone — removed {done} shift{'s' if done != 1 else ''}." if verb == "undo"
+            else f"✅ Marked {done} shift{'s' if done != 1 else ''} paid.")
+    await update.effective_message.reply_text(note)
 
 
 def _clock(minute: int) -> str:
@@ -254,15 +373,15 @@ def _app_day(day: str) -> str:
 async def owed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     link = _howmuch(context)
     if link is None or not await _is_linked(update, context):
-        await update.message.reply_text("/owed reads your HowMuch app. Link it first with /link.")
+        await _owed_from_bot(update, context)
         return
     try:
         summary = await link.summary(update.effective_user.id)
     except LinkError as error:
-        await update.message.reply_text(f"❌ {error}")
+        await update.effective_message.reply_text(f"❌ {error}")
         return
     if not summary["owed"]:
-        await update.message.reply_text("🎉 Nothing owed. Every finished shift is marked paid in HowMuch.")
+        await update.effective_message.reply_text("🎉 Nothing owed. Every finished shift is marked paid in HowMuch.")
         return
     lines = ["💰 <b>Waiting to be paid</b>"]
     for entry in summary["owed"]:
@@ -272,15 +391,32 @@ async def owed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_html(update, lines)
 
 
+async def _owed_from_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    storage = _storage(context)
+    user_id = update.effective_user.id
+    now = local_clock(_offset(storage, user_id))
+    unpaid = [r for r in storage.list_shifts(user_id) if not r.paid and worked_by(r, now).state == "done"]
+    if not unpaid:
+        await update.effective_message.reply_text("🎉 Nothing owed. Every finished shift is marked paid.")
+        return
+    totals: dict[str, Decimal] = {}
+    for record in unpaid:
+        totals[record.currency] = totals.get(record.currency, Decimal("0")) + record.pay
+    lines = ["💰 <b>Waiting to be paid</b>"]
+    lines += [f"<b>{_money(amount, currency)}</b>" for currency, amount in sorted(totals.items())]
+    lines.append(f"{len(unpaid)} finished shift{'s' if len(unpaid) != 1 else ''} not marked paid.")
+    await _send_html(update, lines)
+
+
 async def _show_app_booked(update: Update, context: ContextTypes.DEFAULT_TYPE, days: int, window: str) -> None:
     try:
         summary = await _howmuch(context).summary(update.effective_user.id, days=min(days, 60))
     except LinkError as error:
-        await update.message.reply_text(f"❌ {error}")
+        await update.effective_message.reply_text(f"❌ {error}")
         return
     shifts = summary["upcoming"]
     if not shifts:
-        await update.message.reply_text(f"Nothing booked {window} in HowMuch.")
+        await update.effective_message.reply_text(f"Nothing booked {window} in HowMuch.")
         return
     rows = [(_app_day(s["day"]), f"{_clock(s['startMinute'])}–{_clock(s['endMinute'])}", _where(s["event"], s.get("location", "")))
             for s in shifts]
@@ -292,17 +428,21 @@ async def _log_to_app(update: Update, context: ContextTypes.DEFAULT_TYPE, text: 
     user_id = update.effective_user.id
     parsed = parse_shifts(text, today=_today(_storage(context), user_id))
     if not parsed:
-        await update.message.reply_text("Send a shift, e.g. 13/8 8.30am-8pm 15/h Hermes Private Sale")
+        await update.effective_message.reply_text("Send a shift, e.g. 13/8 8.30am-8pm 15/h Hermes Private Sale")
         return
     shifts = [result for _, result in parsed if not isinstance(result, ParseError)]
     failed = [f"• {line} — {result}" for line, result in parsed if isinstance(result, ParseError)]
     reply: list[str] = []
+    markup = None
     if shifts:
         try:
             added, clashes = await link.add_shifts(user_id, shifts)
         except LinkError as error:
-            await update.message.reply_text(f"❌ {error}")
+            await update.effective_message.reply_text(f"❌ {error}")
             return
+        today = _today(_storage(context), user_id)
+        markup = _action_buttons(context, user_id, True, [a.id for a in added if a.id],
+                                 all(date.fromisoformat(a.day) < today for a in added))
         reply.append(f"✅ <b>Added {len(added)} shift{'s' if len(added) != 1 else ''} to HowMuch</b>")
         rows = [(_app_day(a.day), f"{_clock(a.start_minute)}–{_clock(a.end_minute)}", _where(a.event, a.location),
                  _money(a.pay, a.currency)) for a in added]
@@ -318,7 +458,7 @@ async def _log_to_app(update: Update, context: ContextTypes.DEFAULT_TYPE, text: 
         reply.append("\n❌ <b>Could not read</b>")
         reply.extend(escape(line) for line in failed)
         reply.append("Send /help to see the accepted formats.")
-    await _send_html(update, reply)
+    await _send_html(update, reply, markup)
 
 
 async def rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -341,19 +481,19 @@ async def rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 f"Default break: {format_hours(config.default_break_hours)}h "
                 f"({'paid' if config.default_break_paid else 'unpaid'})"
             )
-        await update.message.reply_text("\n".join(lines))
+        await update.effective_message.reply_text("\n".join(lines))
         return
 
     try:
         amount = _decimal(args[-1])
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
 
     if len(args) == 1:
         config = replace(config, default_rate=amount)
         storage.save_config(user_id, config)
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"Default rate set to {_money(amount, config.currency)}/hour."
         )
         return
@@ -363,7 +503,7 @@ async def rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     rates[event] = amount
     config = replace(config, event_rates=rates)
     storage.save_config(user_id, config)
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"Rate for “{event}” set to {_money(amount, config.currency)}/hour."
     )
 
@@ -373,27 +513,27 @@ async def clear_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     user_id = update.effective_user.id
     event = " ".join(context.args).strip().lower()
     if not event:
-        await update.message.reply_text("Usage: /clearrate <event name>")
+        await update.effective_message.reply_text("Usage: /clearrate <event name>")
         return
     config = storage.get_config(user_id)
     rates = dict(config.event_rates)
     if rates.pop(event, None) is None:
-        await update.message.reply_text(f"No rate stored for “{event}”.")
+        await update.effective_message.reply_text(f"No rate stored for “{event}”.")
         return
     storage.save_config(user_id, replace(config, event_rates=rates))
-    await update.message.reply_text(f"Removed the rate for “{event}”.")
+    await update.effective_message.reply_text(f"Removed the rate for “{event}”.")
 
 
 async def currency(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     user_id = update.effective_user.id
     if not context.args:
-        await update.message.reply_text("Usage: /currency SGD")
+        await update.effective_message.reply_text("Usage: /currency SGD")
         return
     code = context.args[0].upper()
     config = storage.get_config(user_id)
     storage.save_config(user_id, replace(config, currency=code))
-    await update.message.reply_text(f"Currency set to {code}.")
+    await update.effective_message.reply_text(f"Currency set to {code}.")
 
 
 async def overtime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -403,21 +543,21 @@ async def overtime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     if len(args) == 1 and args[0].lower() == "off":
         storage.save_config(user_id, replace(config, overtime_after_hours=None))
-        await update.message.reply_text("Overtime disabled.")
+        await update.effective_message.reply_text("Overtime disabled.")
         return
     if len(args) != 2:
-        await update.message.reply_text("Usage: /overtime <hours> <multiplier>, or /overtime off")
+        await update.effective_message.reply_text("Usage: /overtime <hours> <multiplier>, or /overtime off")
         return
     try:
         hours, multiplier = _decimal(args[0]), _decimal(args[1])
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
     storage.save_config(
         user_id,
         replace(config, overtime_after_hours=hours, overtime_multiplier=multiplier),
     )
-    await update.message.reply_text(f"Overtime: ×{multiplier} after {hours} hours.")
+    await update.effective_message.reply_text(f"Overtime: ×{multiplier} after {hours} hours.")
 
 
 async def break_default(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -427,22 +567,22 @@ async def break_default(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     args = context.args
     if len(args) == 1 and args[0].lower() in {"off", "none", "0"}:
         storage.save_config(user_id, replace(config, default_break_hours=Decimal("0")))
-        await update.message.reply_text("Default break removed.")
+        await update.effective_message.reply_text("Default break removed.")
         return
     if len(args) != 2 or args[1].lower() not in {"paid", "unpaid"}:
-        await update.message.reply_text("Usage: /break <hours> paid|unpaid, or /break off")
+        await update.effective_message.reply_text("Usage: /break <hours> paid|unpaid, or /break off")
         return
     try:
         hours = _decimal(args[0])
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
     paid = args[1].lower() == "paid"
     storage.save_config(
         user_id,
         replace(config, default_break_hours=hours, default_break_paid=paid),
     )
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"Default break: {format_hours(hours)}h ({'paid' if paid else 'unpaid'}). "
         "Say “no break” in a message to skip it."
     )
@@ -532,12 +672,14 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text, today=_today(storage, user_id), default_break_paid=config.default_break_paid
     )
     if not parsed:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "Send a shift, e.g. 13/8 8.30am-8pm 15/h Hermes Private Sale"
         )
         return
 
     logged: list[tuple[tuple[str, ...], str]] = []
+    logged_ids: list[int] = []
+    finished = True
     failed: list[str] = []
     warnings: list[str] = []
     total_pay = Decimal("0")
@@ -555,6 +697,8 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             shift.end,
         )
         shift_id, hours, pay, rate = _store_shift(storage, user_id, shift, config)
+        logged_ids.append(shift_id)
+        finished = finished and shift.day < _today(storage, user_id)
         total_pay += pay
         logged.append(_summarise(shift, shift_id, hours, pay, rate))
         for clash in clashes:
@@ -580,7 +724,8 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply.append("\n❌ <b>Could not read</b>")
         reply.extend(escape(line) for line in failed)
         reply.append("Send /help to see the accepted formats.")
-    await _send_html(update, reply)
+    markup = _action_buttons(context, user_id, False, logged_ids, finished) if logged_ids else None
+    await _send_html(update, reply, markup)
 
 
 _FIELDS = {
@@ -696,7 +841,7 @@ def _edit_record(
 async def add_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     parsed = parse_edit(" ".join(context.args))
     if parsed is None:
-        await update.message.reply_text(EDIT_USAGE, parse_mode=ParseMode.MARKDOWN)
+        await update.effective_message.reply_text(EDIT_USAGE, parse_mode=ParseMode.MARKDOWN)
         return
     field, target, value = parsed
     storage = _storage(context)
@@ -708,14 +853,14 @@ async def add_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else:
         records = storage.find_shifts(user_id, target)
     if not records:
-        await update.message.reply_text(f"No shifts matching {target!r} — check /list.")
+        await update.effective_message.reply_text(f"No shifts matching {target!r} — check /list.")
         return
 
     config = storage.get_config(user_id)
     try:
         changes = [(r, _edit_record(r, field, value, config)) for r in records]
     except (ParseError, InvalidOperation) as exc:
-        await update.message.reply_text(f"Could not read {value!r}: {exc}")
+        await update.effective_message.reply_text(f"Could not read {value!r}: {exc}")
         return
     for record, fields in changes:
         storage.update_shift(user_id, record.id, **fields)
@@ -769,13 +914,13 @@ async def list_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     try:
         month = parse_month(context.args, today=_today(storage, update.effective_user.id))
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
     records = storage.list_shifts(
         update.effective_user.id, month=month, limit=None if month else 20
     )
     if not records:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"No shifts logged for {_month_label(month)}." if month else "No shifts logged yet."
         )
         return
@@ -798,7 +943,7 @@ async def months(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     summaries = storage.month_summaries(update.effective_user.id)
     if not summaries:
-        await update.message.reply_text("No shifts logged yet.")
+        await update.effective_message.reply_text("No shifts logged yet.")
         return
     rows = [
         (
@@ -829,12 +974,12 @@ async def reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not args:
         if existing is None or not existing.enabled:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "Reminders are off. Send /reminders on to get a message the evening "
                 "before each shift (default 20:00, UTC+8), or /reminders 19:30 +8."
             )
             return
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"Reminders on at {existing.send_at.strftime('%H:%M')} "
             f"({format_offset(existing.utc_offset_minutes)}), for the next day's shifts."
         )
@@ -852,20 +997,20 @@ async def reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             try:
                 offset = parse_offset(arg)
             except ValueError as exc:
-                await update.message.reply_text(str(exc))
+                await update.effective_message.reply_text(str(exc))
                 return
         else:
             try:
                 send_at = parse_time(arg)
             except ParseError as exc:
-                await update.message.reply_text(str(exc))
+                await update.effective_message.reply_text(str(exc))
                 return
 
     storage.save_reminder(user_id, update.effective_chat.id, send_at, offset, enabled)
     if not enabled:
-        await update.message.reply_text("Reminders off.")
+        await update.effective_message.reply_text("Reminders off.")
         return
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"Reminders on — I'll message you at {send_at.strftime('%H:%M')} "
         f"({format_offset(offset)}) with the shifts you have the next day."
     )
@@ -909,7 +1054,7 @@ async def _show_booked(
     today = _today(storage, user_id)
     records = storage.shifts_between(user_id, today, today + timedelta(days=days - 1))
     if not records:
-        await update.message.reply_text(f"Nothing booked {window}.")
+        await update.effective_message.reply_text(f"Nothing booked {window}.")
         return
 
     clashing: set[int] = set()
@@ -963,7 +1108,7 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         month = parse_month(context.args, today=today)
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
     month = month or today.strftime("%Y-%m")
     records = storage.list_shifts(user_id, month=month)
@@ -1090,7 +1235,7 @@ def _earnings_block(
 
 
 async def _send_earnings(update: Update, header: str, blocks: list[str]) -> None:
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "\n".join([header, "", *blocks]).strip(), parse_mode=ParseMode.HTML
     )
 
@@ -1138,7 +1283,7 @@ async def earnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         month = parse_month(context.args, today=today)
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
     records = storage.list_shifts(user_id, month=month)
     await _send_earnings(
@@ -1181,7 +1326,7 @@ async def undo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     entry = buffer.get(user_id)
     if not entry or time_module.time() > entry["expires_at"]:
         buffer.pop(user_id, None)
-        await update.message.reply_text("Nothing to undo — it's either done already or expired.")
+        await update.effective_message.reply_text("Nothing to undo — it's either done already or expired.")
         return
     records: list[ShiftRecord] = entry["records"]
     restored = [
@@ -1221,11 +1366,11 @@ async def find_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user_id = update.effective_user.id
     keyword = " ".join(context.args).strip()
     if not keyword:
-        await update.message.reply_text("Usage: /find <keyword> — searches event and location")
+        await update.effective_message.reply_text("Usage: /find <keyword> — searches event and location")
         return
     records = storage.search_shifts(user_id, keyword)
     if not records:
-        await update.message.reply_text(f"No shifts matching {keyword!r}.")
+        await update.effective_message.reply_text(f"No shifts matching {keyword!r}.")
         return
     pay = sum((r.pay for r in records), Decimal("0"))
     hours = sum((r.hours for r in records), Decimal("0"))
@@ -1244,7 +1389,7 @@ async def delete_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     config = storage.get_config(user_id)
     ids = [arg.lstrip("#") for arg in context.args]
     if not ids or not all(i.isdigit() for i in ids):
-        await update.message.reply_text("Usage: /delete <id> [id ...], or /clear <month>")
+        await update.effective_message.reply_text("Usage: /delete <id> [id ...], or /clear <month>")
         return
 
     deleted: list[tuple[str, ...]] = []
@@ -1291,17 +1436,17 @@ async def clear_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         month = parse_month(args, today=_today(storage, user_id))
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
 
     scope = _month_label(month) if month else "all months"
     pending = storage.list_shifts(user_id, month=month)
     if not pending:
-        await update.message.reply_text(f"Nothing logged for {scope}.")
+        await update.effective_message.reply_text(f"Nothing logged for {scope}.")
         return
     if not confirmed:
         pay = sum((r.pay for r in pending), Decimal("0"))
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"This deletes {len(pending)} shifts ({_money(pay, config.currency)}) "
             f"from {scope}.\nSend `/clear {' '.join(args) + ' ' if args else ''}confirm` "
             "to go ahead."
@@ -1325,11 +1470,11 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         month = parse_month(context.args, today=_today(storage, update.effective_user.id))
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
     records = storage.list_shifts(update.effective_user.id, month=month)
     if not records:
-        await update.message.reply_text("Nothing to export.")
+        await update.effective_message.reply_text("Nothing to export.")
         return
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -1366,7 +1511,7 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     data = io.BytesIO(buffer.getvalue().encode("utf-8"))
     data.name = f"shifts-{month or 'all'}.csv"
-    await update.message.reply_document(document=data, filename=data.name)
+    await update.effective_message.reply_document(document=data, filename=data.name)
 
 
 def _calendar_records(
@@ -1390,10 +1535,10 @@ async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         records, scope = _calendar_records(storage, user_id, list(context.args))
     except ParseError as exc:
-        await update.message.reply_text(str(exc))
+        await update.effective_message.reply_text(str(exc))
         return
     if not records:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"No shifts to add for {scope}. Try /calendar aug, /calendar all, or /calendar #12."
         )
         return
@@ -1413,8 +1558,8 @@ async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
     if len(records) > 10:
         lines.append(f"…and {len(records) - 10} more in the file.")
-    await update.message.reply_document(document=data, filename=data.name)
-    await update.message.reply_text(
+    await update.effective_message.reply_document(document=data, filename=data.name)
+    await update.effective_message.reply_text(
         "\n".join(lines),
         parse_mode=ParseMode.MARKDOWN,
         disable_web_page_preview=True,
@@ -1425,7 +1570,7 @@ async def calendar_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     storage = _storage(context)
     base_url = context.application.bot_data.get("feed_base_url")
     if not base_url:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "No calendar feed is running for this bot. Set PAYBOT_FEED_URL (and "
             "PAYBOT_FEED_PORT) when starting it, then try again — /calendar still "
             "sends you a one-off .ics file."
@@ -1435,7 +1580,7 @@ async def calendar_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     refresh = any(a.lower() in {"new", "reset", "rotate"} for a in context.args)
     token = issue_token(storage, update.effective_user.id, refresh=refresh)
     url = f"{base_url.rstrip('/')}/{token}.ics"
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         ("New link — the old one stops working:\n" if refresh else "")
         + f"[Add to Calendar]({url})\n"
         + f"`{url}`\n\n"
@@ -1482,13 +1627,13 @@ def commands_text() -> str:
 
 
 async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(commands_text(), parse_mode=ParseMode.MARKDOWN)
+    await update.effective_message.reply_text(commands_text(), parse_mode=ParseMode.MARKDOWN)
 
 
 async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     url = context.application.bot_data.get("webapp_url")
     if not url:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "The dashboard isn't set up for this deployment — set PAYBOT_FEED_URL "
             "(it doubles as the mini app's address) and restart the bot."
         )
@@ -1496,14 +1641,14 @@ async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = InlineKeyboardMarkup(
         [[InlineKeyboardButton("💰 Open HowMuch", web_app=WebAppInfo(url=url))]]
     )
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "Your earnings, shifts and calendar at a glance:", reply_markup=keyboard
     )
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     command = update.message.text.split()[0]
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"{command} isn't a command — send /commands to see what I understand."
     )
 
@@ -1637,8 +1782,12 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
                 "This list of commands", commands,
             ),
             Command(
-                ("help", "start"), "/help",
-                "How to log shifts", start,
+                ("help",), "/help",
+                "How to log shifts", show_help,
+            ),
+            Command(
+                ("start", "menu"), "/start",
+                "Welcome and quick buttons", start,
             ),
         ),
     ),
@@ -1647,7 +1796,7 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
 
 # Once linked, shifts live in the HowMuch app. These still work; the rest only know the bot's own
 # records, so they point to the app instead (/export stays, to move old bot shifts into the app).
-WORKS_WHEN_LINKED = {"log", "upcoming", "upcomingshifts", "export", "link", "owed", "unlink", "commands", "help"}
+WORKS_WHEN_LINKED = {"log", "upcoming", "upcomingshifts", "export", "link", "owed", "unlink", "commands", "help", "start"}
 
 
 def _bot_records_only(
@@ -1655,7 +1804,7 @@ def _bot_records_only(
 ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]:
     async def guarded(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if await _is_linked(update, context):
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "You're linked with the HowMuch app, so your shifts and settings live there. "
                 "Open the app for this, or use /owed and /upcoming here. "
                 "/export still downloads the shifts you logged in the bot before linking."
@@ -1665,16 +1814,34 @@ def _bot_records_only(
     return guarded
 
 
+# The short menu Telegram shows by the chat box; /commands still lists everything.
+MENU_COMMANDS = ("start", "log", "owed", "upcoming", "earnings", "link", "help", "commands")
+BOT_NAME = "HowMuch"
+BOT_SHORT_DESCRIPTION = "Track your shifts, pay and what you're owed. Pairs with the HowMuch iPhone app."
+BOT_DESCRIPTION = (
+    "💰 HowMuch tracks your part-time and freelance work.\n\n"
+    "• Send a shift like \"Roadshow today 9am-6pm 15/h\" and I'll work out the pay\n"
+    "• See what you're owed and what's coming up\n"
+    "• Link the HowMuch iPhone app and your shifts go straight into it\n\n"
+    "Tap Start to begin."
+)
+
+
 async def _publish_commands(application: Application) -> None:
-    menu = [
-        BotCommand(command.name, command.summary)
-        for _, commands_in_section in SECTIONS
-        for command in commands_in_section
-    ]
+    by_name = {command.name: command for _, section in SECTIONS for command in section}
+    menu = [BotCommand(name, by_name[name].summary) for name in MENU_COMMANDS if name in by_name]
     try:
         await application.bot.set_my_commands(menu)
     except TelegramError:
         logger.exception("Could not publish the command menu")
+    # The profile people see before tapping Start. Each call is skipped quietly if Telegram refuses it.
+    for call in (lambda: application.bot.set_my_name(BOT_NAME),
+                 lambda: application.bot.set_my_short_description(BOT_SHORT_DESCRIPTION),
+                 lambda: application.bot.set_my_description(BOT_DESCRIPTION)):
+        try:
+            await call()
+        except TelegramError:
+            logger.warning("Could not update the bot profile")
 
     webapp_url = application.bot_data.get("webapp_url")
     if webapp_url:
@@ -1705,6 +1872,10 @@ def build_application(
         for command in commands_in_section:
             handler = command.handler if command.name in WORKS_WHEN_LINKED else _bot_records_only(command.handler)
             application.add_handler(CommandHandler(list(command.names), handler))
+    application.add_handler(CallbackQueryHandler(menu_button, pattern=r"^menu:"))
+    application.add_handler(CallbackQueryHandler(action_button, pattern=r"^act:"))
+    keys = "|".join(re.escape(k) for k in (KEY_LOG, KEY_OWED, KEY_UPCOMING, KEY_EARNINGS, KEY_HELP))
+    application.add_handler(MessageHandler(filters.Regex(f"^({keys})$"), keyboard_button))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_shift))
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
     application.job_queue.run_repeating(send_due_reminders, interval=60, first=10)
