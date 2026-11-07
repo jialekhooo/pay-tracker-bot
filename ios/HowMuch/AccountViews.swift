@@ -299,6 +299,7 @@ final class AppLock: ObservableObject {
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         let window = UIWindow(windowScene: scene)
         window.windowLevel = .alert + 1
+        window.overrideUserInterfaceStyle = .light  // matches the app, which always uses its light design
         let host = UIHostingController(rootView: AppLockScreen(lock: self))
         host.view.backgroundColor = .clear
         window.rootViewController = host

@@ -71,7 +71,9 @@ final class ShareModel: ObservableObject {
     }
 }
 
-private let teal = Color(red: 0.071, green: 0.42, blue: 0.369)
+/// HowMuch teal; a lighter jade in Dark Mode so text and buttons stay readable on the dark share sheet.
+private let teal = Color(UIColor { $0.userInterfaceStyle == .dark
+    ? UIColor(red: 0.53, green: 0.9, blue: 0.76, alpha: 1) : UIColor(red: 0.071, green: 0.42, blue: 0.369, alpha: 1) })
 
 struct ShareView: View {
     @ObservedObject var model: ShareModel

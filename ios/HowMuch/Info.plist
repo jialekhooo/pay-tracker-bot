@@ -17,6 +17,12 @@
 	<string>$(HOWMUCH_APNS_ENVIRONMENT)</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>HowMuch uses Face ID to keep your pay and work records locked when you turn on the lock in Settings.</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<!-- The app always uses its light design, so the launch screen stays light in Dark Mode too. -->
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
