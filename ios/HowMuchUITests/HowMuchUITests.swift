@@ -365,6 +365,31 @@ final class HowMuchUITests: XCTestCase {
         }
     }
     @MainActor
+    func testFriendsVisitPetsAndSayHiOnceADay() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account", "--ui-test-friends"]; app.launch()
+        let card = app.buttons["pet.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()
+        let friends = app.buttons["pet.friends"]; reveal(friends, in: app); friends.tap()
+        XCTAssertTrue(app.staticTexts["PENNY-MYCODE"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["friends.invite"].exists, "an invite link to share")
+        // Accept Alex's request.
+        let accept = app.buttons["friends.accept.PENNY-ALEXAL"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
+        XCTAssertTrue(app.staticTexts["You're now friends! 🎉"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-ALEXAL").firstMatch.waitForExistence(timeout: 5))
+        attach("Friends list", app: app)
+        // Visit Sam's Mochi and say hi.
+        let sam = app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-SAMSAM").firstMatch
+        reveal(sam, in: app); sam.tap()
+        XCTAssertTrue(app.staticTexts["Mochi"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Sam's pet"].exists)
+        XCTAssertTrue(app.staticTexts["Sam said hi to you today"].exists || app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Sam said hi to you today")).firstMatch.exists)
+        let hello = app.buttons["friend.hello"]; XCTAssertTrue(hello.isEnabled); hello.tap()
+        XCTAssertTrue(app.staticTexts["Mochi waved back! You and Sam each got 2 coins."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["friend.hello"].isEnabled, "once a day")
+        attach("Said hi to a friend's pet", app: app)
+    }
+    @MainActor
     func testShiftExtraIsAddedToThePayout() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         app.buttons["nav.add"].tap()

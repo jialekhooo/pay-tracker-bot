@@ -55,7 +55,14 @@ final class TrackerStore: ObservableObject {
         petUnlocks = Set(value)
         UserDefaults.standard.set(value, forKey: "petUnlocks.\(accountID)")
     }
-    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, developer: developer, unlocked: petUnlocks, currency: data.rules.currency) }
+    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, developer: developer, unlocked: petUnlocks, currency: data.rules.currency, bonusCoins: helloCoins) }
+    /// Coins from saying hi to friends and being said hi to.
+    @Published private(set) var helloCoins = 0
+    func setHelloCoins(_ value: Int?) {
+        guard let value, value != helloCoins else { return }
+        helloCoins = value
+        UserDefaults.standard.set(value, forKey: "helloCoins.\(accountID)")
+    }
 
     init(accountID: String, suppressNotifications: Bool = false) {
         self.accountID = UUID(uuidString: accountID)?.uuidString.lowercased() ?? "invalid"
@@ -66,6 +73,7 @@ final class TrackerStore: ObservableObject {
         pioneer = UserDefaults.standard.bool(forKey: "pioneer.\(self.accountID)")
         developer = UserDefaults.standard.bool(forKey: "developer.\(self.accountID)")
         petUnlocks = Set(UserDefaults.standard.stringArray(forKey: "petUnlocks.\(self.accountID)") ?? [])
+        helloCoins = UserDefaults.standard.integer(forKey: "helloCoins.\(self.accountID)")
         if isPreview {
             #if DEBUG
             pioneer = !CommandLine.arguments.contains("--ui-test-not-pioneer")

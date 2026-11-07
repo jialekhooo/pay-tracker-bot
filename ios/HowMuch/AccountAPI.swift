@@ -33,6 +33,8 @@ struct CloudEnvelope: Codable {
     let developer: Bool?
     /// Penny items unlocked with gift codes.
     let petUnlocks: [String]?
+    /// Coins from hellos with friends.
+    let helloCoins: Int?
 }
 
 struct AccountHTTPError: LocalizedError {
@@ -133,6 +135,7 @@ final class AccountAPI {
         if let data = try PaymentDetectionUITestFixture.response(for: request) { return data }
         if let data = try PetCodesUITestFixture.response(for: request) { return data }
         if let data = try TelegramUITestFixture.response(for: request) { return data }
+        if let data = try FriendsUITestFixture.response(for: request) { return data }
         #endif
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -176,6 +179,34 @@ private enum PetCodesUITestFixture {
             return try JSONSerialization.data(withJSONObject: codes[index])
         }
         return try JSONSerialization.data(withJSONObject: ["codes": codes])
+    }
+}
+
+/// Friends for UI tests: one friend (Sam's pet Mochi) and one request (Alex).
+@MainActor
+enum FriendsUITestFixture {
+    static func card(_ pet: String, _ owner: String, hat: String) -> [String: Any] {
+        ["petName": pet, "ownerName": owner, "stage": 2, "level": 6, "mood": "happy", "streakWeeks": 3,
+         "outfit": ["hat": hat, "background": "mint"], "badges": ["first-shift", "regular"]]
+    }
+    static var friends: [[String: Any]] = [["code": "PENNY-SAMSAM", "card": card("Mochi", "Sam", hat: "party-hat"), "saidHiToday": false, "theySaidHiToday": true]]
+    static var incoming: [[String: Any]] = [["code": "PENNY-ALEXAL", "card": card("Bean", "Alex", hat: "beanie"), "saidHiToday": false, "theySaidHiToday": false]]
+    static var coins = 0
+    static func response(for request: URLRequest) throws -> Data? {
+        guard CommandLine.arguments.contains("--ui-test-friends"), let path = request.url?.path, path.hasPrefix("/v1/friends") else { return nil }
+        if path.hasSuffix("/hello"), let index = friends.firstIndex(where: { path.contains(($0["code"] as! String)) }) {
+            friends[index]["saidHiToday"] = true; coins += 2
+            return try JSONSerialization.data(withJSONObject: ["friend": friends[index], "helloCoins": coins])
+        }
+        if path == "/v1/friends/card" { return try JSONSerialization.data(withJSONObject: ["saved": true]) }
+        if path == "/v1/friends", request.httpMethod == "POST" {
+            let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+            if let index = incoming.firstIndex(where: { $0["code"] as? String == body["code"] as? String }) { friends.append(incoming.remove(at: index)) }
+            else { throw AccountHTTPError(status: 404, message: "That friend code isn't right. Check it and try again.") }
+        }
+        if request.httpMethod == "DELETE" { friends.removeAll { path.hasSuffix($0["code"] as! String) }; incoming.removeAll { path.hasSuffix($0["code"] as! String) } }
+        return try JSONSerialization.data(withJSONObject: ["code": "PENNY-MYCODE", "link": "https://howmuch-ios.fly.dev/friend/MYCODE",
+                                                           "friends": friends, "incoming": incoming, "outgoing": [], "helloCoins": coins])
     }
 }
 

@@ -88,7 +88,7 @@ public struct PetProgress: Equatable, Sendable {
 
     /// `pioneer`: the account was made before HowMuch's official launch.
     /// `currency`: the person's main currency; money badges only count pay in it. Defaults to the most used one.
-    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, developer: Bool = false, unlocked: Set<String> = [], currency: String? = nil) {
+    public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, developer: Bool = false, unlocked: Set<String> = [], currency: String? = nil, bonusCoins: Int = 0) {
         self.developer = developer
         self.unlocked = unlocked
         let main = currency ?? Dictionary(grouping: shifts, by: \.currency).max { $0.value.count < $1.value.count }?.key ?? "SGD"
@@ -158,7 +158,8 @@ public struct PetProgress: Equatable, Sendable {
         ]
         achievements = list
         coins += list.filter(\.earned).count * Self.coinsPerAchievement
-        coinsEarned = coins
+        // Coins from outside the shifts, such as hellos from friends (kept on the server).
+        coinsEarned = coins + max(bonusCoins, 0)
         xp = points
         stage = Stage.of(xp: points)
 

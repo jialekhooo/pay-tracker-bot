@@ -43,7 +43,7 @@ struct AccountRootView: View {
             } else { AppleWelcomeView() }
         }
         .task { await auth.restore(); await openPendingNotification() }
-        .onChange(of: scenePhase) { _, value in if value == .active { Task { await auth.becomeActive() } } }
+        .onChange(of: scenePhase) { _, value in if value == .active { Task { await auth.becomeActive(); await auth.publishPetCard() } } }
         .onReceive(push.$deviceToken.compactMap { $0 }.removeDuplicates()) { token in Task { await auth.registerDeviceToken(token) } }
         .onChange(of: auth.account?.id) { _, _ in Task { await openPendingNotification() } }
         .onReceive(push.$pendingRoute) { _ in Task { await openPendingNotification() } }

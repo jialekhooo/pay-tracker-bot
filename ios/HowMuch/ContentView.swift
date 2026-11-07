@@ -8,6 +8,7 @@ struct ContentView: View {
     @ObservedObject private var push = PushCenter.shared
     @State private var calendarDay = Date()
     @State private var adding = false
+    @State private var friendInvite: FriendInvite?
     @State private var lastAsked: UUID?
     @State private var finishing: Shift?
     @State private var shared: SharedMessage?
@@ -46,6 +47,12 @@ struct ContentView: View {
         .task(id: push.widgetURL) {
             guard let url = push.widgetURL else { return }
             push.widgetURL = nil
+            // Friend invite links and hello notifications open Friends.
+            if url.scheme == "howmuch", url.host == "friend" || url.host == "friends" {
+                adding = false; finishing = nil; shared = nil
+                friendInvite = FriendInvite(code: url.host == "friend" ? url.lastPathComponent : nil)
+                return
+            }
             guard let route = WidgetLink.parse(url, accountID: store.accountID) else { return }
             if case .finish(let id) = route {
                 if let shift = store.data.shifts.first(where: { $0.id == id && $0.endDate <= Date() }) { adding = false; finishing = shift }
@@ -68,6 +75,12 @@ struct ContentView: View {
             else { adding = true }
         }
         .sheet(isPresented: $adding) { ShiftEditor() }
+        .sheet(item: $friendInvite) { invite in
+            NavigationStack {
+                FriendsView(invite: invite.code)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { friendInvite = nil } } }
+            }
+        }
         .sheet(item: $finishing, onDismiss: finishSheetClosed) { FinishShiftSheet(shift: $0) }
         .sheet(item: $shared) { ShiftEditor(initialMessage: $0.text) }
         .onChange(of: scenePhase) { _, value in if value == .active { store.refreshReminders(); store.refreshWidgets(); refreshLiveShift() } }
@@ -445,4 +458,10 @@ struct UpcomingEventDetail: View {
 private struct SharedMessage: Identifiable {
     let id = UUID()
     let text: String
+}
+
+/// Opens Friends from an invite link (with the friend's code) or a hello notification.
+struct FriendInvite: Identifiable {
+    let id = UUID()
+    let code: String?
 }

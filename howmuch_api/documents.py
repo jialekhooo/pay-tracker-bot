@@ -351,7 +351,9 @@ async def get_data(request: Request, authorization: str | None=Header(default=No
     from .push import configured
     from .auth import developer, pioneer
     from .pet_codes import unlocks
-    return json_response({**result,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(request.app.state.storage._conn,account['account_id'])})
+    from .friends import hello_coins
+    db=request.app.state.storage._conn
+    return json_response({**result,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(db,account['account_id']),'helloCoins':hello_coins(db,account['account_id'])})
 
 
 @router.put('/data')
@@ -420,7 +422,8 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
     from .push import configured
     from .auth import developer, pioneer
     from .pet_codes import unlocks
-    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id'])})
+    from .friends import hello_coins
+    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id']),'helloCoins':hello_coins(storage._conn,account['account_id'])})
 
 
 def commit_document(storage, account, model: Document, timezone_name, current):

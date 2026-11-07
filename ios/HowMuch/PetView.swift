@@ -876,6 +876,18 @@ struct PetDetailView: View {
                 nameRow
                 if balance < 0 { owedNote(balance) }
                 statsCard(pet)
+                NavigationLink { FriendsView() } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.2.fill").font(.title3).frame(width: 40, height: 40).foregroundStyle(.white)
+                            .background(Palette.accent, in: RoundedRectangle(cornerRadius: 11))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Friends").font(.appHeadline).foregroundStyle(Palette.ink)
+                            Text("Visit friends' pets and say hi. You both get 2 coins.").font(.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
+                    }.padding(14).background(Palette.surface, in: RoundedRectangle(cornerRadius: 18)).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("pet.friends")
                 missions(pet)
                 shop(pet, closet)
                 codes
@@ -1274,5 +1286,289 @@ struct PetCodesView: View {
             await load()
         }
         catch { message = error.localizedDescription }
+    }
+}
+
+// MARK: - Friends
+
+/// Penny as friends see her: her look and progress only, never shifts, pay, payers or places.
+struct FriendCard: Codable, Equatable {
+    var petName = "Penny"
+    var ownerName = ""
+    var stage = 0
+    var level = 1
+    var mood = "okay"
+    var streakWeeks = 0
+    var outfit: [String: String] = [:]
+    var badges: [String] = []
+
+    var progressStage: PetProgress.Stage { PetProgress.Stage(rawValue: stage) ?? .egg }
+    var progressMood: PetProgress.Mood { PetProgress.Mood(rawValue: mood) ?? .okay }
+    var items: [PetSlot: PetItem] {
+        Dictionary(uniqueKeysWithValues: outfit.compactMap { key, id in
+            guard let slot = PetSlot(rawValue: key), let item = PetItem.named(id) else { return nil }
+            return (slot, item)
+        })
+    }
+    var owner: String { ownerName.trimmingCharacters(in: .whitespaces).isEmpty ? "A friend" : ownerName }
+}
+
+struct FriendPerson: Codable, Identifiable, Equatable {
+    var code: String
+    var card: FriendCard
+    var saidHiToday: Bool
+    var theySaidHiToday: Bool
+    var id: String { code }
+}
+
+struct FriendsOverview: Codable {
+    var code: String
+    var link: String
+    var friends: [FriendPerson]
+    var incoming: [FriendPerson]
+    var outgoing: [FriendPerson]
+    var helloCoins: Int
+}
+
+private struct HelloResult: Decodable { let friend: FriendPerson; let helloCoins: Int }
+
+extension TrackerStore {
+    var petCard: FriendCard {
+        let pet = petProgress()
+        let outfit = petOutfit(petCloset, pet)
+        return FriendCard(petName: petPreferences.displayName, ownerName: String(data.settings.displayName.prefix(60)),
+                       stage: pet.stage.rawValue, level: pet.level, mood: pet.mood.rawValue, streakWeeks: pet.streakWeeks,
+                       outfit: Dictionary(uniqueKeysWithValues: outfit.map { ($0.key.rawValue, $0.value.id) }),
+                       badges: pet.achievements.filter(\.earned).map(\.id))
+    }
+}
+
+extension AppleAccountStore {
+    /// Sends Penny's card when it has changed since the last send, so friends see her as she is now.
+    func publishPetCard() async {
+        guard let store = tracker, let id = account?.id else { return }
+        let card = store.petCard
+        let key = "petCard.\(id)"
+        guard let body = try? JSONEncoder().encode(["card": card]),
+              UserDefaults.standard.data(forKey: key) != body else { return }
+        if (try? await api.request("/v1/friends/card", method: "PUT", body: body)) != nil {
+            UserDefaults.standard.set(body, forKey: key)
+        }
+    }
+}
+
+/// A friend's Penny, small, for lists.
+private struct FriendPennyThumb: View {
+    let card: FriendCard
+    var size: CGFloat = 52
+    var body: some View {
+        ZStack {
+            PetScene(item: card.items[.background])
+            PetSprite(stage: card.progressStage, mood: card.progressMood, outfit: card.items.filter { $0.key != .background }, animate: false)
+                .frame(width: size * 0.8, height: size * 0.8)
+        }.frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
+    }
+}
+
+/// Penny's friends: your code to share, requests, and friends to visit.
+struct FriendsView: View {
+    @EnvironmentObject private var auth: AppleAccountStore
+    @EnvironmentObject private var store: TrackerStore
+    var invite: String?
+    @State private var overview: FriendsOverview?
+    @State private var code = ""
+    @State private var message = ""
+    @State private var busy = false
+
+    var body: some View {
+        AppForm {
+            Section {
+                Text(overview?.code ?? "Loading…").font(.system(.title2, design: .monospaced, weight: .bold)).textSelection(.enabled)
+                    .accessibilityIdentifier("friends.myCode")
+                if let overview, let link = URL(string: overview.link) {
+                    ShareLink(item: link, message: Text("Be my friend on HowMuch! Visit my pet \(store.petPreferences.displayName) and say hi. My friend code is \(overview.code).")) {
+                        Label("Invite a friend", systemImage: "square.and.arrow.up")
+                    }.accessibilityIdentifier("friends.invite")
+                }
+                Text("Friends can visit \(store.petPreferences.displayName) and say hi. They never see your shifts or pay.").formFootnote()
+            } header: { FormHeader("Your friend code") }
+
+            Section(styled: "Add a friend") {
+                TextField("PENNY-XXXXXX", text: $code).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced)).accessibilityIdentifier("friends.codeField")
+                Button(busy ? "Adding…" : "Add friend", systemImage: "person.badge.plus") { Task { await add(code) } }
+                    .disabled(busy || code.trimmingCharacters(in: .whitespaces).count < 4).accessibilityIdentifier("friends.add")
+                if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.warning).accessibilityIdentifier("friends.message") }
+            }
+
+            if let incoming = overview?.incoming, !incoming.isEmpty {
+                Section(styled: "Friend requests") {
+                    ForEach(incoming) { person in
+                        HStack(spacing: 12) {
+                            FriendPennyThumb(card: person.card, size: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(person.card.owner).font(.subheadline.weight(.semibold))
+                                Text("\(person.card.petName) · Lv \(person.card.level)").font(.caption).foregroundStyle(Palette.muted)
+                            }
+                            Spacer()
+                            Button { Task { await add(person.code) } } label: { Text("Accept").foregroundStyle(.white) }.buttonStyle(.borderedProminent).tint(Palette.accent)
+                                .accessibilityIdentifier("friends.accept." + person.code)
+                            Button("Decline", systemImage: "xmark") { Task { await remove(person.code) } }.labelStyle(.iconOnly).buttonStyle(.bordered)
+                        }
+                    }
+                }
+            }
+
+            Section(styled: "Friends") {
+                if let friends = overview?.friends, !friends.isEmpty {
+                    ForEach(friends) { friend in
+                        NavigationLink { FriendPetView(friend: friend, onChange: { overview = $0 ?? overview; Task { await load() } }) } label: {
+                            HStack(spacing: 12) {
+                                FriendPennyThumb(card: friend.card)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(friend.card.petName).font(.subheadline.weight(.semibold))
+                                    Text("\(friend.card.owner)'s pet · Lv \(friend.card.level)").font(.caption).foregroundStyle(Palette.muted)
+                                }
+                                Spacer()
+                                if friend.theySaidHiToday { Text("👋").accessibilityLabel("Said hi to you today") }
+                                if friend.saidHiToday { Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.teal).accessibilityLabel("You said hi today") }
+                            }
+                        }.accessibilityIdentifier("friends.friend." + friend.code)
+                    }
+                } else {
+                    Text(overview == nil ? "Loading…" : "No friends yet. Share your code to add one.").font(.subheadline).foregroundStyle(Palette.muted)
+                }
+            }
+
+            if let outgoing = overview?.outgoing, !outgoing.isEmpty {
+                Section(styled: "Waiting for them to accept") {
+                    ForEach(outgoing) { person in
+                        HStack {
+                            Text(person.card.ownerName.isEmpty ? person.code : person.card.ownerName).font(.subheadline)
+                            Spacer()
+                            Button("Cancel") { Task { await remove(person.code) } }.font(.subheadline)
+                        }
+                    }
+                }
+            }
+
+            Section(styled: "How it works") {
+                Text("Say hi to each friend once a day. You both get \(2) coins, and they get a notification. Remove a friend any time from their page.")
+                    .formFootnote()
+            }
+        }
+        .detailStyle("Friends")
+        .task {
+            if let invite { code = invite }
+            await auth.publishPetCard()
+            await load()
+        }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        do {
+            let result = try JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request("/v1/friends"))
+            overview = result; store.setHelloCoins(result.helloCoins)
+        } catch { message = error.localizedDescription }
+    }
+
+    private func add(_ value: String) async {
+        busy = true; defer { busy = false }; message = ""
+        do {
+            let before = overview?.friends.count ?? 0
+            let body = try JSONSerialization.data(withJSONObject: ["code": value.trimmingCharacters(in: .whitespacesAndNewlines)])
+            let result = try JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request("/v1/friends", method: "POST", body: body))
+            overview = result; code = ""
+            message = result.friends.count > before ? "You're now friends! 🎉" : "Request sent. You'll be friends once they accept."
+        } catch { message = error.localizedDescription }
+    }
+
+    private func remove(_ value: String) async {
+        do { overview = try JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request("/v1/friends/" + value, method: "DELETE")) }
+        catch { message = error.localizedDescription }
+    }
+}
+
+/// Visiting a friend's Penny.
+struct FriendPetView: View {
+    @EnvironmentObject private var auth: AppleAccountStore
+    @EnvironmentObject private var store: TrackerStore
+    @Environment(\.dismiss) private var dismiss
+    @State var friend: FriendPerson
+    var onChange: (FriendsOverview?) -> Void
+    @State private var waving = false
+    @State private var message = ""
+    @State private var confirmingRemove = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                ZStack {
+                    PetScene(item: friend.card.items[.background])
+                    PetSprite(stage: friend.card.progressStage, mood: friend.card.progressMood, outfit: friend.card.items.filter { $0.key != .background })
+                        .frame(width: 180, height: 180)
+                        .offset(y: waving ? -16 : 8)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.45), value: waving)
+                    if waving {
+                        Text("👋").font(.system(size: 44)).offset(x: 80, y: -60).transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .frame(height: 260).clipShape(RoundedRectangle(cornerRadius: 24))
+
+                VStack(spacing: 4) {
+                    Text(friend.card.petName).font(.title2.weight(.bold)).foregroundStyle(Palette.ink)
+                    Text("\(friend.card.owner)'s pet").font(.subheadline).foregroundStyle(Palette.muted)
+                }
+                HStack(spacing: 10) {
+                    stat("Level", "\(friend.card.level)")
+                    stat("Stage", friend.card.progressStage.title)
+                    stat("Streak", friend.card.streakWeeks == 0 ? "—" : "\(friend.card.streakWeeks) wk")
+                }
+                Text("Feeling \(friend.card.progressMood.label.lowercased()) · \(friend.card.badges.count) badge\(friend.card.badges.count == 1 ? "" : "s")")
+                    .font(.subheadline).foregroundStyle(Palette.muted)
+                if friend.theySaidHiToday {
+                    Label("\(friend.card.owner) said hi to you today", systemImage: "hand.wave.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.teal)
+                }
+                Button(friend.saidHiToday ? "You said hi today" : "👋 Say hi", systemImage: friend.saidHiToday ? "checkmark.circle" : "") {
+                    Task { await sayHi() }
+                }
+                .primaryButton().disabled(friend.saidHiToday).accessibilityIdentifier("friend.hello")
+                Text(message.isEmpty ? "Once a day. You both get 2 coins." : message).font(.caption).foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center).accessibilityIdentifier("friend.helloMessage")
+                Button("Remove friend", role: .destructive) { confirmingRemove = true }.font(.subheadline).foregroundStyle(.red).padding(.top, 20)
+            }.padding(20)
+        }
+        .detailStyle(friend.card.petName)
+        .sensoryFeedback(.success, trigger: waving)
+        .confirmationDialog("Remove \(friend.card.owner) as a friend?", isPresented: $confirmingRemove, titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { Task { await remove() } }
+        }
+    }
+
+    private func stat(_ title: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.headline).foregroundStyle(Palette.ink)
+            Text(title).font(.caption).foregroundStyle(Palette.muted)
+        }.frame(maxWidth: .infinity).padding(.vertical, 10).background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func sayHi() async {
+        do {
+            let result = try JSONDecoder().decode(HelloResult.self, from: await auth.api.request("/v1/friends/\(friend.code)/hello", method: "POST"))
+            friend = result.friend
+            store.setHelloCoins(result.helloCoins)
+            withAnimation { waving = true }
+            message = "\(friend.card.petName) waved back! You and \(friend.card.owner) each got 2 coins."
+            try? await Task.sleep(for: .seconds(1.2))
+            withAnimation { waving = false }
+            onChange(nil)
+        } catch { message = error.localizedDescription }
+    }
+
+    private func remove() async {
+        let result = try? JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request("/v1/friends/" + friend.code, method: "DELETE"))
+        onChange(result)
+        dismiss()
     }
 }
