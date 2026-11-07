@@ -201,3 +201,4 @@ Build 60: Penny is the new app icon. Shifts can carry an extra (bonus, allowance
 Build 61: Penny replaces the H logo everywhere else too: the sign-in screen, the notification preview in Settings and the widgets.
 Build 62: New users see five intro pages (what HowMuch does, adding jobs, getting paid, reminders, Penny) with Next and Skip, ending in Sign up. Shown once per install and never to someone already signed in.
 Build 63: Link Telegram in Settings → Telegram. After tapping Start in @paytracker1_bot, shifts sent to the bot go into the HowMuch account with the app's rates, breaks, overtime and due dates, and /owed and /upcoming read from the app. The Telegram screen is also the help guide.
+Build 64: Dark Mode: the launch screen stays light (no black flash), the Face ID lock stays light like the app, and the share sheet uses a readable jade.
