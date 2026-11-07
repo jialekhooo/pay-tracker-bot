@@ -616,7 +616,15 @@ struct AppearancePicker: View {
             Picker("Appearance", selection: $appearance) {
                 ForEach(AppAppearance.allCases) { Text($0.title).tag($0.rawValue) }
             }.pickerStyle(.segmented).accessibilityIdentifier("settings.appearance")
-            Text("Match iPhone follows Dark Mode in your iPhone's Display settings.").font(.caption).foregroundStyle(Palette.muted)
+            Text(caption).font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("settings.appearanceCaption")
         }.padding(.vertical, 10)
+    }
+    /// Describes the option that's chosen.
+    private var caption: String {
+        switch AppAppearance(rawValue: appearance) ?? .system {
+        case .system: "Switches between light and dark with your iPhone."
+        case .light: "Always light, even when your iPhone is in Dark Mode."
+        case .dark: "Always dark, even when your iPhone is in Light Mode."
+        }
     }
 }

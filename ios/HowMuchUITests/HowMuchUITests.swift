@@ -352,6 +352,19 @@ final class HowMuchUITests: XCTestCase {
         reveal(export, in: app); XCTAssertTrue(export.waitForExistence(timeout: 5))
     }
     @MainActor
+    func testAppearanceCaptionDescribesTheChosenOption() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        let caption = app.staticTexts["settings.appearanceCaption"]; reveal(caption, in: app)
+        XCTAssertTrue(caption.waitForExistence(timeout: 5))
+        for (option, text) in [("Dark", "Always dark, even when your iPhone is in Light Mode."),
+                               ("Light", "Always light, even when your iPhone is in Dark Mode."),
+                               ("Match iPhone", "Switches between light and dark with your iPhone.")] {
+            app.buttons[option].tap()
+            XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 5), option)
+        }
+    }
+    @MainActor
     func testShiftExtraIsAddedToThePayout() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         app.buttons["nav.add"].tap()
