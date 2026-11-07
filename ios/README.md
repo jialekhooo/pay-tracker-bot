@@ -196,3 +196,4 @@ Build 56: Job messages with the event name on its own first line ("Nike Pop-up",
 Build 57: Penny has 30 new items across every category: hats, glasses, neckwear, scenes and skins.
 
 Build 58: Swipe a gift code in Your codes to revoke it.
+Build 59: Press and hold a revoked gift code in Your codes to delete it. Active codes have to be revoked first, and anyone who redeemed a code keeps its items.
