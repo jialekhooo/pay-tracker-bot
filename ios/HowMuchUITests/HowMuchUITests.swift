@@ -54,8 +54,7 @@ final class HowMuchUITests: XCTestCase {
         // Wait for the list to come back before looking for the sort button.
         let sortButton = app.buttons.matching(NSPredicate(format: "identifier IN %@ OR label IN %@", ["Earliest first", "Latest first"], ["Earliest first", "Latest first"])).firstMatch
         XCTAssertTrue(sortButton.waitForExistence(timeout: 5))
-        for _ in 0..<6 { app.swipeDown() }
-        app.buttons["Earliest first"].exists ? app.buttons["Earliest first"].tap() : app.buttons["Latest first"].tap()
+        reveal(sortButton, in: app); sortButton.tap()
         app.buttons["Unpaid"].tap()
         XCTAssertTrue(toggle.exists)
         app.buttons["All"].tap(); toggle.tap()
