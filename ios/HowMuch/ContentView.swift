@@ -156,7 +156,7 @@ struct DashboardView: View {
                     }
                     NavigationLink { ShiftBrowser(mode: "Upcoming shifts") } label: {
                         let next = store.data.shifts.filter { $0.currency == currency && $0.endDate > clock.date && $0.day.hasPrefix(String(Shift.dayString(clock.date).prefix(7))) }
-                        GlanceCard(title: "Left to earn this month", value: money(next.reduce(0) { $0 + $1.pay - $1.earned(at: clock.date) }, currency), symbol: "arrow.up.right")
+                        GlanceCard(title: "Left to earn this month", value: money(next.reduce(0) { $0 + $1.total - $1.earned(at: clock.date) }, currency), symbol: "arrow.up.right")
                     }.accessibilityIdentifier("overview.upcoming")
                 }.buttonStyle(.plain)
                 // Today first: what's on now or later today (including an overnight shift that started yesterday).
@@ -193,7 +193,7 @@ struct DashboardView: View {
                 }.buttonStyle(.plain).accessibilityIdentifier("browse.shifts")
                 let unpaid = store.data.shifts.filter { !$0.paid && $0.endDate <= clock.date && $0.currency == currency }
                 if !unpaid.isEmpty {
-                    SectionHeading(title: "Awaiting payment", detail: money(unpaid.reduce(0) { $0 + $1.pay }, currency))
+                    SectionHeading(title: "Awaiting payment", detail: money(unpaid.reduce(0) { $0 + $1.total }, currency))
                     ShiftCards(shifts: Array(unpaid.sorted { ($0.paymentDue ?? $0.day) < ($1.paymentDue ?? $1.day) }.prefix(3)))
                 }
             }
@@ -309,7 +309,7 @@ struct ShiftsView: View {
                         HStack(alignment: .firstTextBaseline) {
                             Text(first.event).font(.appHeadline)
                             Spacer()
-                            Text(money(items.reduce(Decimal.zero) { $0 + $1.pay }, first.currency)).font(.appHeadline)
+                            Text(money(items.reduce(Decimal.zero) { $0 + $1.total }, first.currency)).font(.appHeadline)
                         }.foregroundStyle(Palette.ink)
                         HStack {
                             Text("\(items.count) \(items.count == 1 ? "shift" : "shifts")").font(.caption)

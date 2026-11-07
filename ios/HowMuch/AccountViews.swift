@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import LocalAuthentication
 import UserNotifications
 import HowMuchCore
 
@@ -180,8 +181,158 @@ struct AccountConflictView: View {
             Text(title).font(.appHeadline)
             Text("\(counted(data.shifts.count, "shift")) · \(counted(data.claims.count, "claim"))").font(.caption).foregroundStyle(Palette.muted)
             ForEach(Array(Set(data.shifts.map(\.currency))).sorted(), id: \.self) { currency in
-                Text(money(data.shifts.filter { $0.currency == currency }.reduce(0) { $0 + $1.pay }, currency)).font(.subheadline.bold())
+                Text(money(data.shifts.filter { $0.currency == currency }.reduce(0) { $0 + $1.total }, currency)).font(.subheadline.bold())
             }
+        }
+    }
+}
+
+// MARK: - Face ID lock
+
+/// Optional lock that asks for Face ID (or the passcode) whenever HowMuch comes back from the background.
+/// It is a setting on this iPhone only and never syncs. The lock screen sits in its own window
+/// above everything, including sheets and alerts, so nothing shows through it.
+@MainActor
+final class AppLock: ObservableObject {
+    static let shared = AppLock()
+    private static let key = "appLock.enabled"
+    @Published private(set) var enabled = AppLock.stored
+    @Published private(set) var locked = false
+    @Published var message: String?
+    private var window: UIWindow?
+    private weak var previousKey: UIWindow?
+    private var unlocking = false
+    /// Ask straight away only after launch or a return from the background. The Face ID sheet itself
+    /// makes the app briefly inactive, so asking on every activation would loop after a cancel.
+    private var promptOnActive: Bool
+
+    /// Preview and UI-test runs keep the setting in memory, so a test never leaves the next launch locked.
+    private static var inMemory: Bool {
+        #if DEBUG
+        return CommandLine.arguments.contains { $0 == "--preview" || $0.hasPrefix("--ui-test") }
+        #else
+        return false
+        #endif
+    }
+    private static var stored: Bool { inMemory ? false : UserDefaults.standard.bool(forKey: key) }
+
+    private init() {
+        let on = AppLock.stored
+        locked = on; promptOnActive = on
+    }
+
+    /// "Face ID", "Touch ID" or "Passcode", for labels.
+    var methodName: String {
+        let context = LAContext()
+        _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+        switch context.biometryType {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        case .opticID: return "Optic ID"
+        default: return "Passcode"
+        }
+    }
+
+    /// Turning the lock on needs a successful unlock first, so nobody is locked out by a lock that can't open.
+    func setEnabled(_ on: Bool) async {
+        message = nil
+        if on {
+            guard await authenticate(reason: "Turn on the HowMuch lock") else { return }
+        }
+        enabled = on
+        if !Self.inMemory { UserDefaults.standard.set(on, forKey: Self.key) }
+        if !on { locked = false; hide() }
+    }
+
+    func scenePhaseChanged(_ phase: ScenePhase) {
+        guard enabled else { return }
+        switch phase {
+        case .background: locked = true; promptOnActive = true; show()
+        case .inactive: show() // covers the app switcher snapshot
+        case .active:
+            guard locked else { hide(); return }
+            show()
+            if promptOnActive { promptOnActive = false; Task { await unlock(automatic: true) } }
+        @unknown default: break
+        }
+    }
+
+    func unlock(automatic: Bool = false) async {
+        guard locked, !unlocking else { return }
+        #if DEBUG
+        // UI tests stand in for the person: the cover stays until the test taps Unlock.
+        if automatic, CommandLine.arguments.contains("--ui-test-app-lock") { return }
+        #endif
+        unlocking = true; defer { unlocking = false }
+        if await authenticate(reason: "Unlock HowMuch") { locked = false; hide() }
+    }
+
+    private func authenticate(reason: String) async -> Bool {
+        #if DEBUG
+        if CommandLine.arguments.contains("--ui-test-app-lock") { return true }
+        #endif
+        let context = LAContext()
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            message = "Set a passcode on this iPhone in Settings to use the lock."
+            return false
+        }
+        do { return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) }
+        catch { message = (error as? LAError)?.code == .userCancel ? nil : error.localizedDescription; return false }
+    }
+
+    private func show() {
+        if window != nil { return }
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert + 1
+        let host = UIHostingController(rootView: AppLockScreen(lock: self))
+        host.view.backgroundColor = .clear
+        window.rootViewController = host
+        // Key, so VoiceOver and the keyboard go to the lock and not the app behind it.
+        previousKey = scene.windows.first { $0.isKeyWindow }
+        window.makeKeyAndVisible()
+        self.window = window
+    }
+
+    private func hide() {
+        guard !locked else { return }
+        window?.isHidden = true; window = nil
+        previousKey?.makeKey()
+    }
+}
+
+private struct AppLockScreen: View {
+    @ObservedObject var lock: AppLock
+    var body: some View {
+        ZStack {
+            Palette.canvas.ignoresSafeArea()
+            VStack(spacing: 18) {
+                Image(systemName: lock.methodName == "Touch ID" ? "touchid" : "faceid").font(.system(size: 54)).foregroundStyle(Palette.teal)
+                Text("HowMuch is locked").font(.appHeadline).foregroundStyle(Palette.ink)
+                if lock.locked {
+                    Button("Unlock with \(lock.methodName)") { Task { await lock.unlock() } }
+                        .primaryButton().padding(.horizontal, 40).accessibilityIdentifier("appLock.unlock")
+                }
+                if let message = lock.message { Text(message).font(.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).padding(.horizontal, 32) }
+            }
+        }
+    }
+}
+
+struct AppLockToggleRow: View {
+    @ObservedObject private var lock = AppLock.shared
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: Binding(get: { lock.enabled }, set: { on in Task { await lock.setEnabled(on) } })) {
+                HStack(spacing: 12) {
+                    Image(systemName: lock.methodName == "Touch ID" ? "touchid" : "faceid").font(.rowIcon).frame(width: 32, height: 32)
+                        .foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
+                    Text("Lock with \(lock.methodName)").font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink)
+                }
+            }.tint(Palette.teal).frame(minHeight: 48).accessibilityIdentifier("settings.appLock")
+            Text(lock.message ?? "Ask for \(lock.methodName) each time HowMuch is opened. Only on this iPhone.")
+                .font(.caption).foregroundStyle(Palette.muted).padding(.leading, 44).padding(.bottom, 8)
         }
     }
 }

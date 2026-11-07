@@ -51,6 +51,9 @@ final class HowMuchUITests: XCTestCase {
         tapTrailingArea(wedding, in: app)
         XCTAssertTrue(app.navigationBars["Wedding reception"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.firstMatch.tap()
+        // Wait for the list to come back before looking for the sort button.
+        let sortButton = app.buttons.matching(NSPredicate(format: "identifier IN %@ OR label IN %@", ["Earliest first", "Latest first"], ["Earliest first", "Latest first"])).firstMatch
+        XCTAssertTrue(sortButton.waitForExistence(timeout: 5))
         for _ in 0..<6 { app.swipeDown() }
         app.buttons["Earliest first"].exists ? app.buttons["Earliest first"].tap() : app.buttons["Latest first"].tap()
         app.buttons["Unpaid"].tap()
@@ -309,6 +312,46 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5))
     }
     @MainActor
+    func testShiftExtraIsAddedToThePayout() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        app.buttons["nav.add"].tap()
+        let event = app.textFields["Event name"]
+        XCTAssertTrue(event.waitForExistence(timeout: 5)); event.tap(); event.typeText("Extras QA")
+        let payout = app.staticTexts["shift.payoutPreview"]
+        reveal(payout, in: app); XCTAssertTrue(payout.waitForExistence(timeout: 5))
+        func amount(_ label: String) -> Double { Double(label.filter { $0.isNumber || $0 == "." }) ?? -1 }
+        let before = amount(payout.label)
+        let extra = app.textFields["shift.extra"]; reveal(extra, in: app); extra.tap(); extra.typeText("20")
+        let note = app.textFields["shift.extraNote"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5)); note.tap(); note.typeText("Transport allowance")
+        reveal(payout, in: app)
+        XCTAssertEqual(amount(payout.label), before + 20, accuracy: 0.001)
+        attach("Shift extra added to the payout", app: app)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5), "the shift with an extra saves")
+    }
+    @MainActor
+    func testFaceIDLockCoversTheAppUntilUnlocked() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-app-lock"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        let toggle = app.switches["settings.appLock"]
+        reveal(toggle, in: app); XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        XCTAssertTrue(app.switches["settings.appLock"].waitForValue("1", timeout: 5))
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 10), "HowMuch is fully in the background before returning")
+        app.activate()
+        let unlock = app.buttons["appLock.unlock"]
+        XCTAssertTrue(unlock.waitForExistence(timeout: 10), "returning to HowMuch shows the lock")
+        XCTAssertFalse(app.switches["settings.appLock"].isHittable, "nothing underneath can be used while locked")
+        attach("HowMuch locked after returning", app: app)
+        unlock.tap()
+        XCTAssertTrue(unlock.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.switches["settings.appLock"].waitForExistence(timeout: 5))
+        toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        XCTAssertTrue(app.switches["settings.appLock"].waitForValue("0", timeout: 5))
+    }
+    @MainActor
     func testJobEditorCardsPayModesAndValidation() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         app.buttons["nav.add"].tap()
@@ -326,6 +369,8 @@ final class HowMuchUITests: XCTestCase {
         amount.typeText("200")
         app.swipeUp()
         let minutes = app.textFields["Minutes"]; reveal(minutes, in: app); minutes.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        // The keyboard can lag the tap; retry once so typing lands in the field.
+        if !minutes.waitForKeyboardFocus(timeout: 2) { minutes.tap(); _ = minutes.waitForKeyboardFocus(timeout: 3) }
         minutes.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (minutes.value as? String ?? "").count)); minutes.typeText("30")
         app.swipeUp()
         let paidBreak = app.switches["Paid break"]; reveal(paidBreak, in: app); paidBreak.tap()
@@ -1492,9 +1537,25 @@ final class HowMuchUITests: XCTestCase {
         attach("Updated cab reimbursement", app: app)
         reveal(app.buttons[identity], in: app); app.buttons[identity].tap(); app.buttons["Delete claim"].tap()
         app.buttons["Delete claim"].tap()
-        XCTAssertFalse(app.staticTexts["QA cab ride updated"].exists)
+        XCTAssertTrue(app.staticTexts["QA cab ride updated"].waitForNonExistence(timeout: 5))
         tapTrailingArea(app.buttons["Undo last change"], in: app)
         XCTAssertTrue(app.staticTexts["QA cab ride updated"].waitForExistence(timeout: 5))
     }
 
+}
+
+private extension XCUIElement {
+    /// True once this field has keyboard focus.
+    func waitForKeyboardFocus(timeout: TimeInterval) -> Bool {
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: focused, object: self)], timeout: timeout) == .completed
+    }
+}
+
+private extension XCUIElement {
+    /// True once this element's value matches.
+    func waitForValue(_ value: String, timeout: TimeInterval) -> Bool {
+        let matches = NSPredicate(format: "value == %@", value)
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: matches, object: self)], timeout: timeout) == .completed
+    }
 }

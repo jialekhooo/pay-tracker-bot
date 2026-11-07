@@ -16,7 +16,7 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
         let event = EKEvent(eventStore: store)
         event.title = shift.event; event.startDate = shift.startDate; event.endDate = shift.endDate
         event.location = shift.location
-        event.notes = "HowMuch · \(shift.currency) \(shift.pay) · \(PayEngine.rounded(shift.hours)) paid hours"
+        event.notes = "HowMuch · \(shift.currency) \(shift.total) · \(PayEngine.rounded(shift.hours)) paid hours"
         controller.event = event
         controller.editViewDelegate = context.coordinator
         return controller

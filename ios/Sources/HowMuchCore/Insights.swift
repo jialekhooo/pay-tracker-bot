@@ -53,9 +53,9 @@ public extension TrackerData {
 public extension Shift {
     func earned(at now: Date) -> Decimal {
         if now <= startDate { return 0 }
-        if now >= endDate { return pay }
+        if now >= endDate { return total }
         let fraction = Decimal(min(1, max(0, now.timeIntervalSince(startDate) / endDate.timeIntervalSince(startDate))))
-        return PayEngine.rounded(pay * fraction)
+        return PayEngine.rounded(total * fraction)
     }
     func state(at now: Date) -> String {
         if now < startDate { return "Upcoming" }
@@ -120,7 +120,7 @@ public enum CalendarExport {
             lines += ["BEGIN:VEVENT", "UID:\(shift.id.uuidString)@howmuch", "DTSTAMP:\(formatter.string(from: now))",
                       "DTSTART:\(formatter.string(from: shift.startDate))", "DTEND:\(formatter.string(from: shift.endDate))",
                       "SUMMARY:\(escape(shift.event))", "LOCATION:\(escape(shift.location))",
-                      "DESCRIPTION:\(escape("\(shift.currency) \(shift.pay) · \(PayEngine.rounded(shift.hours)) paid hours"))", "END:VEVENT"]
+                      "DESCRIPTION:\(escape("\(shift.currency) \(shift.total) · \(PayEngine.rounded(shift.hours)) paid hours"))", "END:VEVENT"]
         }
         lines.append("END:VCALENDAR")
         // RFC 5545 folding is measured in UTF-8 octets, not Character count.

@@ -5,7 +5,7 @@ public struct UpcomingEventGroup: Identifiable {
     public let event: String
     public let currency: String
     public let shifts: [Shift]
-    public var scheduledPay: Decimal { shifts.reduce(0) { $0 + $1.pay } }
+    public var scheduledPay: Decimal { shifts.reduce(0) { $0 + $1.total } }
 }
 
 public enum UpcomingEvents {

@@ -190,7 +190,7 @@ struct ShiftRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(shift.event).font(.appHeadline).foregroundStyle(Palette.ink).lineLimit(2)
                 Spacer(minLength: 4)
-                Text(money(shift.pay, shift.currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).fixedSize()
+                Text(money(shift.total, shift.currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).fixedSize()
             }
             VStack(alignment: .leading, spacing: 7) {
                 Label(shift.startDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " · " + Shift.clock(shift.startMinute) + "–" + Shift.clock(shift.endMinute) + (shift.endMinute <= shift.startMinute ? " (+1 day)" : ""), systemImage: "calendar")

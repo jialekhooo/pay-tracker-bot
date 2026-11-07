@@ -48,7 +48,7 @@ public struct WidgetSnapshot: Codable, Equatable {
         preferredCurrency = data.rules.currency
         let monthStart = TrackerCalendar.calendar.date(from: TrackerCalendar.calendar.dateComponents([.year, .month], from: updatedAt))!
         shifts = data.shifts.filter { $0.endDate > monthStart }.map { WidgetShift(id: $0.id, event: $0.event, location: $0.location, day: $0.day,
-            start: $0.startDate, end: $0.endDate, hours: $0.hours, pay: $0.pay, currency: $0.currency, paid: $0.paid) }
+            start: $0.startDate, end: $0.endDate, hours: $0.hours, pay: $0.total, currency: $0.currency, paid: $0.paid) }
     }
     public func isCurrent(at now: Date) -> Bool {
         version == 1 && UUID(uuidString: accountID) != nil && now.timeIntervalSince(updatedAt) < Self.maximumAge

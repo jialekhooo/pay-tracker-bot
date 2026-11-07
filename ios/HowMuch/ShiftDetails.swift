@@ -18,8 +18,12 @@ struct ShiftDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         Card {
                             HStack { Text("WORK PAYOUT").font(.caption.weight(.semibold)).tracking(1.3).foregroundStyle(Palette.muted); Spacer(); StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date()) }
-                            Text(money(shift.pay, shift.currency)).font(.heroAmount).foregroundStyle(Palette.ink).minimumScaleFactor(0.6).lineLimit(1)
+                            Text(money(shift.total, shift.currency)).font(.heroAmount).foregroundStyle(Palette.ink).minimumScaleFactor(0.6).lineLimit(1)
                             Text("\(PayEngine.rounded(shift.hours)) paid hours · \(shift.fixedPay == nil ? "Hourly" : "Fixed payout")").font(.subheadline).foregroundStyle(Palette.muted)
+                            if let extra = shift.extra {
+                                Text("\(money(shift.pay, shift.currency)) pay + \(money(extra, shift.currency)) \(shift.extraNote ?? "extra")")
+                                    .font(.subheadline).foregroundStyle(Palette.muted).accessibilityIdentifier("shift.extraBreakdown")
+                            }
                             // Payment only makes sense once the work is done.
                             if shift.endDate <= Date() {
                                 Button(shift.paid ? "Mark as unpaid" : "Mark as paid", systemImage: shift.paid ? "arrow.uturn.backward" : "checkmark.circle") {
@@ -56,6 +60,9 @@ struct ShiftDetailView: View {
                                         if let threshold = shift.overtimeAfter {
                                             Text("Overtime after \(threshold)h · ×\(shift.overtimeMultiplier)").font(.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity, alignment: .leading)
                                         }
+                                    }
+                                    if let extra = shift.extra {
+                                        LabeledContent(shift.extraNote ?? "Extra", value: "+ " + money(extra, shift.currency))
                                     }
                                 }.font(.subheadline).padding(.top, 14)
                             }.font(.subheadline.weight(.semibold))
@@ -144,7 +151,7 @@ struct ReimbursementsSection: View {
                         Text("Work payout + claims").font(.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer()
-                    Text(money(shifts.reduce(Decimal.zero) { $0 + $1.pay } + total, currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
+                    Text(money(shifts.reduce(Decimal.zero) { $0 + $1.total } + total, currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
                 }
             }
             Text("Claims are separate from earnings. Marking work paid tracks its payout only.").font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)

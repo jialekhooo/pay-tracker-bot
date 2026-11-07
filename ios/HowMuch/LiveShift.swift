@@ -146,7 +146,7 @@ enum LiveShiftCenter {
             event: details ? shift.event : "Shift in progress",
             location: details ? (shift.location.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? "") : "",
             startTime: shift.startDate.timeIntervalSince1970, endTime: shift.endDate.timeIntervalSince1970,
-            pay: NSDecimalNumber(decimal: shift.pay).doubleValue, currency: shift.currency,
+            pay: NSDecimalNumber(decimal: shift.total).doubleValue, currency: shift.currency,
             shiftURL: WidgetLink.shift(shift.id).url(accountID: accountID),
             finishURL: WidgetLink.finish(shift.id).url(accountID: accountID))
     }
@@ -200,7 +200,7 @@ struct FinishShiftSheet: View {
                     Card {
                         Label("HOW DID IT GO?", systemImage: "clock.badge.checkmark").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
                         Text(latest.event).font(.system(.title2, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink)
-                        Text("Booked \(latest.startDate.formatted(date: .abbreviated, time: .shortened)) to \(latest.endDate.formatted(date: .omitted, time: .shortened)) · \(money(latest.pay, latest.currency))")
+                        Text("Booked \(latest.startDate.formatted(date: .abbreviated, time: .shortened)) to \(latest.endDate.formatted(date: .omitted, time: .shortened)) · \(money(latest.total, latest.currency))")
                             .font(.subheadline).foregroundStyle(Palette.muted)
                     }
                     Card {
@@ -211,7 +211,7 @@ struct FinishShiftSheet: View {
                             .frame(minHeight: 44).accessibilityIdentifier("finish.time")
                         if let updated {
                             Divider()
-                            Text(money(updated.pay, updated.currency)).font(.amount).foregroundStyle(Palette.ink)
+                            Text(money(updated.total, updated.currency)).font(.amount).foregroundStyle(Palette.ink)
                                 .accessibilityIdentifier("finish.pay")
                             Text(change(from: latest, to: updated)).font(.caption).foregroundStyle(Palette.muted)
                         }
@@ -233,7 +233,7 @@ struct FinishShiftSheet: View {
         let minutes = new.durationMinutes - old.durationMinutes
         if minutes == 0 { return "Same as booked." }
         let length = Duration.seconds(abs(minutes) * 60).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
-        let difference = money(abs(new.pay - old.pay), new.currency)
+        let difference = money(abs(new.total - old.total), new.currency)
         return minutes > 0 ? "\(length) longer than booked: \(difference) more, overtime included."
                            : "\(length) shorter than booked: \(difference) less."
     }

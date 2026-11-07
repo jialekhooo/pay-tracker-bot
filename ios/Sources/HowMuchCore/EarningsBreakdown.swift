@@ -20,7 +20,7 @@ public struct EarningsBreakdown: Equatable, Sendable {
         for shift in shifts {
             let earned = shift.earned(at: now)
             if shift.paid { paid += earned } else { owed += earned }
-            booked += shift.pay - earned
+            booked += shift.total - earned
             if now >= shift.endDate {
                 hoursWorked += shift.hours; shiftsWorked += 1
             } else if now > shift.startDate {

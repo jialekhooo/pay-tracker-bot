@@ -44,6 +44,7 @@ struct SettingsView: View {
                 Divider().padding(.leading, 44)
                 settingsRow("Calendar sync", "calendar") { CalendarSettingsView() }
             }
+            group("Privacy") { AppLockToggleRow() }
             group("Account") {
                 settingsRow("Account & sync", "person.crop.circle.badge.checkmark", value: store.hasPendingChanges ? "Syncing" : nil) { AccountSettingsView() }
                 Divider().padding(.leading, 44)

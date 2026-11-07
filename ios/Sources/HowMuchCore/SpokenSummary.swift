@@ -38,7 +38,7 @@ public enum SpokenSummary {
 
     /// "SGD 360", or "SGD 360 and MYR 120" across currencies, largest first.
     static func total(_ shifts: [Shift]) -> String {
-        let sums = Dictionary(grouping: shifts, by: \.currency).mapValues { $0.reduce(Decimal(0)) { $0 + $1.pay } }
+        let sums = Dictionary(grouping: shifts, by: \.currency).mapValues { $0.reduce(Decimal(0)) { $0 + $1.total } }
         let parts = sums.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }.map { amount($0.value, $0.key) }
         return parts.count <= 1 ? (parts.first ?? "nothing") : parts.dropLast().joined(separator: ", ") + " and " + parts.last!
     }

@@ -119,7 +119,7 @@ public struct PetProgress: Equatable, Sendable {
         let today = Shift.dayString(now)
         let late = worked.filter { !$0.paid && ($0.paymentDue ?? "9999-12-31") < today }
         // Never add different currencies together.
-        overdueByCurrency = Dictionary(grouping: late, by: \.currency).mapValues { $0.reduce(Decimal(0)) { $0 + $1.pay } }
+        overdueByCurrency = Dictionary(grouping: late, by: \.currency).mapValues { $0.reduce(Decimal(0)) { $0 + $1.total } }
         overdue = overdueByCurrency[main] ?? 0
 
         // Mood: how long since the last shift, lifted by a shift coming up, and worried while pay is overdue.
@@ -139,7 +139,7 @@ public struct PetProgress: Equatable, Sendable {
         if comingUp, [.okay, .hungry, .sad].contains(feeling) { feeling = .happy }
         mood = late.isEmpty ? feeling : .worried
 
-        let paidTotal = paid.filter { $0.currency == main }.reduce(Decimal(0)) { $0 + $1.pay }
+        let paidTotal = paid.filter { $0.currency == main }.reduce(Decimal(0)) { $0 + $1.total }
         var list: [PetAchievement] = developer
             ? [.init(id: "developer", title: "Developer", detail: "Builds HowMuch", symbol: "hammer.circle.fill", current: 1, target: 1)] : []
         if pioneer { list.append(.init(id: "pioneer", title: "Pioneer", detail: "Joined HowMuch before launch", symbol: "star.circle.fill", current: 1, target: 1)) }

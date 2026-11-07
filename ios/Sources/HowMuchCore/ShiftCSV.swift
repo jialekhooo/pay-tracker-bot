@@ -72,7 +72,7 @@ public enum ShiftCSV {
         for shift in shifts {
             rows.append([shift.sourceID ?? shift.id.uuidString, shift.day, Shift.clock(shift.startMinute),
                          Shift.clock(shift.endMinute), shift.event, shift.location, "\(PayEngine.rounded(shift.hours))",
-                         "\(PayEngine.rounded(Decimal(shift.breakMinutes) / 60))", "\(shift.breakMinutes)", shift.paidBreak ? "Yes" : "No", "\(shift.pay)", shift.currency, shift.paid ? "Yes" : "No", shift.paymentDue ?? ""])
+                         "\(PayEngine.rounded(Decimal(shift.breakMinutes) / 60))", "\(shift.breakMinutes)", shift.paidBreak ? "Yes" : "No", "\(shift.total)", shift.currency, shift.paid ? "Yes" : "No", shift.paymentDue ?? ""])
         }
         return rows.map { $0.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: ",") }.joined(separator: "\r\n") + "\r\n"
     }

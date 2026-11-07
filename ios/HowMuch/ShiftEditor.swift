@@ -31,6 +31,9 @@ struct ShiftEditor: View {
     @State private var overtime = false
     @State private var threshold = "8"
     @State private var multiplier = "1.5"
+    /// A bonus, allowance or tip on top of the pay; blank for none.
+    @State private var extra = ""
+    @State private var extraNote = ""
     @State private var hasDue = false
     @State private var due = Date()
     @State private var error: String?
@@ -49,7 +52,7 @@ struct ShiftEditor: View {
     /// Everything the form would save, to tell whether anything changed.
     private var fingerprint: String {
         [event, location, "\(day)", "\(start)", "\(end)", breakMinutes, "\(paidBreak)", "\(fixed)", amount, currency, "\(overtime)",
-         threshold, multiplier, "\(hasDue)", "\(due)", "\(extraDates.count)", "\(repeatDays)", "\(payerID?.uuidString ?? "")"].joined(separator: "|")
+         threshold, multiplier, extra, extraNote, "\(hasDue)", "\(due)", "\(extraDates.count)", "\(repeatDays)", "\(payerID?.uuidString ?? "")"].joined(separator: "|")
     }
     private var isDirty: Bool { loaded && fingerprint != baseline }
     /// Rules first, straight away; then Apple Intelligence (up to 10 s), applied only if you haven't edited since.
@@ -247,6 +250,7 @@ struct ShiftEditor: View {
         breakMinutes = "\(work.breakMinutes)"; paidBreak = work.paidBreak
         fixed = work.fixedPay != nil; amount = "\(work.fixedPay ?? work.rate)"; currency = work.currency
         overtime = work.overtimeAfter != nil; threshold = "\(work.overtimeAfter ?? 8)"; multiplier = "\(work.overtimeMultiplier)"
+        extra = work.extra.map { "\($0)" } ?? ""; extraNote = work.extraNote ?? ""
         hasDue = false; templateName = template.name; error = nil
     }
     private var scheduleCard: some View {
@@ -308,6 +312,19 @@ struct ShiftEditor: View {
                     editorNumber("Multiplier", text: $multiplier)
                 }
             }
+            Divider()
+            HStack {
+                Text("Extra").font(.subheadline)
+                Spacer()
+                TextField("0.00", text: $extra).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    .frame(width: 100, height: 44).font(.subheadline.weight(.semibold)).accessibilityIdentifier("shift.extra")
+            }
+            if !extra.trimmingCharacters(in: .whitespaces).isEmpty {
+                TextField("What it's for, e.g. transport allowance", text: $extraNote).frame(minHeight: 44)
+                    .accessibilityIdentifier("shift.extraNote")
+            }
+            Text("A bonus, allowance or tip on top of the pay. It counts in your earnings; claims stay separate.")
+                .font(.caption).foregroundStyle(Palette.muted)
         }
     }
     private var breakCard: some View {
@@ -336,8 +353,8 @@ struct ShiftEditor: View {
     private func payoutCard(_ preview: Shift) -> some View {
         Card {
             editorHeading(extraDates.isEmpty ? "ESTIMATED WORK PAYOUT" : "FIRST DATE · ESTIMATED PAYOUT", symbol: "wallet.bifold")
-            Text(money(preview.pay, preview.currency)).font(.amount).foregroundStyle(Palette.ink)
-                .minimumScaleFactor(0.65).lineLimit(1)
+            Text(money(preview.total, preview.currency)).font(.amount).foregroundStyle(Palette.ink)
+                .minimumScaleFactor(0.65).lineLimit(1).accessibilityIdentifier("shift.payoutPreview")
             Text("\(PayEngine.rounded(preview.hours)) paid hours · Claims added separately").font(.caption).foregroundStyle(Palette.muted)
             if !extraDates.isEmpty || repeatDays > 0 { Text("Saving adds \(extraDates.count + (repeatDays > 0 ? repeatCount : 1)) shifts. Each date uses its own scheduled hours.").font(.caption).foregroundStyle(Palette.muted) }
             if store.data.settings.blocked.contains(preview.day) {
@@ -369,11 +386,23 @@ struct ShiftEditor: View {
         rules.currency = currency.uppercased()
         rules.overtimeAfter = overtime && !fixed ? thresholdValue : nil
         rules.overtimeMultiplier = multiplierValue
-        return try Shift(id: duplicating ? UUID() : existing?.id ?? UUID(), sourceID: duplicating ? nil : existing?.sourceID,
+        let extraText = extra.trimmingCharacters(in: .whitespaces)
+        var extraValue: Decimal?
+        if !extraText.isEmpty {
+            guard let value = ShiftCSV.decimal(extraText), value >= 0, value <= Shift.maxExtra, PayEngine.rounded(value) == value else {
+                throw TrackerError.invalid("Enter the extra as an amount with up to 2 decimal places, or leave it blank.")
+            }
+            extraValue = value > 0 ? value : nil
+        }
+        let note = extraNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard note.count <= Shift.maxExtraNote else { throw TrackerError.invalid("Keep the extra's note to \(Shift.maxExtraNote) characters.") }
+        var made = try Shift(id: duplicating ? UUID() : existing?.id ?? UUID(), sourceID: duplicating ? nil : existing?.sourceID,
                          event: event, location: location, day: Shift.dayString(day),
                          startMinute: minute(start), endMinute: minute(end), breakMinutes: breaks,
                          paidBreak: paidBreak, rate: fixed ? 0 : amountValue, fixedPay: fixed ? amountValue : nil,
                          rules: rules, paid: duplicating ? false : existing?.paid ?? false, paymentDue: hasDue ? Shift.dayString(due) : existing == nil || duplicating ? Shift.dayString(TrackerCalendar.defaultDueDate(for: day, existing: store.data.shifts, event: event)) : nil)
+        made.extra = extraValue; made.extraNote = extraValue == nil || note.isEmpty ? nil : note
+        return made
     }
     private func makeBatch() throws -> [Shift] {
         let primary = try makeShift()
@@ -387,7 +416,9 @@ struct ShiftEditor: View {
             var rules = PayRules(); rules.currency = primary.currency
             rules.overtimeAfter = primary.overtimeAfter; rules.overtimeMultiplier = primary.overtimeMultiplier
             let pay = index == extraDates.count - 1 ? lastPay : primary.fixedPay
-            batch.append(try Shift(event: primary.event, location: primary.location, day: Shift.dayString(entry.day), startMinute: minute(entry.start), endMinute: minute(entry.end), breakMinutes: primary.breakMinutes, paidBreak: primary.paidBreak, rate: primary.rate, fixedPay: pay, rules: rules, paymentDue: hasDue ? Shift.dayString(due) : nil))
+            var dated = try Shift(event: primary.event, location: primary.location, day: Shift.dayString(entry.day), startMinute: minute(entry.start), endMinute: minute(entry.end), breakMinutes: primary.breakMinutes, paidBreak: primary.paidBreak, rate: primary.rate, fixedPay: pay, rules: rules, paymentDue: hasDue ? Shift.dayString(due) : nil)
+            dated.extra = primary.extra; dated.extraNote = primary.extraNote
+            batch.append(dated)
         }
         for shift in batch where batch.contains(where: { shift.overlaps($0) }) { throw TrackerError.invalid("Two dates in this entry overlap. Check the schedule before saving.") }
         if !hasDue && (existing == nil || duplicating) {
@@ -406,6 +437,7 @@ struct ShiftEditor: View {
             breakMinutes = "\(shift.breakMinutes)"; paidBreak = shift.paidBreak
             fixed = shift.fixedPay != nil; amount = "\(shift.fixedPay ?? shift.rate)"; currency = shift.currency
             overtime = shift.overtimeAfter != nil; threshold = "\(shift.overtimeAfter ?? 8)"; multiplier = "\(shift.overtimeMultiplier)"
+            extra = shift.extra.map { "\($0)" } ?? ""; extraNote = shift.extraNote ?? ""
             hasDue = shift.paymentDue != nil
             if let date = shift.paymentDue, let parsed = TrackerCalendar.localDate(date) { due = parsed }
         } else {

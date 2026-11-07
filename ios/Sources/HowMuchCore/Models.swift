@@ -52,6 +52,12 @@ public struct Shift: Identifiable, Codable, Equatable {
     public var paymentDue: String?
     public var overtimeAfter: Decimal?
     public var overtimeMultiplier: Decimal
+    /// A bonus, allowance or tip on top of the pay (1.1). Kept apart from `pay`, so older app
+    /// versions still check `pay` against the pay rules, and the server keeps it when they save.
+    public var extra: Decimal?
+    /// What the extra is for ("Transport allowance").
+    public var extraNote: String?
+    public static let maxExtraNote = 60, maxExtra: Decimal = 1_000_000
 
     public init(id: UUID = UUID(), sourceID: String? = nil, event: String, location: String = "",
                 day: String, startMinute: Int, endMinute: Int, breakMinutes: Int = 0,
@@ -82,6 +88,9 @@ public struct Shift: Identifiable, Codable, Equatable {
         let hours = Decimal(duration - (paidBreak ? 0 : breakMinutes)) / 60
         self.pay = fixedPay.map(PayEngine.rounded) ?? PayEngine.calculate(hours: hours, rate: rate, rules: rules)
     }
+
+    /// Everything this shift pays: the pay plus any extra. Use this for earnings and totals.
+    public var total: Decimal { pay + (extra ?? 0) }
 
     public var durationMinutes: Int { endMinute > startMinute ? endMinute - startMinute : endMinute + 1440 - startMinute }
     public var hours: Decimal { Decimal(durationMinutes - (paidBreak ? 0 : breakMinutes)) / 60 }
@@ -116,6 +125,22 @@ public struct Shift: Identifiable, Codable, Equatable {
     }
     public func overlaps(_ other: Shift) -> Bool { id != other.id && startDate < other.endDate && other.startDate < endDate }
     public static func clock(_ minute: Int) -> String { String(format: "%02d:%02d", minute / 60, minute % 60) }
+}
+
+public extension Shift {
+    /// Same as the synthesized encoding, except `extra` and `extraNote` are always written, as null
+    /// when cleared. The server keeps a missing extra for older apps, so a cleared one must be explicit.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id); try c.encodeIfPresent(sourceID, forKey: .sourceID)
+        try c.encode(event, forKey: .event); try c.encode(location, forKey: .location); try c.encode(day, forKey: .day)
+        try c.encode(startMinute, forKey: .startMinute); try c.encode(endMinute, forKey: .endMinute)
+        try c.encode(breakMinutes, forKey: .breakMinutes); try c.encode(paidBreak, forKey: .paidBreak)
+        try c.encode(rate, forKey: .rate); try c.encodeIfPresent(fixedPay, forKey: .fixedPay); try c.encode(pay, forKey: .pay)
+        try c.encode(currency, forKey: .currency); try c.encode(paid, forKey: .paid); try c.encodeIfPresent(paymentDue, forKey: .paymentDue)
+        try c.encodeIfPresent(overtimeAfter, forKey: .overtimeAfter); try c.encode(overtimeMultiplier, forKey: .overtimeMultiplier)
+        try c.encode(extra, forKey: .extra); try c.encode(extraNote, forKey: .extraNote)
+    }
 }
 
 public enum ClaimCategory: String, Codable, CaseIterable, Identifiable {
@@ -244,6 +269,10 @@ public struct TrackerData: Codable, Equatable {
                                     rate: shift.rate, fixedPay: shift.fixedPay, rules: rules,
                                     paid: shift.paid, paymentDue: shift.paymentDue)
             guard checked.pay == shift.pay else { throw TrackerError.invalid("An archived payout does not match its saved pay rules.") }
+            if let extra = shift.extra {
+                guard extra > 0, extra <= Shift.maxExtra, !extra.isNaN, PayEngine.rounded(extra) == extra else { throw TrackerError.invalid("A shift extra is invalid.") }
+            }
+            guard (shift.extraNote ?? "").count <= Shift.maxExtraNote else { throw TrackerError.invalid("A shift extra note is too long.") }
         }
         guard (expenses ?? []).count <= 20000, Set((expenses ?? []).map(\.id)).count == (expenses ?? []).count else { throw TrackerError.invalid("Invalid reimbursement records.") }
         for claim in claims + (expenses ?? []) {

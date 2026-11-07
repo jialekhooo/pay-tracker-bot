@@ -12,8 +12,10 @@ public struct JobTemplate: Identifiable, Codable, Equatable {
     }
     public func makeShift(on day: String) throws -> Shift {
         var rules = PayRules(); rules.currency = shift.currency; rules.overtimeAfter = shift.overtimeAfter; rules.overtimeMultiplier = shift.overtimeMultiplier
-        return try Shift(event: shift.event, location: shift.location, day: day, startMinute: shift.startMinute, endMinute: shift.endMinute,
-                         breakMinutes: shift.breakMinutes, paidBreak: shift.paidBreak, rate: shift.rate, fixedPay: shift.fixedPay, rules: rules)
+        var made = try Shift(event: shift.event, location: shift.location, day: day, startMinute: shift.startMinute, endMinute: shift.endMinute,
+                             breakMinutes: shift.breakMinutes, paidBreak: shift.paidBreak, rate: shift.rate, fixedPay: shift.fixedPay, rules: rules)
+        made.extra = shift.extra; made.extraNote = shift.extraNote
+        return made
     }
 }
 
@@ -39,7 +41,7 @@ public struct EventFinancialSummary {
     public init(data: TrackerData, event: String, currency: String) {
         let shifts = data.shifts.filter { $0.event.caseInsensitiveCompare(event) == .orderedSame && $0.currency == currency }
         let ids = Set(shifts.map(\.id))
-        workPay = shifts.reduce(0) { $0 + $1.pay }
+        workPay = shifts.reduce(0) { $0 + $1.total }
         paidHours = shifts.reduce(0) { $0 + $1.hours }
         reimbursements = data.reimbursementsOnly.claims.filter { ids.contains($0.shiftID) }.reduce(0) { $0 + $1.amount }
         personalExpenses = 0

@@ -603,3 +603,27 @@ def test_a_due_reminder_still_goes_out_when_jobs_are_rebuilt(setup):
     push.rebuild_jobs(setup.storage,account,data,'Asia/Singapore',now=start-25*60)
     pending=[r['fire_at'] for r in db.execute("SELECT fire_at FROM notification_jobs WHERE kind='start' AND status='pending' ORDER BY fire_at")]
     assert pending==[start-30*60,start]
+
+
+def test_shift_extras_count_in_matching_survive_older_apps_and_can_be_cleared(setup):
+    from howmuch_api.payment_detection import PaymentStore
+    store=PaymentStore(setup.storage)
+    session,_=login(setup);data=document();data['shifts'][0]['day']=(datetime.now(timezone.utc)-timedelta(days=2)).date().isoformat()
+    data['preferences']['payers']={'roadshow':'EXACT COMPANY'}
+    data['shifts'][0].update(extra=20,extraNote='Transport allowance')
+    assert write(setup,session,data).status_code==200
+    uid=setup.storage._conn.execute('SELECT id FROM accounts WHERE account_id=?',(session['account']['id'],)).fetchone()[0]
+    receipt={'amount':'140','received_at':datetime.now(timezone.utc).isoformat(),'currency':'SGD','payer':'EXACT COMPANY'}
+    assert len(store.candidates(uid,receipt))==1, 'a bank transfer for pay plus the extra matches the shift'
+    # An older app doesn't know extras and leaves them out; the server keeps them.
+    older=copy.deepcopy(data);older['shifts'][0].pop('extra');older['shifts'][0].pop('extraNote');older['shifts'][0]['location']='Edited on older app'
+    assert write(setup,session,older,1).status_code==200
+    saved=setup.client.get('/v1/data',headers=headers(session)).json()['data']['shifts'][0]
+    assert saved['extra']==20 and saved['extraNote']=='Transport allowance' and saved['pay']==120
+    # The new app sends null to clear an extra.
+    data['shifts'][0].update(extra=None,extraNote=None)
+    assert write(setup,session,data,2).status_code==200
+    assert 'extra' not in setup.client.get('/v1/data',headers=headers(session)).json()['data']['shifts'][0]
+    for bad in [0,-5,1.234]:
+        data['shifts'][0]['extra']=bad
+        assert write(setup,session,data,3).status_code==422

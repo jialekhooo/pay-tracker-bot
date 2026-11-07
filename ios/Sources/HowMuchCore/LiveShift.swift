@@ -5,9 +5,11 @@ public extension Shift {
     func finishing(atMinute minute: Int) throws -> Shift {
         var rules = PayRules()
         rules.currency = currency; rules.overtimeAfter = overtimeAfter; rules.overtimeMultiplier = overtimeMultiplier
-        return try Shift(id: id, sourceID: sourceID, event: event, location: location, day: day,
-                         startMinute: startMinute, endMinute: minute, breakMinutes: breakMinutes, paidBreak: paidBreak,
-                         rate: rate, fixedPay: fixedPay, rules: rules, paid: paid, paymentDue: paymentDue)
+        var next = try Shift(id: id, sourceID: sourceID, event: event, location: location, day: day,
+                             startMinute: startMinute, endMinute: minute, breakMinutes: breakMinutes, paidBreak: paidBreak,
+                             rate: rate, fixedPay: fixedPay, rules: rules, paid: paid, paymentDue: paymentDue)
+        next.extra = extra; next.extraNote = extraNote
+        return next
     }
 
     /// The same shift finishing `minutes` later (the live card's "+30 min"), kept under 24 hours long.

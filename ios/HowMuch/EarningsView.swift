@@ -79,7 +79,7 @@ struct EarningsView: View {
                                             Text("\(counted(records.count, "shift")) · \(PayEngine.rounded(records.reduce(0) { $0 + $1.hours }))h").font(.caption).foregroundStyle(Palette.muted)
                                         }
                                         Spacer()
-                                        Text(money(records.reduce(0) { $0 + $1.pay }, currency)).font(.subheadline.bold())
+                                        Text(money(records.reduce(0) { $0 + $1.total }, currency)).font(.subheadline.bold())
                                         Image(systemName: "chevron.right").font(.chevron)
                                     }.foregroundStyle(Palette.ink)
                                 }
@@ -111,7 +111,7 @@ struct EventCard: View {
     private var shifts: [Shift] { store.data.shifts.filter { $0.event.caseInsensitiveCompare(event) == .orderedSame && $0.currency == currency } }
     private var claims: [CabClaim] { store.data.claims.filter { claim in shifts.contains { $0.id == claim.shiftID } } }
     var body: some View {
-        let earnings = shifts.reduce(Decimal.zero) { $0 + $1.pay }
+        let earnings = shifts.reduce(Decimal.zero) { $0 + $1.total }
         let cabs = claims.reduce(Decimal.zero) { $0 + $1.amount }
         let completed = shifts.allSatisfy { $0.endDate <= Date() }
         let paid = completed && shifts.allSatisfy(\.paid)

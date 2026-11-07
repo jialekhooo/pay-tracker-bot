@@ -140,7 +140,7 @@ def rebuild_plans(storage, account, data, timezone_name, now=None):
             'event': shift['event'] if details else 'Shift in progress',
             'location': (shift.get('location') or '').split(',')[0].strip() if details else '',
             'startTime': start.timestamp(), 'endTime': end.timestamp(),
-            'pay': float(shift['pay']), 'currency': shift['currency'],
+            'pay': float(shift['pay'])+float(shift.get('extra') or 0), 'currency': shift['currency'],
             'shiftURL': link.format('shift'), 'finishURL': link.format('finish'),
         }
         rows.append((account['account_id'], shift_id, int(start.timestamp()), int(end.timestamp()), json.dumps(state)))

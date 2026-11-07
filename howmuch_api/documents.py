@@ -40,6 +40,11 @@ class WorkShift(BaseModel):
     paymentDue: date | None=None
     overtimeAfter: Decimal | None=Field(default=None,gt=0)
     overtimeMultiplier: Decimal=Field(ge=1,le=100)
+    # A bonus, allowance or tip on top of pay (1.1); not part of the pay-rule check.
+    extra: Decimal | None=Field(default=None,gt=0,le=1000000,decimal_places=2)
+    extraNote: str | None=Field(default=None,max_length=60)
+    @property
+    def total(self): return self.pay+(self.extra or 0)
     @model_validator(mode='after')
     def valid_work(self):
         duration=(self.endMinute-self.startMinute) % 1440 or 1440
@@ -282,7 +287,7 @@ def mirror_document(storage, account, model: Document, timezone_name, previous_d
         hours=Decimal(duration-(0 if shift.paidBreak else shift.breakMinutes))/60
         values=(shift.day.isoformat(),f'{shift.startMinute//60:02}:{shift.startMinute%60:02}',
                 f'{shift.endMinute//60:02}:{shift.endMinute%60:02}',shift.event,shift.location,
-                str(Decimal(shift.breakMinutes)/60),int(shift.paidBreak),str(hours),str(shift.pay),
+                str(Decimal(shift.breakMinutes)/60),int(shift.paidBreak),str(hours),str(shift.total),
                 int(shift.fixedPay is not None),shift.currency,shift.paymentDue.isoformat() if shift.paymentDue else None,int(shift.paid))
         if key in existing:
             db.execute('UPDATE shifts SET day=?,start_time=?,end_time=?,event=?,location=?,break_hours=?,break_paid=?,hours=?,pay=?,pay_is_fixed=?,currency=?,payment_due=?,paid=? WHERE id=? AND user_id=?',(*values,existing[key]['id'],user))
@@ -379,6 +384,12 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
         prior=prior_claims.get(str(claim.id))
         if 'receiptID' not in claim.model_fields_set and prior and str(claim.shiftID)==str(prior['shiftID']):
             claim.receiptID=uuid.UUID(prior['receiptID']) if prior.get('receiptID') else None
+    # Shift extras (1.1) survive a save from an older app that doesn't know them.
+    prior_shifts={str(s['id']):s for s in current['data'].get('shifts',[])}
+    for shift in payload.data.shifts:
+        prior=prior_shifts.get(str(shift.id))
+        if prior and 'extra' not in shift.model_fields_set and prior.get('extra') is not None:
+            shift.extra=Decimal(str(prior['extra'])); shift.extraNote=prior.get('extraNote')
     if 'expenses' not in payload.data.model_fields_set:
         remaining={str(s.id) for s in payload.data.shifts}
         payload.data.expenses=[Claim.model_validate(c) for c in current['data'].get('expenses',[]) if str(c['shiftID']) in remaining] or None
