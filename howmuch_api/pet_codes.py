@@ -114,6 +114,21 @@ async def disable_code(code: str, request: Request, authorization: str | None = 
     return public(db.execute('SELECT * FROM pet_codes WHERE code=?', (normalized(code),)).fetchone())
 
 
+@router.delete('/codes/{code}/forever')
+async def delete_code(code: str, request: Request, authorization: str | None = Header(default=None)):
+    """Remove an already-revoked code from the list. Redeemed items live in pet_redemptions, so people keep them."""
+    require_developer(request, authorization)
+    db = db_for(request)
+    with db:
+        row = db.execute('SELECT disabled FROM pet_codes WHERE code=?', (normalized(code),)).fetchone()
+        if not row:
+            raise HTTPException(404, 'Code not found.')
+        if not row['disabled']:
+            raise HTTPException(409, 'Revoke this code before deleting it.')
+        db.execute('DELETE FROM pet_codes WHERE code=?', (normalized(code),))
+    return {'deleted': normalized(code)}
+
+
 class Redeem(BaseModel):
     code: str = Field(min_length=1, max_length=40)
 

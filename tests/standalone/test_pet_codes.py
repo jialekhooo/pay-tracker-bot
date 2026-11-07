@@ -59,3 +59,16 @@ def test_guessing_codes_is_rate_limited(setup, monkeypatch):
     me, friend = prepare(setup, monkeypatch)
     statuses = [setup.client.post('/v1/pet/redeem', headers=headers(friend), json={'code': f'GUESS-{n:04d}'}).status_code for n in range(11)]
     assert statuses[:10] == [404] * 10 and statuses[10] == 429
+
+
+def test_only_revoked_codes_can_be_deleted_and_redeemers_keep_their_items(setup, monkeypatch):
+    me, friend = prepare(setup, monkeypatch)
+    code = setup.client.post('/v1/pet/codes', headers=headers(me), json={'items': ['halo'], 'max_uses': 5}).json()['code']
+    assert setup.client.post('/v1/pet/redeem', headers=headers(friend), json={'code': code}).status_code == 200
+    assert setup.client.delete(f'/v1/pet/codes/{code}/forever', headers=headers(me)).status_code == 409
+    assert setup.client.delete('/v1/pet/codes/' + code, headers=headers(me)).json()['disabled'] is True
+    assert setup.client.delete(f'/v1/pet/codes/{code}/forever', headers=headers(friend)).status_code == 403
+    assert setup.client.delete(f'/v1/pet/codes/{code}/forever', headers=headers(me)).json() == {'deleted': code}
+    assert setup.client.get('/v1/pet/codes', headers=headers(me)).json()['codes'] == []
+    assert setup.client.delete(f'/v1/pet/codes/{code}/forever', headers=headers(me)).status_code == 404
+    assert setup.client.get('/v1/data', headers=headers(friend)).json()['petUnlocks'] == ['halo']

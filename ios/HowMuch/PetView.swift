@@ -1206,7 +1206,11 @@ struct PetCodesView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     .accessibilityElement(children: .contain).accessibilityIdentifier("code.row." + code.code)
-                    .contextMenu { Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = code.code } }
+                    .contextMenu {
+                        Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = code.code }
+                        // Only revoked codes can be deleted; anyone who redeemed one keeps its items.
+                        if code.disabled { Button("Delete code", systemImage: "trash", role: .destructive) { Task { await remove(code) } } }
+                    }
                     // Revoking stops new redemptions; people who already redeemed keep their items.
                     .swipeActions(allowsFullSwipe: false) {
                         if !code.disabled { Button("Revoke", systemImage: "nosign", role: .destructive) { Task { await turnOff(code) } } }
@@ -1257,6 +1261,15 @@ struct PetCodesView: View {
             _ = try await auth.api.request("/v1/pet/codes/" + code.code, method: "DELETE")
             // A revoked code must not stay on the New code card, ready to copy or share.
             if made?.code == code.code { made = nil }
+            await load()
+        }
+        catch { message = error.localizedDescription }
+    }
+
+    private func remove(_ code: PetGiftCode) async {
+        do {
+            _ = try await auth.api.request("/v1/pet/codes/" + code.code + "/forever", method: "DELETE")
+            codes.removeAll { $0.code == code.code }
             await load()
         }
         catch { message = error.localizedDescription }

@@ -516,6 +516,12 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertEqual(dev.staticTexts["code.status.STARS2026"].label, "Revoked")
         XCTAssertFalse(dev.staticTexts["code.new"].exists)  // nothing left to share
         attach("Developer revoked a gift code", app: dev)
+        row.press(forDuration: 1.2)
+        let delete = dev.buttons["Delete code"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5)); delete.tap()
+        XCTAssertTrue(dev.staticTexts["No codes yet."].waitForExistence(timeout: 5))
+        XCTAssertFalse(row.exists)
+        attach("Developer deleted a revoked gift code", app: dev)
     }
     @MainActor
     func testPetCardOpensItsPage() {
