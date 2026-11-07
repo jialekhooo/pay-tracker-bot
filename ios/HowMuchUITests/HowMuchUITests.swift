@@ -312,6 +312,24 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5))
     }
     @MainActor
+    func testIntroPagesLeadToSignUpAndShowOnlyOnce() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-onboarding"]; app.launch()
+        XCTAssertTrue(app.staticTexts["WELCOME TO HOWMUCH"].waitForExistence(timeout: 10))
+        attach("Intro first page", app: app)
+        for eyebrow in ["ADD JOBS FAST", "GET PAID ON TIME", "STAY ON SCHEDULE", "MEET PENNY"] {
+            app.buttons["intro.next"].tap()
+            XCTAssertTrue(app.staticTexts[eyebrow].waitForExistence(timeout: 5), eyebrow)
+        }
+        XCTAssertFalse(app.buttons["intro.skip"].exists, "the last page has no Skip")
+        attach("Intro last page", app: app)
+        app.buttons["intro.signUp"].tap()
+        XCTAssertTrue(app.buttons["account.signInApple"].waitForExistence(timeout: 10), "Sign up leads to Sign in with Apple")
+        // Seen once, the intro doesn't come back.
+        app.terminate(); app.launchArguments = []; app.launch()
+        XCTAssertTrue(app.buttons["account.signInApple"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["WELCOME TO HOWMUCH"].exists)
+    }
+    @MainActor
     func testShiftExtraIsAddedToThePayout() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         app.buttons["nav.add"].tap()

@@ -5,6 +5,12 @@ struct HowMuchApp: App {
     @UIApplicationDelegateAdaptor(HowMuchAppDelegate.self) private var appDelegate
     @StateObject private var account = AppleAccountStore.shared
     @Environment(\.scenePhase) private var scenePhase
+    init() {
+        #if DEBUG
+        // The intro test starts from a fresh install every time.
+        if CommandLine.arguments.contains("--ui-test-onboarding") { UserDefaults.standard.removeObject(forKey: "onboarding.seen") }
+        #endif
+    }
     var body: some Scene {
         WindowGroup {
             AccountRootView().environmentObject(account)

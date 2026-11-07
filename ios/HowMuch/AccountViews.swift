@@ -8,6 +8,17 @@ struct AccountRootView: View {
     @EnvironmentObject private var auth: AppleAccountStore
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var push = PushCenter.shared
+    /// The intro pages show once on a new install, before signing up.
+    @AppStorage("onboarding.seen") private var introSeen = false
+    private var showIntro: Bool {
+        #if DEBUG
+        // UI tests and previews go straight to their screens unless a test is checking the intro.
+        let args = CommandLine.arguments
+        if args.contains("--ui-test-onboarding") { return !introSeen }
+        if args.contains(where: { $0 == "--preview" || $0.hasPrefix("--ui-test") }) { return false }
+        #endif
+        return !introSeen
+    }
     var body: some View {
         Group {
             if auth.restoring {
@@ -27,6 +38,8 @@ struct AccountRootView: View {
                                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { auth.notificationJob = nil } } }
                         }
                     }
+            } else if showIntro {
+                IntroPagesView { introSeen = true }
             } else { AppleWelcomeView() }
         }
         .task { await auth.restore(); await openPendingNotification() }
@@ -333,6 +346,104 @@ struct AppLockToggleRow: View {
             }.tint(Palette.teal).frame(minHeight: 48).accessibilityIdentifier("settings.appLock")
             Text(lock.message ?? "Ask for \(lock.methodName) each time HowMuch is opened. Only on this iPhone.")
                 .font(.caption).foregroundStyle(Palette.muted).padding(.leading, 44).padding(.bottom, 8)
+        }
+    }
+}
+
+// MARK: - Intro pages
+
+/// A quick tour for new users: what HowMuch does, then Sign up.
+struct IntroPagesView: View {
+    let finish: () -> Void
+    @State private var page = 0
+    private struct Page { let symbol: String?; let eyebrow: String; let title: String; let body: String; let points: [(String, String)] }
+    private let pages: [Page] = [
+        Page(symbol: nil, eyebrow: "WELCOME TO HOWMUCH", title: "Know what every\nshift is worth.",
+             body: "HowMuch keeps your part-time and freelance work in one place, from booking to getting paid.",
+             points: []),
+        Page(symbol: "doc.on.clipboard", eyebrow: "ADD JOBS FAST", title: "Paste a job post.\nWe fill it in.",
+             body: "Copy a job message from WhatsApp or Telegram. HowMuch reads the dates, times, pay and venue for you.",
+             points: [("clock", "Hourly or lump-sum pay, overtime and breaks"), ("plus.circle", "Bonuses, allowances and tips"), ("repeat", "Several dates or a repeating shift at once")]),
+        Page(symbol: "banknote", eyebrow: "GET PAID ON TIME", title: "See who owes you,\nand how much.",
+             body: "Every finished shift waits for payment until you mark it paid, so nothing slips through.",
+             points: [("calendar.badge.clock", "Reminders when payment is due"), ("creditcard", "Spot pay-ins from your bank emails"), ("car", "Track cab, food and other claims")]),
+        Page(symbol: "bell.badge", eyebrow: "STAY ON SCHEDULE", title: "Never miss\na shift.",
+             body: "Reminders before each job, a nudge when it's time to leave, and your earnings live while you work.",
+             points: [("map", "Directions with Apple Maps"), ("rectangle.on.rectangle", "Home Screen and Lock Screen widgets"), ("calendar", "Sync with your calendar")]),
+        Page(symbol: nil, eyebrow: "MEET PENNY", title: "Penny grows\nas you work.",
+             body: "Every shift and payday earns coins. Hatch Penny, keep a streak going and dress Penny up along the way.",
+             points: []),
+    ]
+
+    var body: some View {
+        ZStack {
+            Palette.canvas.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    if page < pages.count - 1 {
+                        Button("Skip") { finish() }.font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
+                            .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("intro.skip")
+                    }
+                }.frame(height: 44).padding(.horizontal, 20)
+                TabView(selection: $page) {
+                    ForEach(pages.indices, id: \.self) { index in pageView(pages[index], index: index).tag(index) }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                HStack(spacing: 8) {
+                    ForEach(pages.indices, id: \.self) { index in
+                        Capsule().fill(index == page ? Palette.teal : Palette.line).frame(width: index == page ? 22 : 8, height: 8)
+                    }
+                }
+                .animation(.snappy, value: page)
+                .accessibilityElement().accessibilityLabel("Page \(page + 1) of \(pages.count)")
+                .padding(.bottom, 20)
+                Button(page == pages.count - 1 ? "Sign up" : "Next") {
+                    if page == pages.count - 1 { finish() } else { withAnimation { page += 1 } }
+                }
+                .primaryButton().padding(.horizontal, 28).padding(.bottom, 12)
+                .accessibilityIdentifier(page == pages.count - 1 ? "intro.signUp" : "intro.next")
+            }
+        }
+    }
+
+    private func pageView(_ item: Page, index: Int) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                art(item, index: index).frame(maxWidth: .infinity).frame(height: 220)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(item.eyebrow).font(.caption2.weight(.bold)).tracking(2.5).foregroundStyle(Palette.teal)
+                    Text(item.title).font(.system(size: 34, weight: .bold, design: .rounded)).tracking(-1).foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(item.body).font(.body).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                if !item.points.isEmpty {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(item.points, id: \.1) { point in
+                            HStack(spacing: 12) {
+                                Image(systemName: point.0).font(.body).frame(width: 30, height: 30).foregroundStyle(Palette.teal)
+                                    .background(Palette.mint, in: RoundedRectangle(cornerRadius: 8))
+                                Text(point.1).font(.subheadline).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }.padding(.horizontal, 28).padding(.top, 8)
+        }.scrollBounceBehavior(.basedOnSize)
+    }
+
+    @ViewBuilder private func art(_ item: Page, index: Int) -> some View {
+        if index == 0 {
+            Image("BrandLogo").resizable().scaledToFit().frame(width: 150, height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 34)).accessibilityHidden(true)
+        } else if let symbol = item.symbol {
+            Image(systemName: symbol).font(.system(size: 76, weight: .semibold)).foregroundStyle(Palette.teal)
+                .frame(width: 170, height: 170).background(Palette.mint, in: Circle()).accessibilityHidden(true)
+        } else {
+            ZStack {
+                PetScene(item: nil)
+                PetSprite(stage: .hatchling, mood: .thriving).frame(width: 150, height: 150).offset(y: 6)
+            }.frame(width: 240, height: 210).clipShape(RoundedRectangle(cornerRadius: 28)).accessibilityHidden(true)
         }
     }
 }
