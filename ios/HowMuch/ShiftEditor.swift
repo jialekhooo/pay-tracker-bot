@@ -490,7 +490,7 @@ struct ClaimEditor: View {
                                     Text(kind.title).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
                                         .frame(maxWidth: .infinity, minHeight: 44).contentShape(Capsule())
                                         .foregroundStyle(category == kind ? Color.white : Palette.teal)
-                                        .glassChrome(in: Capsule(), tint: category == kind ? Palette.teal : nil)
+                                        .glassChrome(in: Capsule(), tint: category == kind ? Palette.accent : nil)
                                 }.buttonStyle(.plain).accessibilityIdentifier("claim.category.\(kind.rawValue)")
                                     .accessibilityAddTraits(category == kind ? .isSelected : [])
                             }

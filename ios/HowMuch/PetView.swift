@@ -561,7 +561,7 @@ struct PetScene: View {
                     }
                 default:
                     // A little window in the mint room.
-                    let pane = Color.white.opacity(0.75), frame = Color(red: 0.72, green: 0.86, blue: 0.80)
+                    let pane = Palette.adaptive((1, 1, 1), dark: (1, 0.84, 0.48)).opacity(0.75), frame = Palette.adaptive((0.72, 0.86, 0.80), dark: (0.16, 0.30, 0.27))
                     VStack(spacing: 2) {
                         HStack(spacing: 2) { pane.frame(width: 11, height: 9); pane.frame(width: 11, height: 9) }
                         HStack(spacing: 2) { pane.frame(width: 11, height: 9); pane.frame(width: 11, height: 9) }
@@ -594,7 +594,8 @@ struct PetScene: View {
         case "fireworks": [Color(red: 0.05, green: 0.04, blue: 0.18), Color(red: 0.16, green: 0.10, blue: 0.34)]
         case "beach": [Color(red: 0.55, green: 0.82, blue: 0.97), Color(red: 0.80, green: 0.93, blue: 0.99)]
         case "confetti": [Color(red: 1, green: 0.97, blue: 0.9), Color(red: 1, green: 0.99, blue: 0.95)]
-        default: [Palette.mint, Color(red: 0.95, green: 0.98, blue: 0.96)]
+        // Penny's room by day, or by night in Dark Mode.
+        default: [Palette.adaptive((0.89, 0.95, 0.92), dark: (0.04, 0.09, 0.15)), Palette.adaptive((0.95, 0.98, 0.96), dark: (0.07, 0.15, 0.19))]
         }
     }
 
@@ -611,7 +612,7 @@ struct PetScene: View {
         case "fireworks": Color(red: 0.12, green: 0.14, blue: 0.24)
         case "beach": Color(red: 0.96, green: 0.86, blue: 0.62)
         case "confetti": Color(red: 0.98, green: 0.85, blue: 0.75)
-        default: Color(red: 0.72, green: 0.86, blue: 0.80)
+        default: Palette.adaptive((0.72, 0.86, 0.80), dark: (0.10, 0.23, 0.20))
         }
     }
 }
@@ -786,7 +787,7 @@ struct PetCard: View {
                 }
                 .padding(16)
             }
-            .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 22))
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22))
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(Palette.line.opacity(0.7), lineWidth: 0.6).allowsHitTesting(false))
             .contentShape(RoundedRectangle(cornerRadius: 22))
@@ -1057,7 +1058,7 @@ struct PetDetailView: View {
                 }.font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
             }
             .padding(10).frame(maxWidth: .infinity)
-            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 18))
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(wearing ? PetPalette.leaf : Palette.line.opacity(0.7), lineWidth: wearing ? 2 : 0.6))
             .contentShape(RoundedRectangle(cornerRadius: 18))
         }.buttonStyle(.plain).accessibilityIdentifier("pet.item." + item.id)
@@ -1094,7 +1095,7 @@ struct PetDetailView: View {
         HStack(spacing: 10) {
             Image(systemName: achievement.symbol).font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(achievement.earned ? .white : Palette.muted)
-                .frame(width: 38, height: 38).background(achievement.earned ? Palette.teal : Palette.mint, in: Circle())
+                .frame(width: 38, height: 38).background(achievement.earned ? Palette.accent : Palette.mint, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(achievement.title).font(.caption.weight(.bold)).foregroundStyle(Palette.ink)
                 if !achievement.earned { ProgressView(value: achievement.progress).tint(Palette.teal) }
@@ -1103,7 +1104,7 @@ struct PetDetailView: View {
             Spacer(minLength: 0)
         }
         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(achievement.earned ? 0.95 : 0.6), in: RoundedRectangle(cornerRadius: 14))
+        .background(Palette.surface.opacity(achievement.earned ? 1 : 0.6), in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine).accessibilityLabel("\(achievement.title), \(achievement.earned ? "earned" : "not earned yet")")
     }
 
@@ -1234,7 +1235,7 @@ struct PetCodesView: View {
             }
             .foregroundStyle(chosen ? Color.white : Palette.ink)
             .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 40)
-            .background(chosen ? Palette.teal : Palette.mint.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
+            .background(chosen ? Palette.accent : Palette.mint.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }.buttonStyle(.plain).accessibilityIdentifier("code.item." + item.id)
             .accessibilityAddTraits(chosen ? .isSelected : [])

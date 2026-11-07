@@ -46,6 +46,7 @@ struct SettingsView: View {
                 Divider().padding(.leading, 44)
                 settingsRow("Calendar sync", "calendar") { CalendarSettingsView() }
             }
+            group("Appearance") { AppearancePicker() }
             group("Privacy") { AppLockToggleRow() }
             group("Account") {
                 settingsRow("Account & sync", "person.crop.circle.badge.checkmark", value: store.hasPendingChanges ? "Syncing" : nil) { AccountSettingsView() }
@@ -62,7 +63,7 @@ struct SettingsView: View {
             Text(title.uppercased()).font(.caption2.weight(.semibold)).tracking(0.8).foregroundStyle(Palette.muted).padding(.leading, 4)
             VStack(spacing: 0) { rows() }
                 .padding(.horizontal, 14).padding(.vertical, 4)
-                .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Palette.line.opacity(0.7), lineWidth: 0.6).allowsHitTesting(false))
         }
     }
@@ -102,12 +103,12 @@ struct ProfileSettingsView: View {
                 // Photo and name
                 VStack(spacing: 14) {
                     ProfileAvatar(size: 108)
-                        .overlay(Circle().stroke(.white, lineWidth: 4))
+                        .overlay(Circle().stroke(Palette.surface, lineWidth: 4))
                         .shadow(color: Palette.teal.opacity(0.18), radius: 14, y: 6)
                         .overlay(alignment: .bottomTrailing) {
                             PhotosPicker(selection: $photo, matching: .images) {
                                 Image(systemName: "camera.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                                    .frame(width: 36, height: 36).background(Palette.teal, in: Circle()).overlay(Circle().stroke(.white, lineWidth: 3))
+                                    .frame(width: 36, height: 36).background(Palette.accent, in: Circle()).overlay(Circle().stroke(Palette.surface, lineWidth: 3))
                             }.buttonStyle(.plain).disabled(loading).accessibilityLabel("Choose photo").accessibilityIdentifier("profile.choosePhoto")
                         }
                     if loading { ProgressView("Preparing photo…").font(.caption) }
@@ -132,7 +133,7 @@ struct ProfileSettingsView: View {
                     if store.pioneer {
                         Label("Pioneer", systemImage: "star.circle.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(LinearGradient(colors: [Color(red: 0.16, green: 0.62, blue: 0.5), Palette.teal], startPoint: .leading, endPoint: .trailing), in: Capsule())
+                            .background(LinearGradient(colors: [Color(red: 0.16, green: 0.62, blue: 0.5), Palette.accent], startPoint: .leading, endPoint: .trailing), in: Capsule())
                             .accessibilityLabel("Pioneer: joined HowMuch before launch").accessibilityIdentifier("profile.pioneer")
                     }
                     }
@@ -167,7 +168,7 @@ struct ProfileSettingsView: View {
                         if stats.topJob != nil && stats.topPlace != nil { Divider().padding(.leading, 44) }
                         if let place = stats.topPlace { favourite("mappin.and.ellipse", "Favourite spot", place) }
                     }.padding(.horizontal, 14).padding(.vertical, 4)
-                        .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
                 }
 
                 // Penny
@@ -181,7 +182,7 @@ struct ProfileSettingsView: View {
                         Spacer()
                         Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
                     }.foregroundStyle(Palette.ink).padding(14).frame(maxWidth: .infinity)
-                        .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18)).contentShape(Rectangle())
+                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18)).contentShape(Rectangle())
                 }.buttonStyle(.plain)
 
                 Button("Save profile", action: save).primaryButton().disabled(loading).accessibilityIdentifier("profile.save")
@@ -226,7 +227,7 @@ struct ProfileSettingsView: View {
             Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(label).font(.caption).foregroundStyle(Palette.muted)
         }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 18))
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
             .accessibilityElement(children: .combine)
     }
     private func favourite(_ icon: String, _ title: String, _ value: String) -> some View {
@@ -523,7 +524,7 @@ struct TelegramSettingsView: View {
             Section {
                 HStack(spacing: 12) {
                     Image(systemName: "paperplane.fill").font(.title3).frame(width: 40, height: 40).foregroundStyle(.white)
-                        .background(Palette.teal, in: RoundedRectangle(cornerRadius: 11))
+                        .background(Palette.accent, in: RoundedRectangle(cornerRadius: 11))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(TelegramBot.handle).font(.headline)
                         Text(statusText).font(.subheadline).foregroundStyle(status?.linked == true ? Palette.teal : Palette.muted)
@@ -604,5 +605,18 @@ struct TelegramSettingsView: View {
     private func unlink() async {
         do { status = try JSONDecoder().decode(TelegramStatus.self, from: await auth.api.request("/v1/telegram", method: "DELETE")) }
         catch { message = error.localizedDescription }
+    }
+}
+
+/// Settings → Appearance: follow the iPhone, or always light or dark.
+struct AppearancePicker: View {
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system.rawValue
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Appearance", selection: $appearance) {
+                ForEach(AppAppearance.allCases) { Text($0.title).tag($0.rawValue) }
+            }.pickerStyle(.segmented).accessibilityIdentifier("settings.appearance")
+            Text("Match iPhone follows Dark Mode in your iPhone's Display settings.").font(.caption).foregroundStyle(Palette.muted)
+        }.padding(.vertical, 10)
     }
 }

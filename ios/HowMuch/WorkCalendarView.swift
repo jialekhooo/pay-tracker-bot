@@ -42,7 +42,7 @@ struct WorkCalendarView: View {
                                     HStack(spacing: 2) { ForEach(0..<min(3, items.count), id: \.self) { _ in Circle().fill(chosen ? .white : clash ? Color.orange : Palette.teal).frame(width: 3, height: 3) } }.frame(height: 4)
                                 }.frame(maxWidth: .infinity, minHeight: 44)
                                     .foregroundStyle(chosen ? .white : today ? Palette.teal : Palette.ink)
-                                    .background(chosen ? Palette.teal : today ? Palette.mint : .clear, in: RoundedRectangle(cornerRadius: 12))
+                                    .background(chosen ? Palette.accent : today ? Palette.mint : .clear, in: RoundedRectangle(cornerRadius: 12))
                                     .contentShape(Rectangle())
                             }.buttonStyle(.plain).accessibilityLabel("\(date.formatted(.dateTime.day().month(.wide).year())), \(counted(items.count, "shift"))")
                                 .accessibilityIdentifier("calendar.day.\(key)").accessibilityAddTraits(chosen ? .isSelected : [])

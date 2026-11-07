@@ -109,7 +109,7 @@ struct ContentView: View {
             Button { adding = true } label: {
                 Image(systemName: "plus").font(.system(size: 25, weight: .medium))
                     .foregroundStyle(.white).frame(width: 58, height: 58).contentShape(Circle())
-                    .glassChrome(in: Circle(), tint: Palette.teal)
+                    .glassChrome(in: Circle(), tint: Palette.accent)
             }.buttonStyle(.plain).accessibilityLabel("Add shift").accessibilityIdentifier("nav.add")
         }
     }
@@ -232,7 +232,7 @@ struct EarningsHero: View {
             HStack(alignment: .top) {
                 figure("Paid", split.paid, color: Palette.teal, alignment: .leading)
                 Spacer(minLength: 8)
-                figure("Pending payment", split.owed, color: split.owed > 0 ? Color(red: 0.8, green: 0.42, blue: 0.12) : Palette.ink, alignment: .center)
+                figure("Pending payment", split.owed, color: split.owed > 0 ? Palette.warning : Palette.ink, alignment: .center)
                 Spacer(minLength: 8)
                 figure("Booked", split.booked, color: Palette.ink, alignment: .trailing)
             }

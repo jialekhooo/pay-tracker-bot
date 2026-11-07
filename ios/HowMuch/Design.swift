@@ -23,22 +23,54 @@ extension Font {
     static let rowIcon = Font.system(size: 15, weight: .medium)
 }
 
+/// The app's colors, each with a Dark Mode value. Light values are the original design.
 enum Palette {
-    static let ink = Color(red: 0.094, green: 0.231, blue: 0.216)
-    static let muted = Color(red: 0.392, green: 0.471, blue: 0.451)
-    static let teal = Color(red: 0.071, green: 0.42, blue: 0.369)
-    static let canvas = Color(red: 0.953, green: 0.965, blue: 0.961)
-    static let mint = Color(red: 0.89, green: 0.95, blue: 0.92)
-    static let line = Color(red: 0.86, green: 0.90, blue: 0.88)
+    /// Main text.
+    static let ink = adaptive((0.094, 0.231, 0.216), dark: (0.90, 0.96, 0.93))
+    /// Secondary text.
+    static let muted = adaptive((0.392, 0.471, 0.451), dark: (0.62, 0.71, 0.68))
+    /// Teal text, icons and outlines. Brighter in Dark Mode so it reads on dark backgrounds.
+    static let teal = adaptive((0.071, 0.42, 0.369), dark: (0.45, 0.85, 0.71))
+    /// Teal fills behind white text (buttons, chips, selected days). Stays deep in Dark Mode.
+    static let accent = adaptive((0.071, 0.42, 0.369), dark: (0.11, 0.50, 0.43))
+    static let canvas = adaptive((0.953, 0.965, 0.961), dark: (0.035, 0.075, 0.068))
+    /// Light tiles behind icons and chips.
+    static let mint = adaptive((0.89, 0.95, 0.92), dark: (0.10, 0.21, 0.18))
+    static let line = adaptive((0.86, 0.90, 0.88), dark: (0.18, 0.27, 0.25))
+    /// Cards and grouped rows.
+    static let surface = adaptive((1, 1, 1), dark: (0.075, 0.135, 0.125), lightAlpha: 0.88)
+    /// Money waiting to be paid.
+    static let warning = adaptive((0.8, 0.42, 0.12), dark: (0.98, 0.62, 0.32))
+    /// Paid.
+    static let success = adaptive((0.15, 0.42, 0.27), dark: (0.45, 0.85, 0.55))
+
+    static func adaptive(_ light: (Double, Double, Double), dark: (Double, Double, Double), lightAlpha: Double = 1) -> Color {
+        Color(UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: dark.0, green: dark.1, blue: dark.2, alpha: 1)
+                : UIColor(red: light.0, green: light.1, blue: light.2, alpha: lightAlpha)
+        })
+    }
+}
+
+/// Which look the app uses: the iPhone's setting, or always light or dark. Settings → Appearance.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    static let key = "appearance"
+    var id: String { rawValue }
+    var title: String { switch self { case .system: "Match iPhone"; case .light: "Light"; case .dark: "Dark" } }
+    var scheme: ColorScheme? { switch self { case .system: nil; case .light: .light; case .dark: .dark } }
+    var style: UIUserInterfaceStyle { switch self { case .system: .unspecified; case .light: .light; case .dark: .dark } }
+    static var current: AppAppearance { AppAppearance(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system }
 }
 
 struct AppBackdrop: View {
     var body: some View {
         LinearGradient(stops: [
-            .init(color: Color(red: 0.80, green: 0.92, blue: 0.87), location: 0),
-            .init(color: Color(red: 0.90, green: 0.95, blue: 0.92), location: 0.34),
+            .init(color: Palette.adaptive((0.80, 0.92, 0.87), dark: (0.04, 0.20, 0.17)), location: 0),
+            .init(color: Palette.adaptive((0.90, 0.95, 0.92), dark: (0.04, 0.12, 0.11)), location: 0.34),
             .init(color: Palette.canvas, location: 0.65),
-            .init(color: Color(red: 0.89, green: 0.94, blue: 0.91), location: 1)
+            .init(color: Palette.adaptive((0.89, 0.94, 0.91), dark: (0.03, 0.09, 0.08)), location: 1)
         ], startPoint: .topLeading, endPoint: .bottomTrailing)
         .ignoresSafeArea().allowsHitTesting(false)
     }
@@ -58,7 +90,7 @@ private struct GlassChrome<S: Shape>: ViewModifier {
         } else {
             content.background(.regularMaterial, in: shape)
                 .background(tint ?? .clear, in: shape)
-                .overlay(shape.stroke(.white.opacity(0.7), lineWidth: 0.7).allowsHitTesting(false))
+                .overlay(shape.stroke(Palette.adaptive((1, 1, 1), dark: (0.3, 0.4, 0.37)).opacity(0.7), lineWidth: 0.7).allowsHitTesting(false))
         }
     }
 }
@@ -69,7 +101,7 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 14) { content }
             .font(.appBody)
             .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 20))
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
             .contentShape(RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Palette.line.opacity(0.7), lineWidth: 0.6).allowsHitTesting(false))
     }
@@ -145,8 +177,8 @@ struct PillPicker: View {
                     Button { selection = value } label: {
                         Text(value).font(.system(.caption, design: .rounded, weight: .semibold))
                             .padding(.horizontal, 14).padding(.vertical, 11).frame(minHeight: 44)
-                            .foregroundStyle(selection == value ? (onDark ? Palette.ink : Color.white) : (onDark ? .white : Palette.muted))
-                            .background(selection == value ? (onDark ? Color.white : Palette.teal) : (onDark ? .white.opacity(0.12) : .white), in: Capsule()).contentShape(Capsule())
+                            .foregroundStyle(selection == value ? (onDark ? Color(red: 0.094, green: 0.231, blue: 0.216) : Color.white) : (onDark ? .white : Palette.muted))
+                            .background(selection == value ? (onDark ? Color.white : Palette.accent) : (onDark ? .white.opacity(0.12) : Palette.surface), in: Capsule()).contentShape(Capsule())
                     }.buttonStyle(.plain).accessibilityAddTraits(selection == value ? .isSelected : [])
                 }
             }
@@ -176,7 +208,7 @@ struct StatusPill: View {
     var paid = false
     var body: some View {
         Label(title, systemImage: paid ? "checkmark.circle.fill" : title == "Working now" ? "clock.fill" : "circle.fill")
-            .font(.caption2.weight(.semibold)).foregroundStyle(paid ? Color(red: 0.15, green: 0.42, blue: 0.27) : Palette.teal)
+            .font(.caption2.weight(.semibold)).foregroundStyle(paid ? Palette.success : Palette.teal)
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background((paid ? Color.green : Palette.teal).opacity(0.08), in: Capsule())
     }
@@ -259,7 +291,8 @@ extension Section where Parent == FormHeader, Footer == EmptyView, Content: View
 /// The app's settings-style form: compact sections, styled headers and rows that size themselves.
 struct AppForm<Content: View>: View {
     @ViewBuilder var content: Content
-    var body: some View { Form { content }.appForm() }
+    // Rows use the app's card colour (white, or dark jade in Dark Mode) instead of the system's grouped grey.
+    var body: some View { Form { content.listRowBackground(Palette.surface) }.appForm() }
 }
 
 extension View {
@@ -290,7 +323,7 @@ private struct PrimaryActionButtonStyle: ButtonStyle {
             .foregroundStyle(.white).padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 48)
             .contentShape(RoundedRectangle(cornerRadius: 16))
             // Teal-tinted Liquid Glass, like the + button, so the main action keeps its emphasis without a flat slab.
-            .glassChrome(in: RoundedRectangle(cornerRadius: 16), tint: Palette.teal)
+            .glassChrome(in: RoundedRectangle(cornerRadius: 16), tint: Palette.accent)
             .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
     }
 }

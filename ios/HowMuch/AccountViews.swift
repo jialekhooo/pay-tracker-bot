@@ -299,7 +299,7 @@ final class AppLock: ObservableObject {
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         let window = UIWindow(windowScene: scene)
         window.windowLevel = .alert + 1
-        window.overrideUserInterfaceStyle = .light  // matches the app, which always uses its light design
+        window.overrideUserInterfaceStyle = AppAppearance.current.style  // matches Settings → Appearance
         let host = UIHostingController(rootView: AppLockScreen(lock: self))
         host.view.backgroundColor = .clear
         window.rootViewController = host
@@ -344,7 +344,7 @@ struct AppLockToggleRow: View {
                         .foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
                     Text("Lock with \(lock.methodName)").font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink)
                 }
-            }.tint(Palette.teal).frame(minHeight: 48).accessibilityIdentifier("settings.appLock")
+            }.tint(Palette.accent).frame(minHeight: 48).accessibilityIdentifier("settings.appLock")
             Text(lock.message ?? "Ask for \(lock.methodName) each time HowMuch is opened. Only on this iPhone.")
                 .font(.caption).foregroundStyle(Palette.muted).padding(.leading, 44).padding(.bottom, 8)
         }

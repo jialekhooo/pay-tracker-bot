@@ -135,7 +135,7 @@ struct CalendarSettingsView: View {
     }
     private func step(_ number: Int, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 26, height: 26).background(Palette.teal, in: Circle())
+            Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 26, height: 26).background(Palette.accent, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(detail).font(.caption).foregroundStyle(Palette.muted)

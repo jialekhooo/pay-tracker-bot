@@ -22,7 +22,7 @@ struct PasteJobCard: View {
                     let text = strings.joined(separator: "\n")
                     DispatchQueue.main.async { onText(text) }
                 }
-                .buttonBorderShape(.roundedRectangle(radius: 16)).controlSize(.large).tint(Palette.teal).labelStyle(.titleAndIcon)
+                .buttonBorderShape(.roundedRectangle(radius: 16)).controlSize(.large).tint(Palette.accent).labelStyle(.titleAndIcon)
                 .accessibilityIdentifier("paste.clipboard")
                 Button("Type or edit", systemImage: "keyboard") { typing = true }
                     .glassAction().accessibilityIdentifier("paste.type")
@@ -63,7 +63,7 @@ struct JobMessageEntry: View {
                     .font(.caption).foregroundStyle(Palette.muted)
                 TextEditor(text: $text)
                     .focused($focused).scrollContentBackground(.hidden).padding(10)
-                    .background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 16))
+                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
                     .frame(minHeight: 240).accessibilityIdentifier("paste.text")
                 Spacer()
             }

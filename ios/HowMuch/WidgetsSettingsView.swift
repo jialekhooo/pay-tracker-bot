@@ -49,8 +49,8 @@ private struct AccountWidgetPreviews: View {
             HowMuchWidgetContents(snapshot: WidgetSnapshot(data: store.data, accountID: store.accountID), date: .now,
                 kind: kind, family: .systemMedium, showPay: showPay, showLocation: showLocation)
                 .padding(16).frame(height: height).frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(red: 0.92, green: 0.97, blue: 0.95).gradient, in: RoundedRectangle(cornerRadius: 24))
-                .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.8)))
+                .background(Palette.adaptive((0.92, 0.97, 0.95), dark: (0.07, 0.16, 0.14)).gradient, in: RoundedRectangle(cornerRadius: 24))
+                .overlay(RoundedRectangle(cornerRadius: 24).stroke(Palette.line.opacity(0.8)))
                 .accessibilityIdentifier("widgets.preview.\(kind.rawValue)")
         }
     }
