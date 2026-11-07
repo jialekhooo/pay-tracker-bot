@@ -213,12 +213,17 @@ async def bot_add_shifts(payload: BotShifts, request: Request, x_howmuch_bot: st
     db = db_for(request)
     account = linked_account(db, payload.telegramUserId)
     limit(request, 'telegram-shifts', maximum=60, key=account['account_id'])
+    return add_shifts(request, account, payload.shifts)
+
+
+def add_shifts(request, account, items: list[BotShift]) -> dict:
+    """Adds shifts to the account as the app would, and lists any they overlap. Shared with the schedule bot."""
     from .documents import Document, read_document, commit_document
     storage = request.app.state.storage
     current = read_document(storage, account)
     data = json.loads(json.dumps(current['data'], use_decimal=True), use_decimal=True)
     zone = ZoneInfo(current.get('timezone') or 'Asia/Singapore')
-    added = [make_shift(item, data) for item in payload.shifts]
+    added = [make_shift(item, data) for item in items]
     clashes = []
     for shift in added:
         start, end = span(shift, zone)
@@ -242,11 +247,16 @@ def change_shifts(request, payload: BotShiftIds, change):
     """Apply `change(shift) -> shift | None` (None removes it) to the listed shifts of the linked account."""
     db = db_for(request)
     account = linked_account(db, payload.telegramUserId)
+    return change_account_shifts(request, account, payload.ids, change)
+
+
+def change_account_shifts(request, account, ids, change):
+    """`change` on the account's listed shifts; shared with the schedule bot."""
     from .documents import Document, read_document, commit_document
     storage = request.app.state.storage
     current = read_document(storage, account)
     data = json.loads(json.dumps(current['data'], use_decimal=True), use_decimal=True)
-    wanted = {str(i) for i in payload.ids}
+    wanted = {str(i) for i in ids}
     kept, changed = [], 0
     for shift in data.get('shifts', []):
         if shift['id'] in wanted:

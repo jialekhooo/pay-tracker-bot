@@ -317,6 +317,34 @@ async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text("Unlinked. Shifts you send here are kept in the bot again, not in the app.")
 
 
+async def schedule_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/schedulelink: a key that lets your own schedule bot see and edit your shifts in the app."""
+    link = _howmuch(context)
+    if link is None or not await _is_linked(update, context):
+        await update.effective_message.reply_text(
+            "Link the HowMuch app first (/link). Then /schedulelink gives your personal schedule bot a key.")
+        return
+    revoke = bool(context.args) and context.args[0].lower() in ("off", "revoke", "stop")
+    try:
+        result = await link.schedule_link(update.effective_user.id, revoke=revoke)
+    except LinkError as error:
+        await update.effective_message.reply_text(f"❌ {error}")
+        return
+    if revoke:
+        await update.effective_message.reply_text(
+            "🔒 Schedule bot key turned off." if result.get("revoked") else "There was no schedule bot key to turn off.")
+        return
+    await _send_html(update, [
+        "🔗 <b>Schedule bot key</b>",
+        "Send this to your schedule bot:",
+        "",
+        f"<code>/link howmuch {escape(result['key'])}</code>",
+        "",
+        "It can see your shifts and add, move, mark paid or remove them, nothing else in HowMuch. "
+        "A new key turns the old one off. <code>/schedulelink off</code> turns it off now.",
+    ])
+
+
 ACTION_SECONDS = 24 * 60 * 60
 
 
@@ -1772,6 +1800,10 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
                 ("unlink",), "/unlink",
                 "Stop sending shifts to the HowMuch app", unlink,
             ),
+            Command(
+                ("schedulelink",), "/schedulelink [off]",
+                "A key for your personal schedule bot (linked app)", schedule_link,
+            ),
         ),
     ),
     (
@@ -1796,7 +1828,8 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
 
 # Once linked, shifts live in the HowMuch app. These still work; the rest only know the bot's own
 # records, so they point to the app instead (/export stays, to move old bot shifts into the app).
-WORKS_WHEN_LINKED = {"log", "upcoming", "upcomingshifts", "export", "link", "owed", "unlink", "commands", "help", "start"}
+WORKS_WHEN_LINKED = {"log", "upcoming", "upcomingshifts", "export", "link", "owed", "unlink", "schedulelink",
+                     "commands", "help", "start"}
 
 
 def _bot_records_only(

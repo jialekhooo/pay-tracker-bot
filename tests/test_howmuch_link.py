@@ -175,3 +175,30 @@ def test_keyboard_buttons_route_to_their_commands(tmp_path):
     update.message.text = "➕ Log a shift"
     asyncio.run(bot.keyboard_button(update, context))
     assert "Send the shift as a message" in replies[-1]
+
+
+def test_schedulelink_gives_a_key_only_when_linked(tmp_path):
+    server = Server()
+    original = server.handler
+
+    def handler(request):
+        if request.url.path == "/v1/bot/schedule-link":
+            body = json.loads(request.content)
+            server.requests.append((request.url.path, request.headers.get("X-HowMuch-Bot"), body))
+            return httpx.Response(200, json={"revoked": True} if body["revoke"] else {"key": "hms_abc<&"})
+        return original(request)
+    server.handler = handler
+
+    update, context, replies = harness(tmp_path, server)
+    asyncio.run(bot.schedule_link(update, context))
+    assert "Link the HowMuch app first" in replies[-1]
+
+    server.linked.add(77)
+    update, context, replies = harness(tmp_path, server)  # a fresh client: link status is cached briefly
+    asyncio.run(bot.schedule_link(update, context))
+    assert "<code>/link howmuch hms_abc&lt;&amp;</code>" in replies[-1]
+    assert server.requests[-1] == ("/v1/bot/schedule-link", "secret-1", {"telegramUserId": 77, "revoke": False})
+
+    update, context, replies = harness(tmp_path, server, args=["off"])
+    asyncio.run(bot.schedule_link(update, context))
+    assert "turned off" in replies[-1] and server.requests[-1][2]["revoke"] is True

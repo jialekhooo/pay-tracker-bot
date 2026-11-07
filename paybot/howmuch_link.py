@@ -125,5 +125,9 @@ class HowMuchLink:
     async def mark_paid(self, telegram_user_id: int, ids: list[str]) -> int:
         return (await self._post("/v1/bot/shifts/paid", {"telegramUserId": telegram_user_id, "ids": ids}))["changed"]
 
+    async def schedule_link(self, telegram_user_id: int, revoke: bool = False) -> dict:
+        """A key for the owner's personal schedule bot ({"key": ...}), or {"revoked": bool}."""
+        return await self._post("/v1/bot/schedule-link", {"telegramUserId": telegram_user_id, "revoke": revoke})
+
     async def summary(self, telegram_user_id: int, days: int = 14) -> dict:
         return await self._post("/v1/bot/summary", {"telegramUserId": telegram_user_id, "days": days})
