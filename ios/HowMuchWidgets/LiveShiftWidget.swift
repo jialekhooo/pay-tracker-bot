@@ -1,0 +1,127 @@
+import SwiftUI
+import WidgetKit
+import ActivityKit
+import AppIntents
+
+private let teal = Color(red: 0.071, green: 0.42, blue: 0.369)
+private let mint = Color(red: 0.55, green: 0.86, blue: 0.74)
+
+/// Lock Screen and Dynamic Island card while a shift is on.
+/// The timer and progress bar run on their own, so the card stays current without the app open.
+struct LiveShiftWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: LiveShiftAttributes.self) { context in
+            LiveShiftLockScreen(state: context.state, attributes: context.attributes, ended: context.isStale)
+                .widgetURL(context.isStale ? context.state.finishURL : context.state.shiftURL)
+                .activityBackgroundTint(Color(red: 0.06, green: 0.2, blue: 0.18))
+                .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            let state = context.state
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Label(state.event, systemImage: "briefcase.fill").font(.subheadline.weight(.semibold)).lineLimit(1)
+                        .foregroundStyle(mint).padding(.leading, 4)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text(state.payText).font(.subheadline.weight(.bold)).monospacedDigit().padding(.trailing, 4)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if context.isStale {
+                            Text("Shift over. When did you finish?").font(.footnote).foregroundStyle(.secondary)
+                        } else {
+                            ProgressView(timerInterval: state.start...state.end, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
+                                .tint(mint)
+                            TimeRow(state: state).font(.caption2).foregroundStyle(.secondary)
+                        }
+                        FinishButtons(attributes: context.attributes, ended: context.isStale)
+                    }.padding(.horizontal, 4)
+                }
+            } compactLeading: {
+                Image(systemName: "briefcase.fill").foregroundStyle(mint)
+            } compactTrailing: {
+                if context.isStale { Image(systemName: "checkmark.circle").foregroundStyle(mint) }
+                else { Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit().multilineTextAlignment(.trailing).frame(width: 66).foregroundStyle(mint) }
+            } minimal: {
+                Image(systemName: "briefcase.fill").foregroundStyle(mint)
+            }
+            .widgetURL(context.isStale ? state.finishURL : state.shiftURL)
+            .keylineTint(mint)
+        }
+    }
+}
+
+private struct LiveShiftLockScreen: View {
+    let state: LiveShiftAttributes.ContentState
+    let attributes: LiveShiftAttributes
+    let ended: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(state.event).font(.headline).lineLimit(1)
+                    if !state.location.isEmpty { Text(state.location).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(state.payText).font(.title3.weight(.bold)).monospacedDigit()
+                    Text(ended ? "booked pay" : "when you finish").font(.caption2).foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            if ended {
+                Label("Shift over. When did you finish?", systemImage: "clock.badge.checkmark")
+                    .font(.subheadline).foregroundStyle(mint)
+            } else {
+                ProgressView(timerInterval: state.start...state.end, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
+                    .tint(mint)
+                TimeRow(state: state).font(.caption).foregroundStyle(.white.opacity(0.75))
+            }
+            FinishButtons(attributes: attributes, ended: ended)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+}
+
+/// Start time, time left (centred) and end time under the progress bar.
+private struct TimeRow: View {
+    let state: LiveShiftAttributes.ContentState
+    /// On a dimmed Lock Screen iOS hides a ticking clock's seconds as "--", so show the end time instead.
+    @Environment(\.isLuminanceReduced) private var dimmed
+    var body: some View {
+        ZStack {
+            HStack { Text(state.start, style: .time); Spacer(); Text(state.end, style: .time) }
+            if dimmed {
+                (Text("Ends ") + Text(state.end, style: .time)).fontWeight(.semibold)
+            } else {
+                HStack(spacing: 4) {
+                    Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit()
+                        .multilineTextAlignment(.trailing).frame(width: 64, alignment: .trailing)
+                    Text("left")
+                }.fontWeight(.semibold)
+            }
+        }
+    }
+}
+
+/// "+30 min" while the shift is on (staying late), plus "Finished on time" once it's over.
+/// Both run in HowMuch without opening it; staying later recalculates the shift's pay, overtime included.
+private struct FinishButtons: View {
+    let attributes: LiveShiftAttributes
+    let ended: Bool
+    var body: some View {
+        HStack(spacing: 8) {
+            if ended {
+                Button(intent: FinishShiftOnTimeIntent(shiftID: attributes.shiftID, accountID: attributes.accountID)) {
+                    Label("Finished on time", systemImage: "checkmark").frame(maxWidth: .infinity)
+                }.tint(mint)
+            }
+            Button(intent: ExtendShiftIntent(shiftID: attributes.shiftID, accountID: attributes.accountID)) {
+                Label(ended ? "+30 min" : "Staying late? +30 min", systemImage: "plus").frame(maxWidth: ended ? nil : .infinity)
+            }.tint(.white)
+        }
+        .font(.caption.weight(.semibold))
+        .buttonStyle(.bordered).buttonBorderShape(.capsule)
+        .controlSize(.small)
+    }
+}

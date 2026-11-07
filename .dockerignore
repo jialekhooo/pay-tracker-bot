@@ -4,3 +4,7 @@ __pycache__/
 .paybot-token
 *.sqlite3
 tests/
+ios/
+.venv/
+.pytest_cache/
+.agents/
