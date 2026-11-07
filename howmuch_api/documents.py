@@ -416,24 +416,31 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
     if (options and 'startLeadMinutes' not in options.model_fields_set
             and previous.get('startLeadMinutes') and options.leadMinutes==previous.get('leadMinutes',30)):
         options.startLeadMinutes=previous['startLeadMinutes']
+    revision,envelope=commit_document(storage,account,payload.data,payload.timezone,current)
+    from .push import configured
+    from .auth import developer, pioneer
+    from .pet_codes import unlocks
+    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id'])})
+
+
+def commit_document(storage, account, model: Document, timezone_name, current):
+    """Save a validated document as the next revision: mirror it for payment matching, then refresh
+    reminders and unused receipts. Used by app saves and by shifts added from Telegram."""
     # Pydantic validates, while simplejson preserves Decimal values as exact JSON numbers for Swift.
-    data=payload.data.model_dump(mode='python',exclude_none=True)
-    data=normalize(data)
-    envelope={'data':data,'timezone':payload.timezone}
+    data=normalize(model.model_dump(mode='python',exclude_none=True))
+    envelope={'data':data,'timezone':timezone_name}
     db=storage._conn
     revision=current['revision']+1
     with db:
         # PaymentStore schema initialization occurs before this transaction, not during record writes.
-        mirror_document(storage,account,payload.data,payload.timezone,current['data'])
+        mirror_document(storage,account,model,timezone_name,current['data'])
         db.execute('INSERT INTO documents VALUES(?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET revision=excluded.revision,body=excluded.body,updated=excluded.updated',
                    (account['account_id'],revision,json.dumps(envelope,use_decimal=True),int(time.time())))
-    from .push import rebuild_jobs, configured
-    rebuild_jobs(storage,account,data,payload.timezone)
+    from .push import rebuild_jobs
+    rebuild_jobs(storage,account,data,timezone_name)
     from .receipts import collect_unused
     collect_unused(db,account['account_id'],data)
-    from .auth import developer, pioneer
-    from .pet_codes import unlocks
-    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id'])})
+    return revision,envelope
 
 
 def normalize(value):

@@ -329,6 +329,29 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["WELCOME TO HOWMUCH"].exists)
     }
     @MainActor
+    func testTelegramLinkingHelpGuideAndUnlink() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account", "--ui-test-telegram"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        let row = app.staticTexts["Telegram"]; reveal(row, in: app); row.tap()
+        func showing(_ text: String) -> XCUIElement { app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch }
+        XCTAssertTrue(showing("Not linked").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["What you can do in Telegram"].exists || app.staticTexts["WHAT YOU CAN DO IN TELEGRAM"].exists)
+        attach("Telegram screen before linking", app: app)
+        app.buttons["telegram.link"].tap()
+        // Telegram (Safari in the simulator) opens; come back as the person would after tapping Start.
+        _ = app.wait(for: .runningBackground, timeout: 10)
+        app.activate()
+        XCTAssertTrue(showing("Linked to @howmuch_tester").waitForExistence(timeout: 10))
+        attach("Telegram linked", app: app)
+        app.buttons["telegram.unlink"].tap()
+        let confirm = app.buttons["Unlink"]; XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(showing("Not linked").waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        let data = app.staticTexts["Data & backups"]; reveal(data, in: app); data.tap()
+        let export = app.descendants(matching: .any).matching(identifier: "data.telegramBot").firstMatch
+        reveal(export, in: app); XCTAssertTrue(export.waitForExistence(timeout: 5))
+    }
+    @MainActor
     func testShiftExtraIsAddedToThePayout() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         app.buttons["nav.add"].tap()

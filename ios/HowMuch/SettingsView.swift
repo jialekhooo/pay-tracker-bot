@@ -38,6 +38,8 @@ struct SettingsView: View {
             }
             group("Getting paid") {
                 settingsRow("Pay-in tracking", "creditcard") { PaymentDetectionView() }
+                Divider().padding(.leading, 44)
+                settingsRow("Telegram", "paperplane") { TelegramSettingsView() }
             }
             group("Widgets & calendar") {
                 settingsRow("Widgets", "rectangle.on.rectangle") { WidgetsSettingsView() }
@@ -326,6 +328,8 @@ struct DataToolsView: View {
         AppForm {
             Section(styled: "Import & export") {
                 Button("Import Telegram CSV", systemImage: "square.and.arrow.down") { archiveImport = false; importing = true }.rowAction()
+                Link(destination: TelegramBot.url) { Label("Open \(TelegramBot.handle) to export with /export", systemImage: "paperplane") }
+                    .rowAction().accessibilityIdentifier("data.telegramBot")
                 Button("Export shifts as CSV", systemImage: "tablecells") { document = TextFile(ShiftCSV.encode(store.data.shifts)); exportType = .commaSeparatedText; exporting = true }.rowAction()
                 NavigationLink("Export calendar (.ics)") { CalendarSettingsView() }
                 Text("Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.caption).foregroundStyle(Palette.muted)
@@ -492,5 +496,113 @@ struct ProfileStats {
     }
     func summary(_ currency: String) -> String {
         shifts == 0 ? "Your profile" : "\(shifts) \(shifts == 1 ? "shift" : "shifts") · \(money(earned, currency)) earned"
+    }
+}
+
+/// The HowMuch Telegram bot.
+enum TelegramBot {
+    static let handle = "@paytracker1_bot"
+    static let url = URL(string: "https://t.me/paytracker1_bot")!
+}
+
+private struct TelegramStatus: Decodable { let linked: Bool; let username: String }
+private struct TelegramLinkCode: Decodable { let url: String }
+
+/// Link the HowMuch bot in Telegram with this account, and a guide to what the bot can do.
+struct TelegramSettingsView: View {
+    @EnvironmentObject private var auth: AppleAccountStore
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var status: TelegramStatus?
+    @State private var busy = false
+    @State private var message = ""
+    @State private var confirmingUnlink = false
+
+    var body: some View {
+        AppForm {
+            Section {
+                HStack(spacing: 12) {
+                    Image(systemName: "paperplane.fill").font(.title3).frame(width: 40, height: 40).foregroundStyle(.white)
+                        .background(Palette.teal, in: RoundedRectangle(cornerRadius: 11))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(TelegramBot.handle).font(.headline)
+                        Text(statusText).font(.subheadline).foregroundStyle(status?.linked == true ? Palette.teal : Palette.muted)
+                            .accessibilityIdentifier("telegram.status")
+                    }
+                }.padding(.vertical, 4)
+                if status?.linked == true {
+                    Link(destination: TelegramBot.url) { Label("Open \(TelegramBot.handle)", systemImage: "arrow.up.right.square") }
+                        .accessibilityIdentifier("telegram.open")
+                    Button("Unlink Telegram", systemImage: "link.badge.plus", role: .destructive) { confirmingUnlink = true }
+                        .accessibilityIdentifier("telegram.unlink")
+                } else {
+                    Button(busy ? "Opening Telegram…" : "Link Telegram", systemImage: "link") { Task { await link() } }
+                        .primaryButton().disabled(busy || status == nil)
+                        .listRowBackground(Color.clear).listRowInsets(EdgeInsets()).accessibilityIdentifier("telegram.link")
+                    Text("Opens \(TelegramBot.handle) in Telegram. Tap Start there to finish linking.").font(.caption).foregroundStyle(Palette.muted)
+                }
+                if !message.isEmpty { Text(message).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("telegram.message") }
+            } header: { FormHeader("Telegram") }
+
+            Section(styled: "What you can do in Telegram") {
+                guideRow("text.bubble", "Send a shift as a message", "Wedding gig 12/8 6pm-11pm @ MBS\nIt lands in HowMuch with your rates, breaks, overtime and due date.")
+                guideRow("list.bullet", "Send several at once", "One shift per line. Add 25/h or $200 flat to set the pay for that shift.")
+                guideRow("banknote", "/owed", "What you're still waiting to be paid.")
+                guideRow("calendar", "/upcoming", "What you're booked for in the next two weeks.")
+                guideRow("link", "/unlink", "Stop sending shifts to the app. You can also unlink here.")
+            }
+            Section(styled: "How to link") {
+                guideRow("1.circle", "Tap Link Telegram", "Telegram opens a chat with \(TelegramBot.handle).")
+                guideRow("2.circle", "Tap Start in Telegram", "The bot confirms it's linked to your HowMuch account.")
+                guideRow("3.circle", "Send your shifts", "They show up here, on every device you're signed in to.")
+                Text("The link only lets the bot add shifts and read what's owed and upcoming. It can't see your bank emails or change anything else. Each link code works once and expires after 15 minutes.")
+                    .font(.caption).foregroundStyle(Palette.muted)
+            }
+            Section(styled: "Used the bot before linking?") {
+                Text("Shifts you logged in the bot before linking stay in the bot. To bring them over, send /export to the bot, save the CSV, then use Settings → Data & backups → Import Telegram CSV.")
+                    .font(.subheadline).foregroundStyle(Palette.ink)
+            }
+        }
+        .detailStyle("Telegram")
+        .task { await load() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await load() } } }
+        .confirmationDialog("Unlink Telegram?", isPresented: $confirmingUnlink, titleVisibility: .visible) {
+            Button("Unlink", role: .destructive) { Task { await unlink() } }
+        } message: { Text("Shifts already added stay in HowMuch. New messages to the bot won't reach the app.") }
+    }
+
+    private var statusText: String {
+        guard let status else { return "Checking…" }
+        if !status.linked { return "Not linked" }
+        return status.username.isEmpty ? "Linked" : "Linked to @\(status.username)"
+    }
+
+    private func guideRow(_ icon: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).frame(width: 26).foregroundStyle(Palette.teal)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                Text(detail).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+        }.padding(.vertical, 2).accessibilityElement(children: .combine)
+    }
+
+    private func load() async {
+        do { status = try JSONDecoder().decode(TelegramStatus.self, from: await auth.api.request("/v1/telegram")); message = "" }
+        catch { message = error.localizedDescription }
+    }
+
+    private func link() async {
+        busy = true; defer { busy = false }; message = ""
+        do {
+            let made = try JSONDecoder().decode(TelegramLinkCode.self, from: await auth.api.request("/v1/telegram/link", method: "POST"))
+            guard let url = URL(string: made.url) else { return }
+            openURL(url)
+        } catch { message = error.localizedDescription }
+    }
+
+    private func unlink() async {
+        do { status = try JSONDecoder().decode(TelegramStatus.self, from: await auth.api.request("/v1/telegram", method: "DELETE")) }
+        catch { message = error.localizedDescription }
     }
 }

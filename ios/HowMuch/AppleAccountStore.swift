@@ -58,7 +58,7 @@ final class AppleAccountStore: ObservableObject {
             account = AccountIdentity(id: id, email: nil, displayName: "Preview", appleUserID: "ui-test")
             tracker = TrackerStore(accountID: id, suppressNotifications: true)
             if CommandLine.arguments.contains("--ui-test-widgets") { tracker?.activateWidgets() }
-            if (CommandLine.arguments.contains("--ui-test-payments") || CommandLine.arguments.contains("--ui-test-travel") || CommandLine.arguments.contains("--ui-test-receipts") || CommandLine.arguments.contains("--ui-test-pet-codes")), let account {
+            if (CommandLine.arguments.contains("--ui-test-payments") || CommandLine.arguments.contains("--ui-test-travel") || CommandLine.arguments.contains("--ui-test-receipts") || CommandLine.arguments.contains("--ui-test-pet-codes") || CommandLine.arguments.contains("--ui-test-telegram")), let account {
                 api.setSession(AccountSession(accessToken: "synthetic-ui-test", refreshToken: "unused-ui-test", expiresAt: Date().timeIntervalSince1970 + 86400, account: account))
             }
             PushCenter.shared.currentAccountID = id

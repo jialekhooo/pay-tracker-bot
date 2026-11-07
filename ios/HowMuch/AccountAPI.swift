@@ -132,6 +132,7 @@ final class AccountAPI {
         if let data = try TravelReminderUITestFixture.response(for: request) { return data }
         if let data = try PaymentDetectionUITestFixture.response(for: request) { return data }
         if let data = try PetCodesUITestFixture.response(for: request) { return data }
+        if let data = try TelegramUITestFixture.response(for: request) { return data }
         #endif
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -175,6 +176,23 @@ private enum PetCodesUITestFixture {
             return try JSONSerialization.data(withJSONObject: codes[index])
         }
         return try JSONSerialization.data(withJSONObject: ["codes": codes])
+    }
+}
+
+/// Telegram linking for UI tests: a link code, then linked once the test says the bot confirmed it.
+@MainActor
+enum TelegramUITestFixture {
+    static var linked = false
+    static var openedLink: URL?
+    static func response(for request: URLRequest) throws -> Data? {
+        guard CommandLine.arguments.contains("--ui-test-telegram"), let path = request.url?.path, path.hasPrefix("/v1/telegram") else { return nil }
+        if path == "/v1/telegram/link" {
+            // The test stands in for Telegram: tapping Start in the bot links the account.
+            linked = true
+            return try JSONSerialization.data(withJSONObject: ["url": "https://t.me/paytracker1_bot?start=link-UITESTCODE123", "expires": 0])
+        }
+        if request.httpMethod == "DELETE" { linked = false }
+        return try JSONSerialization.data(withJSONObject: ["linked": linked, "username": linked ? "howmuch_tester" : "", "linkedAt": 0, "bot": "paytracker1_bot"])
     }
 }
 

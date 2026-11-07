@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager,suppress
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from .database import AppStorage
-from . import pet_codes,auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity,pay_in
+from . import telegram_link,pet_codes,auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity,pay_in
 
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
@@ -37,6 +37,7 @@ app.include_router(email_providers.router,prefix='/v1')
 app.include_router(travel.router,prefix='/v1')
 app.include_router(receipts.router,prefix='/v1')
 app.include_router(pet_codes.router,prefix='/v1')
+app.include_router(telegram_link.router,prefix='/v1')
 app.include_router(calendar_feed.router)
 
 @app.get('/healthz')

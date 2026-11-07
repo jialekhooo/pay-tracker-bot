@@ -33,6 +33,7 @@ from telegram.ext import (
 
 from .calendar_export import event_title, google_link, to_ics
 from .feed import issue_token, serve
+from .howmuch_link import HowMuchLink, LinkError
 from .parsing import Break, ParseError, Shift, parse_shifts, parse_time
 from .pay import RateConfig, calculate_pay, format_hours, round_money
 from .reminders import (
@@ -80,6 +81,8 @@ Breaks — add them anywhere in the message:
 `today 9am-6pm 1 hour paid break Roadshow` (not deducted)
 `today 9am-6pm 30min break Roadshow` (uses your /break default)
 `today 9am-6pm no break Roadshow`
+
+Using the HowMuch iPhone app? Link it with /link, and shifts you send here go straight into the app.
 
 Send /commands for everything the bot can do.
 """
@@ -176,8 +179,146 @@ def _decimal(raw: str) -> Decimal:
     return value
 
 
+def _howmuch(context: ContextTypes.DEFAULT_TYPE) -> HowMuchLink | None:
+    return context.application.bot_data.get("howmuch")
+
+
+async def _is_linked(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    link = _howmuch(context)
+    return bool(link and update.effective_user and await link.linked(update.effective_user.id))
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # The app opens the bot with /start link-<code> to link the two.
+    if context.args and context.args[0].startswith("link-"):
+        await _link_from_app(update, context, context.args[0][len("link-"):])
+        return
     await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN)
+
+
+async def _link_from_app(update: Update, context: ContextTypes.DEFAULT_TYPE, code: str) -> None:
+    link = _howmuch(context)
+    if link is None:
+        await update.message.reply_text("Linking with the HowMuch app isn't available right now.")
+        return
+    user = update.effective_user
+    try:
+        name = await link.link(user.id, code, user.username or "")
+    except LinkError as error:
+        await update.message.reply_text(f"❌ {error}")
+        return
+    who = f" to {escape(name)}'s HowMuch account" if name else " to your HowMuch account"
+    await _send_html(update, [
+        f"✅ <b>Linked{who}</b>",
+        "Send a shift here, like <code>Wedding gig 12/8 6pm-11pm @ MBS</code>, and it appears in the app "
+        "with your app's rates, breaks and due dates.",
+        "/owed — what you're waiting to be paid",
+        "/upcoming — what you're booked for",
+        "/unlink — stop sending shifts to the app",
+    ])
+
+
+async def link_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _is_linked(update, context):
+        await update.message.reply_text("You're linked with the HowMuch app. Shifts you send here go into the app. /unlink to stop.")
+        return
+    await update.message.reply_text(
+        "To link with the HowMuch iPhone app:\n"
+        "1. Open HowMuch → Settings → Telegram.\n"
+        "2. Tap Link Telegram. It opens this chat.\n"
+        "3. Tap Start. Done — shifts you send here then go into the app."
+    )
+
+
+async def unlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    link = _howmuch(context)
+    if link is None or not await _is_linked(update, context):
+        await update.message.reply_text("This chat isn't linked to the HowMuch app.")
+        return
+    try:
+        await link.unlink(update.effective_user.id)
+    except LinkError as error:
+        await update.message.reply_text(f"❌ {error}")
+        return
+    await update.message.reply_text("Unlinked. Shifts you send here are kept in the bot again, not in the app.")
+
+
+def _clock(minute: int) -> str:
+    return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def _app_day(day: str) -> str:
+    return date.fromisoformat(day).strftime("%a %d %b")
+
+
+async def owed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    link = _howmuch(context)
+    if link is None or not await _is_linked(update, context):
+        await update.message.reply_text("/owed reads your HowMuch app. Link it first with /link.")
+        return
+    try:
+        summary = await link.summary(update.effective_user.id)
+    except LinkError as error:
+        await update.message.reply_text(f"❌ {error}")
+        return
+    if not summary["owed"]:
+        await update.message.reply_text("🎉 Nothing owed. Every finished shift is marked paid in HowMuch.")
+        return
+    lines = ["💰 <b>Waiting to be paid</b>"]
+    for entry in summary["owed"]:
+        count = entry["shifts"]
+        lines.append(f"<b>{_money(Decimal(str(entry['amount'])), entry['currency'])}</b> · {count} shift{'s' if count != 1 else ''}")
+    lines.append("Mark shifts paid in the HowMuch app when the money arrives.")
+    await _send_html(update, lines)
+
+
+async def _show_app_booked(update: Update, context: ContextTypes.DEFAULT_TYPE, days: int, window: str) -> None:
+    try:
+        summary = await _howmuch(context).summary(update.effective_user.id, days=min(days, 60))
+    except LinkError as error:
+        await update.message.reply_text(f"❌ {error}")
+        return
+    shifts = summary["upcoming"]
+    if not shifts:
+        await update.message.reply_text(f"Nothing booked {window} in HowMuch.")
+        return
+    rows = [(_app_day(s["day"]), f"{_clock(s['startMinute'])}–{_clock(s['endMinute'])}", _where(s["event"], s.get("location", "")))
+            for s in shifts]
+    await _send_html(update, [f"🗓 <b>Booked in HowMuch · {escape(window)}</b>", _block(_aligned(rows, right=set()))])
+
+
+async def _log_to_app(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
+    link = _howmuch(context)
+    user_id = update.effective_user.id
+    parsed = parse_shifts(text, today=_today(_storage(context), user_id))
+    if not parsed:
+        await update.message.reply_text("Send a shift, e.g. 13/8 8.30am-8pm 15/h Hermes Private Sale")
+        return
+    shifts = [result for _, result in parsed if not isinstance(result, ParseError)]
+    failed = [f"• {line} — {result}" for line, result in parsed if isinstance(result, ParseError)]
+    reply: list[str] = []
+    if shifts:
+        try:
+            added, clashes = await link.add_shifts(user_id, shifts)
+        except LinkError as error:
+            await update.message.reply_text(f"❌ {error}")
+            return
+        reply.append(f"✅ <b>Added {len(added)} shift{'s' if len(added) != 1 else ''} to HowMuch</b>")
+        rows = [(_app_day(a.day), f"{_clock(a.start_minute)}–{_clock(a.end_minute)}", _where(a.event, a.location),
+                 _money(a.pay, a.currency)) for a in added]
+        reply.append(_block(_aligned(rows, right={3})))
+        if len(added) > 1:
+            reply.append(f"Total  <b>{_money(sum((a.pay for a in added), Decimal('0')), added[0].currency)}</b>")
+        if clashes:
+            reply.append("\n⚠️ <b>Double booking</b>")
+            reply.extend(escape(f"• {c['event']} clashes with {c['with']} ({_app_day(c['day'])} "
+                                f"{_clock(c['startMinute'])}–{_clock(c['endMinute'])})") for c in clashes)
+            reply.append("Open HowMuch to fix it.")
+    if failed:
+        reply.append("\n❌ <b>Could not read</b>")
+        reply.extend(escape(line) for line in failed)
+        reply.append("Send /help to see the accepted formats.")
+    await _send_html(update, reply)
 
 
 async def rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -382,6 +523,9 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
     if text.startswith("/log"):
         text = text[len("/log") :]
+    if await _is_linked(update, context):
+        await _log_to_app(update, context, text)
+        return
     config = storage.get_config(user_id)
 
     parsed = parse_shifts(
@@ -799,10 +943,16 @@ async def upcoming(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     days = 14
     if context.args and context.args[0].isdigit():
         days = max(1, min(int(context.args[0]), 365))
+    if await _is_linked(update, context):
+        await _show_app_booked(update, context, days, f"next {min(days, 60)} days")
+        return
     await _show_booked(update, context, days, f"next {days} days")
 
 
 async def upcoming_shifts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await _is_linked(update, context):
+        await _show_app_booked(update, context, 60, "next 60 days")
+        return
     await _show_booked(update, context, 366, "all upcoming")
 
 
@@ -1463,6 +1613,23 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
         ),
     ),
     (
+        "HowMuch app",
+        (
+            Command(
+                ("link",), "/link",
+                "Link with the HowMuch iPhone app", link_info,
+            ),
+            Command(
+                ("owed",), "/owed",
+                "What you're waiting to be paid (linked app)", owed,
+            ),
+            Command(
+                ("unlink",), "/unlink",
+                "Stop sending shifts to the HowMuch app", unlink,
+            ),
+        ),
+    ),
+    (
         "Help",
         (
             Command(
@@ -1476,6 +1643,26 @@ SECTIONS: tuple[tuple[str, tuple[Command, ...]], ...] = (
         ),
     ),
 )
+
+
+# Once linked, shifts live in the HowMuch app. These still work; the rest only know the bot's own
+# records, so they point to the app instead (/export stays, to move old bot shifts into the app).
+WORKS_WHEN_LINKED = {"log", "upcoming", "upcomingshifts", "export", "link", "owed", "unlink", "commands", "help"}
+
+
+def _bot_records_only(
+    handler: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]],
+) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]:
+    async def guarded(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if await _is_linked(update, context):
+            await update.message.reply_text(
+                "You're linked with the HowMuch app, so your shifts and settings live there. "
+                "Open the app for this, or use /owed and /upcoming here. "
+                "/export still downloads the shifts you logged in the bot before linking."
+            )
+            return
+        await handler(update, context)
+    return guarded
 
 
 async def _publish_commands(application: Application) -> None:
@@ -1512,9 +1699,12 @@ def build_application(
     application.bot_data["feed_base_url"] = feed_base_url
     application.bot_data["webapp_url"] = webapp_url
 
+    application.bot_data["howmuch"] = HowMuchLink.from_env()
+
     for _, commands_in_section in SECTIONS:
         for command in commands_in_section:
-            application.add_handler(CommandHandler(list(command.names), command.handler))
+            handler = command.handler if command.name in WORKS_WHEN_LINKED else _bot_records_only(command.handler)
+            application.add_handler(CommandHandler(list(command.names), handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_shift))
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
     application.job_queue.run_repeating(send_due_reminders, interval=60, first=10)
