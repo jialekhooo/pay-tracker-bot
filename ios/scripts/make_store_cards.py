@@ -7,7 +7,8 @@
        -only-testing:HowMuchUITests/HowMuchUITests/testStoreScreenshots
 2. python3 ios/scripts/make_store_cards.py <captures> <output folder>   (needs Pillow)
 
-Writes opaque RGB PNGs at 6.9" (1320 x 2868) and 6.5" (1284 x 2778).
+Writes opaque RGB PNGs at 6.9" (1320 x 2868), 6.3" (1206 x 2622, the "medium display"
+slot App Store Connect asks for) and 6.5" (1284 x 2778).
 """
 import sys
 from pathlib import Path
@@ -101,7 +102,7 @@ def card(capture, headline, subline, dark, size):
 
 def main():
     captures, out = Path(sys.argv[1]), Path(sys.argv[2])
-    for label, size in (("6.9in-1320x2868", (1320, 2868)), ("6.5in-1284x2778", (1284, 2778))):
+    for label, size in (("6.9in-1320x2868", (1320, 2868)), ("6.3in-1206x2622", (1206, 2622)), ("6.5in-1284x2778", (1284, 2778))):
         folder = out / label
         folder.mkdir(parents=True, exist_ok=True)
         for i, (name, headline, subline, dark) in enumerate(CARDS, 1):

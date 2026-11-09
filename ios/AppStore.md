@@ -52,6 +52,8 @@ Everything App Store Connect asks for, ready to paste. App record: `6830079731`
 
 **Current set (build 67, 8 Nov 2026):** `output/app-store/demo-cards/6.9in-1320x2868/`. These are seven framed cards built from real captures (Overview, paste a job, Calendar, Earnings, Penny, Friends, Dark Mode). Upload them in file-name order. To redo them after UI changes, run the `testStoreScreenshots` UI test, then `ios/scripts/make_store_cards.py` (instructions are in the script).
 
+**App previews:** `output/app-store/demo-cards/previews-886x1920/`. These are three silent recordings of the real app, made from the `testStorePreview1/2/3` UI tests; the README in `demo-cards` explains how they were made. They go in the same medium-display slot as the 6.3" screenshots (`demo-cards/6.3in-1206x2622`, the size App Store Connect asks for).
+
 Older set: upload `output/app-store/real-6.9in/` (1320 × 2868, 6.9" display) in this order:
 1. `01-overview.png` — Overview with today's shift
 2. `02-calendar.png` — Work calendar
