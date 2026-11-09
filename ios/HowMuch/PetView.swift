@@ -1357,6 +1357,88 @@ extension AppleAccountStore {
     }
 }
 
+/// Draws Penny for the Home Screen widget when she changes (stage, mood, outfit, streak).
+private var lastPennyWidget: (info: PennyWidgetInfo, outfit: [String])?
+extension TrackerStore {
+    func publishPennyWidget() {
+        let pet = petProgress()
+        let outfit = petOutfit(petCloset, pet)
+        let info = PennyWidgetInfo(accountID: accountID.lowercased(), name: petPreferences.displayName, stage: pet.stage.title,
+                                   level: pet.level, mood: pet.mood.label, streakWeeks: pet.streakWeeks, hatched: pet.stage != .egg)
+        let worn = outfit.map { $0.key.rawValue + "=" + $0.value.id }.sorted()
+        guard lastPennyWidget?.info != info || lastPennyWidget?.outfit != worn || PennyWidgetFile.imageURL(dark: false) == nil else { return }
+        func draw(_ scheme: ColorScheme) -> Data? {
+            let room = ZStack {
+                PetScene(item: outfit[.background])
+                PetSprite(stage: pet.stage, mood: pet.mood, outfit: outfit.filter { $0.key != .background }, animate: false)
+                    .frame(width: 112, height: 112).offset(y: -34)  // above the widget's name bar
+            }.frame(width: 180, height: 180).environment(\.colorScheme, scheme)
+            let renderer = ImageRenderer(content: room)
+            renderer.scale = 3
+            return renderer.uiImage?.pngData()
+        }
+        guard let light = draw(.light), let dark = draw(.dark) else { return }
+        do { try PennyWidgetFile.write(info, light: light, dark: dark); lastPennyWidget = (info, worn) } catch {}
+    }
+}
+
+/// You and your friends' pets ranked by streak, then level. Pets only: no shifts or pay.
+struct FriendBoardEntry: Identifiable, Equatable {
+    var id: String
+    var card: FriendCard
+    var isYou: Bool
+    var rank: Int
+
+    static func ranked(you: FriendCard, friends: [FriendPerson]) -> [FriendBoardEntry] {
+        let all = [FriendBoardEntry(id: "you", card: you, isYou: true, rank: 0)]
+            + friends.map { FriendBoardEntry(id: $0.code, card: $0.card, isYou: false, rank: 0) }
+        // Ties stay in a steady order (you first, then by name) and share a rank.
+        let sorted = all.enumerated().sorted { a, b in
+            let (x, y) = (a.element.card, b.element.card)
+            if x.streakWeeks != y.streakWeeks { return x.streakWeeks > y.streakWeeks }
+            if x.level != y.level { return x.level > y.level }
+            if a.element.isYou != b.element.isYou { return a.element.isYou }
+            return x.petName.localizedCaseInsensitiveCompare(y.petName) == .orderedAscending
+        }.map(\.element)
+        var result: [FriendBoardEntry] = []
+        for (index, var entry) in sorted.enumerated() {
+            if let previous = result.last, previous.card.streakWeeks == entry.card.streakWeeks, previous.card.level == entry.card.level {
+                entry.rank = previous.rank
+            } else { entry.rank = index + 1 }
+            result.append(entry)
+        }
+        return result
+    }
+}
+
+private struct FriendBoardRow: View {
+    let entry: FriendBoardEntry
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                switch entry.rank {
+                case 1: Text("🥇"); case 2: Text("🥈"); case 3: Text("🥉")
+                default: Text("\(entry.rank)").font(.subheadline.weight(.bold)).foregroundStyle(Palette.muted)
+                }
+            }.frame(width: 28)
+            FriendPennyThumb(card: entry.card, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.isYou ? "\(entry.card.petName) (you)" : entry.card.petName).font(.subheadline.weight(.semibold))
+                Text(entry.isYou ? "Lv \(entry.card.level)" : "\(entry.card.owner)'s pet · Lv \(entry.card.level)").font(.caption).foregroundStyle(Palette.muted)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 0) {
+                Text("\(entry.card.streakWeeks) wk").font(.subheadline.weight(.bold)).foregroundStyle(entry.card.streakWeeks > 0 ? .orange : Palette.muted)
+                Text("streak").font(.caption2).foregroundStyle(Palette.muted)
+            }
+        }
+        .listRowBackground(entry.isYou ? Palette.mint : nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Number \(entry.rank): \(entry.isYou ? "your pet " : "\(entry.card.owner)'s pet ")\(entry.card.petName), level \(entry.card.level), \(entry.card.streakWeeks) week streak")
+        .accessibilityIdentifier(entry.isYou ? "friends.board.you" : "friends.board." + entry.id)
+    }
+}
+
 /// A friend's Penny, small, for lists.
 private struct FriendPennyThumb: View {
     let card: FriendCard
@@ -1382,6 +1464,12 @@ struct FriendsView: View {
 
     var body: some View {
         AppForm {
+            if let friends = overview?.friends, !friends.isEmpty {
+                Section {
+                    ForEach(FriendBoardEntry.ranked(you: store.petCard, friends: friends)) { FriendBoardRow(entry: $0) }
+                    Text("Ranked by weekly streak, then level. Work a shift each week to keep yours going.").formFootnote()
+                } header: { FormHeader("Leaderboard") }
+            }
             Section {
                 Text(overview?.code ?? "Loading…").font(.system(.title2, design: .monospaced, weight: .bold)).textSelection(.enabled)
                     .accessibilityIdentifier("friends.myCode")

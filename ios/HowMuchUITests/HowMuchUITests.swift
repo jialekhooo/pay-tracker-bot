@@ -210,6 +210,42 @@ final class HowMuchUITests: XCTestCase {
         splash.tap()
         XCTAssertTrue(splash.waitForNonExistence(timeout: 1.5), "a tap skips it")
     }
+    /// Adds the Penny widget to the Home Screen and checks it shows Penny. Changes the Home Screen, so it only
+    /// runs when asked: TEST_RUNNER_WIDGET_CHECK=1.
+    @MainActor
+    func testPennyWidgetOnTheHomeScreen() throws {
+        guard ProcessInfo.processInfo.environment["WIDGET_CHECK"] == "1" else { throw XCTSkip("WIDGET_CHECK not set") }
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-widgets", "-appearance", "light"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 10)); sleep(2)
+        XCUIDevice.shared.press(.home)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertTrue(springboard.wait(for: .runningForeground, timeout: 10))
+        // Edit the Home Screen, open the widget gallery and find HowMuch's Penny widget.
+        springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.62)).press(forDuration: 1.5)
+        let edit = springboard.buttons["Edit"].firstMatch
+        if edit.waitForExistence(timeout: 3) { edit.tap() }
+        let addWidget = springboard.buttons["Add Widget"].firstMatch
+        XCTAssertTrue(addWidget.waitForExistence(timeout: 5)); addWidget.tap()
+        let search = springboard.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("HowMuch")
+        let howMuch = springboard.staticTexts["HowMuch"].firstMatch  // the app's row, not the search text
+        XCTAssertTrue(howMuch.waitForExistence(timeout: 5)); howMuch.tap()
+        sleep(1)
+        // Swipe through HowMuch's widgets until Penny's shows.
+        for _ in 0..<8 where !springboard.staticTexts["Penny"].exists { springboard.swipeLeft(); sleep(1) }
+        XCTAssertTrue(springboard.staticTexts["Penny"].waitForExistence(timeout: 3), "the Penny widget is in the gallery")
+        sleep(1)
+        let gallery = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); gallery.name = "Penny widget gallery"; gallery.lifetime = .keepAlways; add(gallery)
+        // The medium size is the next page.
+        springboard.swipeLeft(); sleep(2)
+        let medium = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); medium.name = "Penny widget medium"; medium.lifetime = .keepAlways; add(medium)
+        springboard.swipeRight(); sleep(1)
+        springboard.buttons.matching(NSPredicate(format: "label CONTAINS 'Add Widget'")).firstMatch.tap()
+        sleep(2)
+        if springboard.buttons["Done"].exists { springboard.buttons["Done"].tap() }
+        sleep(3)
+        let home = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); home.name = "Penny widget on the Home Screen"; home.lifetime = .keepAlways; add(home)
+    }
     @MainActor
     func testFoodMiscAndCabClaimsPersistEditDeleteAndUndo() {
         let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()
@@ -501,7 +537,18 @@ final class HowMuchUITests: XCTestCase {
         let accept = app.buttons["friends.accept.PENNY-ALEXAL"]
         XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap()
         XCTAssertTrue(app.staticTexts["You're now friends! 🎉"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-ALEXAL").firstMatch.waitForExistence(timeout: 5))
+        let alexRow = app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-ALEXAL").firstMatch
+        reveal(alexRow, in: app); XCTAssertTrue(alexRow.waitForExistence(timeout: 5))
+        // The leaderboard: Mochi and Bean tie for first (3-week streaks), you're behind on a shorter streak.
+        let mochi = app.descendants(matching: .any).matching(identifier: "friends.board.PENNY-SAMSAM").firstMatch
+        let bean = app.descendants(matching: .any).matching(identifier: "friends.board.PENNY-ALEXAL").firstMatch
+        let you = app.descendants(matching: .any).matching(identifier: "friends.board.you").firstMatch
+        reveal(you, in: app)
+        XCTAssertTrue(mochi.waitForExistence(timeout: 5)); XCTAssertTrue(bean.exists); XCTAssertTrue(you.exists)
+        XCTAssertTrue(mochi.label.hasPrefix("Number 1: Sam's pet Mochi, level 6, 3 week streak"), mochi.label)
+        XCTAssertTrue(bean.label.hasPrefix("Number 1: Alex's pet Bean"), bean.label)
+        XCTAssertTrue(you.label.hasPrefix("Number 3: your pet"), you.label)
+        XCTAssertLessThan(bean.frame.minY, you.frame.minY, "ranked rows come first")
         attach("Friends list", app: app)
         // Visit Sam's Mochi and say hi.
         let sam = app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-SAMSAM").firstMatch

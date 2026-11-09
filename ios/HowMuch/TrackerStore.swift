@@ -144,6 +144,7 @@ final class TrackerStore: ObservableObject {
         guard publishesWidgets else { return }
         do {
             try SharedWidgetStorage.publish(WidgetSnapshot(data: data, accountID: accountID))
+            publishPennyWidget()
             widgetMessage = "Widgets updated from this account."
         } catch { widgetMessage = error.localizedDescription }
     }

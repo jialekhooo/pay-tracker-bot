@@ -132,6 +132,10 @@ final class JobMessageTests: XCTestCase {
         let account = UUID().uuidString.lowercased(), id = UUID()
         let url = WidgetLink.finish(id).url(accountID: account)
         XCTAssertEqual(WidgetLink.parse(url, accountID: account), .finish(id))
+        // The Penny widget opens Penny's page, for this account only.
+        let pet = WidgetLink.pet.url(accountID: account)
+        XCTAssertEqual(WidgetLink.parse(pet, accountID: account), .pet)
+        XCTAssertNil(WidgetLink.parse(pet, accountID: UUID().uuidString))
         XCTAssertNil(WidgetLink.parse(url, accountID: UUID().uuidString))
     }
 
@@ -202,5 +206,43 @@ final class JobMessageTests: XCTestCase {
         XCTAssertEqual(pinned.location, "Marina Bay Sands")
         XCTAssertEqual(pinned.dates.count, 2)
         XCTAssertEqual(pinned.rate, 13)
+    }
+
+    func testWeekdaysBetweenDaysKeepEveryDate() {
+        XCTAssertEqual(slots(parse("Roadshow\nSat 21 & Sun 22 Nov, 10am-7pm")), ["2026-11-21 10:00-19:00", "2026-11-22 10:00-19:00"])
+        XCTAssertEqual(slots(parse("Roadshow\n21 (Sat), 22 (Sun) & 23 (Mon) Nov 10am-7pm")),
+                       ["2026-11-21 10:00-19:00", "2026-11-22 10:00-19:00", "2026-11-23 10:00-19:00"])
+        XCTAssertEqual(slots(parse("Roadshow\nFri 20 - Sun 22 Nov 9am-6pm")),
+                       ["2026-11-20 09:00-18:00", "2026-11-21 09:00-18:00", "2026-11-22 09:00-18:00"])
+        // A weekday on its own still means the next one.
+        XCTAssertEqual(slots(parse("Roadshow\nSat 10am-7pm")), ["2026-11-07 10:00-19:00"])
+    }
+
+    func testEmojiAreNotPartOfTheNameOrVenue() {
+        let job = parse("Roadshow at VivoCity 🎉\n21 Nov 10am-7pm")
+        XCTAssertEqual(job.location, "VivoCity")
+        XCTAssertEqual(job.event, "Roadshow")
+        let pinned = parse("🎪 Nike Pop-up ✨\n📍 Jewel Changi 🛫\n21 Nov 10am-7pm")
+        XCTAssertEqual(pinned.event, "Nike Pop-up")
+        XCTAssertEqual(pinned.location, "Jewel Changi")
+        XCTAssertEqual(parse("Location: Suntec City 🏢\n21 Nov 10am-7pm").location, "Suntec City")
+    }
+
+    func testEventNameAfterAGreetingLine() {
+        let job = parse("""
+        Hi all! Promoter needed 🙌
+        Roadshow at VivoCity
+        📅 Sat 21 Nov
+        ⏰ 10am - 7pm (1h break)
+        💰 $14/hr
+        """)
+        XCTAssertEqual(job.event, "Roadshow")
+        XCTAssertEqual(job.location, "VivoCity")
+        XCTAssertEqual(slots(job), ["2026-11-21 10:00-19:00"])
+        XCTAssertEqual(job.rate, 14); XCTAssertEqual(job.breakMinutes, 60)
+        // A recruiting line on its own isn't the event; the heading after it is.
+        XCTAssertEqual(parse("Promoters needed\nSamsung Galaxy launch\n21 Nov 10am-7pm").event, "Samsung Galaxy launch")
+        // Headings only count before the details start.
+        XCTAssertNil(parse("21 Nov 10am-7pm\nPlease reply soon").event)
     }
 }

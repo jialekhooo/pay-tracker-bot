@@ -91,7 +91,7 @@ public struct WidgetSnapshot: Codable, Equatable {
 }
 
 public enum WidgetLink: Hashable {
-    case shift(UUID), event(UUID), earnings, calendar(String), finish(UUID)
+    case shift(UUID), event(UUID), earnings, calendar(String), finish(UUID), pet
     public func url(accountID: String) -> URL {
         var parts = URLComponents(); parts.scheme = "howmuch"; parts.host = "widget"
         var query = [URLQueryItem(name: "account", value: accountID.lowercased())]
@@ -100,6 +100,7 @@ public enum WidgetLink: Hashable {
         case .event(let id): parts.path = "/event"; query.append(URLQueryItem(name: "id", value: id.uuidString))
         case .finish(let id): parts.path = "/finish"; query.append(URLQueryItem(name: "id", value: id.uuidString))
         case .earnings: parts.path = "/earnings"
+        case .pet: parts.path = "/pet"
         case .calendar(let day): parts.path = "/calendar"; query.append(URLQueryItem(name: "day", value: day))
         }
         parts.queryItems = query; return parts.url!
@@ -110,6 +111,7 @@ public enum WidgetLink: Hashable {
               query.filter({ $0.name == "account" }).count == 1,
               query.first(where: { $0.name == "account" })?.value.flatMap(UUID.init(uuidString:)) == owner else { return nil }
         if parts.path == "/earnings" { return .earnings }
+        if parts.path == "/pet" { return .pet }
         if parts.path == "/calendar" {
             guard query.filter({ $0.name == "day" }).count == 1,
                   let day = query.first(where: { $0.name == "day" })?.value,

@@ -40,6 +40,7 @@ struct ContentView: View {
             case .earnings: EarningsView()
             case .calendar(let day): WorkCalendarView(initialDay: TrackerCalendar.localDate(day) ?? Date())
             case .finish(let id): ShiftDetailView(shiftID: id)
+            case .pet: PetDetailView()
             }
         }
         }
