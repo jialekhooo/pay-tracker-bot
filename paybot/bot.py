@@ -37,7 +37,8 @@ from telegram.ext import (
 from .calendar_export import event_title, google_link, to_ics
 from .feed import issue_token, serve
 from .howmuch_link import HowMuchLink, LinkError
-from .parsing import Break, ParseError, Shift, parse_shifts, parse_time
+from .job_message import parse_message
+from .parsing import Break, ParseError, Shift, parse_time
 from .pay import RateConfig, calculate_pay, format_hours, round_money
 from .reminders import (
     DEFAULT_SEND_AT,
@@ -65,6 +66,8 @@ Or log a fixed payout instead of an hourly rate:
 `Wedding gig 12/8 6pm-11.30pm $200 flat @ Marina Bay Sands`
 
 Location is optional — write it after `@` or `at`.
+
+You can also forward a whole job post, and I'll read the event, venue, dates, times and pay from it.
 
 The order doesn't matter and the rate is optional (your saved rate is used):
 `12/8 6pm-11.30pm Wedding gig`
@@ -214,7 +217,7 @@ LOG_EXAMPLE = (
     "<code>Wedding gig 12/8 6pm-11.30pm 25/h @ Marina Bay Sands</code>\n"
     "<code>Roadshow today 9am-6pm 1h unpaid break</code>\n"
     "<code>Promo 15/8 10am-4pm $120 flat</code>\n"
-    "Several lines log several shifts."
+    "Several lines log several shifts. You can also forward a whole job post."
 )
 
 
@@ -454,7 +457,7 @@ async def _show_app_booked(update: Update, context: ContextTypes.DEFAULT_TYPE, d
 async def _log_to_app(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
     link = _howmuch(context)
     user_id = update.effective_user.id
-    parsed = parse_shifts(text, today=_today(_storage(context), user_id))
+    parsed = parse_message(text, today=_today(_storage(context), user_id))
     if not parsed:
         await update.effective_message.reply_text("Send a shift, e.g. 13/8 8.30am-8pm 15/h Hermes Private Sale")
         return
@@ -696,7 +699,7 @@ async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     config = storage.get_config(user_id)
 
-    parsed = parse_shifts(
+    parsed = parse_message(
         text, today=_today(storage, user_id), default_break_paid=config.default_break_paid
     )
     if not parsed:
