@@ -128,6 +128,88 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Mochi waved back! You and Sam each got 2 coins."].waitForExistence(timeout: 5))
         shot("friend-visit")
     }
+    /// App Store preview flows, paced for video. Skipped unless STORE_PREVIEW_DIR is set; each writes
+    /// preview-N.txt with the start and end times (seconds since 1970) for trimming the simulator recording.
+    @MainActor
+    private func previewClip(_ number: Int, _ arguments: [String], _ steps: (XCUIApplication) -> Void) throws {
+        guard let folder = ProcessInfo.processInfo.environment["STORE_PREVIEW_DIR"], !folder.isEmpty else { throw XCTSkip("STORE_PREVIEW_DIR not set") }
+        let app = XCUIApplication(); app.launchArguments = arguments; app.launch()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 15) || app.buttons["pet.card"].waitForExistence(timeout: 5))
+        sleep(1)
+        let start = Date().timeIntervalSince1970
+        steps(app)
+        let end = Date().timeIntervalSince1970
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        try "\(start) \(end)".write(toFile: folder + "/preview-\(number).txt", atomically: true, encoding: .utf8)
+    }
+    private func pause(_ seconds: Double) { usleep(useconds_t(seconds * 1_000_000)) }
+    @MainActor
+    func testStorePreview1PasteAJob() throws {
+        try previewClip(1, ["--preview", "-appearance", "light"]) { app in
+            pause(2)
+            app.buttons["nav.add"].tap(); pause(1.5)
+            app.buttons["paste.type"].tap()
+            let text = app.textViews["paste.text"]; XCTAssertTrue(text.waitForExistence(timeout: 5)); pause(0.5)
+            text.typeText("Roadshow at VivoCity\n21 & 22 Nov, 10am-7pm\n$14/hr")
+            pause(1)
+            app.buttons["paste.fill"].tap()
+            XCTAssertTrue(app.staticTexts["paste.summary"].waitForExistence(timeout: 5)); pause(2.5)
+            app.swipeUp(velocity: .slow); pause(2)
+            app.swipeUp(velocity: .slow); pause(2)
+            app.buttons["Save"].tap(); pause(1.5)
+            app.buttons["nav.calendar"].tap(); pause(2.5)
+            app.buttons["nav.earnings"].tap(); pause(2.5)
+        }
+    }
+    @MainActor
+    func testStorePreview2PennyAndFriends() throws {
+        try previewClip(2, ["--ui-test-account", "--ui-test-friends", "-appearance", "light"]) { app in
+            pause(1.5)
+            app.buttons["pet.card"].tap(); pause(2.5)
+            app.swipeUp(velocity: .slow); pause(2)
+            let friends = app.buttons["pet.friends"]; reveal(friends, in: app); pause(0.5); friends.tap(); pause(2)
+            let accept = app.buttons["friends.accept.PENNY-ALEXAL"]
+            XCTAssertTrue(accept.waitForExistence(timeout: 5)); accept.tap(); pause(2.5)
+            let sam = app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-SAMSAM").firstMatch
+            reveal(sam, in: app); sam.tap(); pause(2.5)
+            app.buttons["friend.hello"].tap(); pause(3.5)
+        }
+    }
+    @MainActor
+    func testStorePreview3EarningsAndDarkMode() throws {
+        // No -appearance argument: it would override the Dark choice made on screen.
+        try previewClip(3, ["--preview"]) { app in
+            pause(1.5)
+            app.buttons["nav.earnings"].tap(); pause(2)
+            app.buttons["Month"].firstMatch.tap(); pause(1.5)
+            app.buttons["All time"].firstMatch.tap(); pause(0.8)
+            app.swipeUp(velocity: .slow); pause(1)
+            app.staticTexts["Wedding reception"].firstMatch.tap(); pause(2.5)
+            app.navigationBars.buttons.firstMatch.tap(); pause(0.8)
+            app.buttons["nav.settings"].tap(); pause(0.8)
+            let caption = app.staticTexts["settings.appearanceCaption"]; reveal(caption, in: app); pause(0.8)
+            app.buttons["Dark"].tap(); pause(2)
+            app.buttons["nav.overview"].tap(); pause(2.5)
+            app.buttons["nav.calendar"].tap(); pause(2)
+        }
+        // Leave the simulator as it was.
+        let app = XCUIApplication(); app.buttons["nav.settings"].tap()
+        let system = app.buttons["Match iPhone"]; reveal(system, in: app); system.tap()
+    }
+    @MainActor
+    func testOpeningAnimationPlaysThenGetsOutOfTheWay() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-splash"]; app.launch()
+        let splash = app.descendants(matching: .any).matching(identifier: "opening.splash").firstMatch
+        // --ui-test-splash holds it for 4 s (normally about 1 s) so the test can see it.
+        XCTAssertTrue(splash.waitForExistence(timeout: 5), "the opening animation shows on launch")
+        XCTAssertTrue(splash.waitForNonExistence(timeout: 8), "and leaves by itself")
+        XCTAssertTrue(app.buttons["nav.add"].isHittable)
+        // A tap skips it.
+        app.terminate(); app.launch()
+        XCTAssertTrue(splash.waitForExistence(timeout: 5))
+        splash.tap()
+        XCTAssertTrue(splash.waitForNonExistence(timeout: 1.5), "a tap skips it")
+    }
     @MainActor
     func testFoodMiscAndCabClaimsPersistEditDeleteAndUndo() {
         let app = XCUIApplication(); app.launchArguments = ["--ui-test-account"]; app.launch()

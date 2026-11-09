@@ -60,6 +60,149 @@ struct AccountRootView: View {
     }
 }
 
+/// A short opening animation each time HowMuch opens: on launch, and when coming back after a while away.
+/// It's its own window drawn with Core Animation, so it keeps moving while the app draws its first screen
+/// behind it. It starts on the launch screen's colour, sits below the Face ID lock, and stays (briefly) while
+/// the account opens.
+@MainActor
+final class OpeningSplash: NSObject {
+    static let shared = OpeningSplash()
+    /// Away for less than this (switching apps to copy a job message, say) opens straight into the app.
+    static let returnAfter: TimeInterval = 30
+    /// Shown at least this long, and at most `longest` while waiting for the account.
+    static let longest: TimeInterval = 3.0
+    static var shortest: TimeInterval {
+        #if DEBUG
+        // UI tests only see the app once it's idle, after a 1 s animation is over; hold it so they can check it.
+        if CommandLine.arguments.contains("--ui-test-splash") { return 4 }
+        #endif
+        return 1.0
+    }
+    var isReady: () -> Bool = { true }
+    private var window: UIWindow?
+    private var icon: UIView?
+    private var backgroundedAt: Date?
+    private var shownAt = Date()
+    private var leaving = false
+
+    static var enabled: Bool {
+        #if DEBUG
+        let args = CommandLine.arguments
+        if args.contains("--ui-test-splash") { return true }
+        if args.contains(where: { $0 == "--preview" || $0.hasPrefix("--ui-test") }) { return false }
+        #endif
+        return true
+    }
+
+    /// Call from App.init: the splash goes up as the scene connects, in the app's first frame.
+    func prepareForLaunch() {
+        guard Self.enabled else { return }
+        NotificationCenter.default.addObserver(self, selector: #selector(sceneWillConnect(_:)), name: UIScene.willConnectNotification, object: nil)
+    }
+    @objc private func sceneWillConnect(_ note: Notification) {
+        NotificationCenter.default.removeObserver(self, name: UIScene.willConnectNotification, object: nil)
+        guard let scene = note.object as? UIWindowScene else { return }
+        show(in: scene)
+    }
+
+    func scenePhaseChanged(_ phase: ScenePhase) {
+        switch phase {
+        case .background: backgroundedAt = Date()
+        case .active:
+            guard let away = backgroundedAt else { return }
+            backgroundedAt = nil
+            guard Self.enabled, Date().timeIntervalSince(away) >= Self.returnAfter,
+                  let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+            show(in: scene)
+        default: break
+        }
+    }
+
+    private func show(in scene: UIWindowScene) {
+        if window != nil { return }
+        leaving = false; shownAt = Date()
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert  // the Face ID lock is .alert + 1
+        window.overrideUserInterfaceStyle = AppAppearance.current.style
+        let root = UIViewController()
+        let view = root.view!
+        view.backgroundColor = UIColor(named: "LaunchBackground")
+        view.isAccessibilityElement = true
+        view.accessibilityLabel = "HowMuch"
+        view.accessibilityIdentifier = "opening.splash"
+        view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(skip)))
+
+        // The hop and the pop are on separate views so their transforms don't fight.
+        let hop = UIView()
+        let icon = UIView()
+        icon.layer.shadowColor = UIColor(Palette.teal).cgColor
+        icon.layer.shadowOpacity = 0.18; icon.layer.shadowRadius = 18; icon.layer.shadowOffset = CGSize(width: 0, height: 8)
+        let art = UIImageView(image: UIImage(named: "BrandLogo"))
+        art.contentMode = .scaleAspectFit
+        art.layer.cornerRadius = 28; art.layer.cornerCurve = .continuous; art.clipsToBounds = true
+        let name = UILabel()
+        name.text = "HowMuch"
+        name.textColor = UIColor(Palette.ink)
+        let base = UIFont.systemFont(ofSize: 30, weight: .bold)
+        name.font = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: 30) } ?? base
+        for v in [hop, icon, art, name] { v.translatesAutoresizingMaskIntoConstraints = false }
+        view.addSubview(hop); hop.addSubview(icon); icon.addSubview(art); view.addSubview(name)
+        NSLayoutConstraint.activate([
+            hop.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            hop.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -26),
+            hop.widthAnchor.constraint(equalToConstant: 116), hop.heightAnchor.constraint(equalToConstant: 116),
+            icon.leadingAnchor.constraint(equalTo: hop.leadingAnchor), icon.trailingAnchor.constraint(equalTo: hop.trailingAnchor),
+            icon.topAnchor.constraint(equalTo: hop.topAnchor), icon.bottomAnchor.constraint(equalTo: hop.bottomAnchor),
+            art.leadingAnchor.constraint(equalTo: icon.leadingAnchor), art.trailingAnchor.constraint(equalTo: icon.trailingAnchor),
+            art.topAnchor.constraint(equalTo: icon.topAnchor), art.bottomAnchor.constraint(equalTo: icon.bottomAnchor),
+            name.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            name.topAnchor.constraint(equalTo: hop.bottomAnchor, constant: 22),
+        ])
+        window.rootViewController = root
+        window.isHidden = false  // visible, but not key: the app (or the lock) keeps the keyboard and VoiceOver focus
+        self.window = window; self.icon = icon
+        view.layoutIfNeeded()
+
+        // Every animation is handed to Core Animation now, so it plays even if the app is busy drawing.
+        icon.alpha = 0; name.alpha = 0
+        if UIAccessibility.isReduceMotionEnabled {
+            UIView.animate(withDuration: 0.25) { icon.alpha = 1 }
+            UIView.animate(withDuration: 0.25, delay: 0.1) { name.alpha = 1 }
+        } else {
+            icon.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+            name.transform = CGAffineTransform(translationX: 0, y: 10)
+            UIView.animate(springDuration: 0.45, bounce: 0.38) { icon.alpha = 1; icon.transform = .identity }
+            UIView.animate(withDuration: 0.3, delay: 0.26, options: .curveEaseOut) { name.alpha = 1; name.transform = .identity }
+            UIView.animateKeyframes(withDuration: 0.5, delay: 0.3, options: .calculationModeCubic) {
+                UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.35) { hop.transform = CGAffineTransform(translationX: 0, y: -14) }
+                UIView.addKeyframe(withRelativeStartTime: 0.35, relativeDuration: 0.4) { hop.transform = CGAffineTransform(translationX: 0, y: 2) }
+                UIView.addKeyframe(withRelativeStartTime: 0.75, relativeDuration: 0.25) { hop.transform = .identity }
+            }
+        }
+        Task { await waitThenLeave() }
+    }
+
+    private func waitThenLeave() async {
+        try? await Task.sleep(for: .seconds(Self.shortest))
+        while !isReady() && Date().timeIntervalSince(shownAt) < max(Self.longest, Self.shortest) { try? await Task.sleep(for: .milliseconds(100)) }
+        leave()
+    }
+    @objc private func skip() { leave() }
+
+    private func leave() {
+        guard let window, !leaving else { return }
+        leaving = true
+        let icon = self.icon
+        UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0.2 : 0.3, delay: 0, options: .curveEaseIn) {
+            window.alpha = 0
+            if !UIAccessibility.isReduceMotionEnabled { icon?.transform = CGAffineTransform(scaleX: 1.12, y: 1.12) }
+        } completion: { _ in
+            window.isHidden = true
+            if self.window === window { self.window = nil; self.icon = nil }
+        }
+    }
+}
+
 struct AppleWelcomeView: View {
     @EnvironmentObject private var auth: AppleAccountStore
     var body: some View {
