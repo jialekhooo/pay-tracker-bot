@@ -48,7 +48,8 @@ public enum JobMessageParser {
         // A heading line with no dates, times or pay ("Nike Pop-up"), used when no other line names the event.
         var title: String?
         var titleVenue: String?
-        var sawLine = false
+        // Greeting or recruiting lines ("Hi all! Promoter needed") may come before the heading.
+        var onlyIntroSoFar = true
         var items: [Item] = []
         var flat: Decimal?
         // "19th: 3.30pm - 6pm" or "21,22nd: 9am - 6pm": times for days of the month listed on another line.
@@ -58,8 +59,8 @@ public enum JobMessageParser {
         for raw in normalized(String(text.prefix(maximumLength))).components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: CharacterSet(charactersIn: " \t-•*>·").union(.whitespaces))
             guard !line.isEmpty else { continue }
-            let isFirstLine = !sawLine
-            sawLine = true
+            let mayBeHeading = onlyIntroSoFar
+            if !isIntro(line) { onlyIntroSoFar = false }
             var content = line
             // "📍 Marina Bay Sands": a pin marks the venue, as WhatsApp job posts often do.
             if let pin = line.firstMatch(of: #/^(?:📍|📌)\s*(.+)$/#) {
@@ -101,7 +102,7 @@ public enum JobMessageParser {
             if days.isEmpty && time == nil {
                 // Only lines with numbers left unread are skipped; a break already read ("1hr break") is not.
                 if pay == nil, lower.rangeOfCharacter(from: .decimalDigits) != nil { job.skipped.append(line) }
-                if isFirstLine, pay == nil, content == line, let found = heading(line) { title = found.name; titleVenue = found.venue }
+                if mayBeHeading, title == nil, items.isEmpty, pay == nil, content == line, let found = heading(line) { title = found.name; titleVenue = found.venue }
                 continue
             }
             items.append(Item(days: days, time: time))
@@ -212,8 +213,31 @@ public enum JobMessageParser {
     }
 
     private static func clean(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: CharacterSet(charactersIn: " ,.;-").union(.whitespacesAndNewlines))
-        return trimmed.isEmpty ? nil : trimmed
+        // Emoji decorate names and venues ("VivoCity 🎉", "🎪 Nike Pop-up ✨") but aren't part of them.
+        var text = Substring(value)
+        let edge = CharacterSet(charactersIn: " ,.;-").union(.whitespacesAndNewlines)
+        func trims(_ c: Character) -> Bool { isDecoration(c) || c.unicodeScalars.allSatisfy(edge.contains) }
+        while let first = text.first, trims(first) { text = text.dropFirst() }
+        while let last = text.last, trims(last) { text = text.dropLast() }
+        return text.isEmpty ? nil : String(text)
+    }
+
+    /// An emoji or pictograph (with any skin tone, joiner or variation selector), not a letter, digit or keycap.
+    private static func isDecoration(_ c: Character) -> Bool {
+        c.unicodeScalars.allSatisfy { s in
+            s.properties.isEmojiPresentation || (s.properties.isEmoji && s.value > 0x2000) || s.value == 0xFE0F || s.value == 0x200D
+        }
+    }
+
+    /// Lines that only greet or recruit, which job posts often open with.
+    private static func isIntro(_ line: String) -> Bool {
+        line.range(of: greeting, options: .regularExpression) != nil || recruitingOnly(line)
+    }
+    private static let greeting = #"(?i)^(hi|hello|hey|dear|urgent|good\s+(morning|afternoon|evening)|thank|thanks|pm|dm|whatsapp|text|looking|hiring|need|needed|seeking|urgently|anyone|available|calling)\b"#
+    /// "Promoters needed" says who is wanted, not for what; "Crew wanted for Nike Pop-up" names the event.
+    private static func recruitingOnly(_ line: String) -> Bool {
+        line.range(of: #"(?i)\b(needed|wanted|required|hiring|urgent|urgently)\b"#, options: .regularExpression) != nil
+            && line.range(of: #"(?i)\bfor\b"#, options: .regularExpression) == nil
     }
 
     private static func breakLength(_ text: String) -> Int? {
@@ -265,8 +289,15 @@ public enum JobMessageParser {
 
     private static func readDates(_ line: inout String, today: Date, calendar: Calendar) -> [String] {
         var found: [Found] = []
-        func scan(_ pattern: String, _ build: (NSTextCheckingResult, String) -> [Date]?) {
+        // Weekdays between the days ("Sat 21 & Sun 22 Nov", "21 (Sat), 22 (Sun) Nov") are blanked out
+        // for reading dates, keeping every position the same; a weekday alone still means the next one.
+        var dated = line
+        if let weekdays = try? NSRegularExpression(pattern: #"\(?\b(?:mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?\b\.?\)?"#) {
+            for match in weekdays.matches(in: dated, range: NSRange(dated.startIndex..., in: dated)).reversed() { blank(&dated, match.range) }
+        }
+        func scan(_ pattern: String, weekdays: Bool = false, _ build: (NSTextCheckingResult, String) -> [Date]?) {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
+            let line = weekdays ? line : dated
             for match in regex.matches(in: line, range: NSRange(line.startIndex..., in: line)) {
                 guard !found.contains(where: { NSIntersectionRange($0.range, match.range).length > 0 }),
                       let days = build(match, line), !days.isEmpty else { continue }
@@ -309,7 +340,7 @@ public enum JobMessageParser {
             return calendar.date(byAdding: .day, value: offset, to: today).map { [$0] }
         }
         if found.isEmpty {
-            scan(#"\b(mon|tue|wed|thu|fri|sat|sun)(?:day|sday|nesday|rsday|urday|s|t|r|rs)?\b"#) { match, text in
+            scan(#"\b(mon|tue|wed|thu|fri|sat|sun)(?:day|sday|nesday|rsday|urday|s|t|r|rs)?\b"#, weekdays: true) { match, text in
                 guard let name = group(match, 1, text),
                       let weekday = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].firstIndex(of: name) else { return nil }
                 return calendar.nextDate(after: calendar.date(byAdding: .day, value: -1, to: today)!, matching: DateComponents(weekday: weekday + 1), matchingPolicy: .nextTime).map { [$0] }
@@ -321,8 +352,8 @@ public enum JobMessageParser {
         var merged: [Found] = []
         for item in found {
             if let previous = merged.last, previous.single, item.single,
-               let between = Range(NSRange(location: NSMaxRange(previous.range), length: item.range.location - NSMaxRange(previous.range)), in: line),
-               line[between].firstMatch(of: #/^\s*(-|to|till|until)\s*$/#) != nil,
+               let between = Range(NSRange(location: NSMaxRange(previous.range), length: item.range.location - NSMaxRange(previous.range)), in: dated),
+               dated[between].firstMatch(of: #/^\s*(-|to|till|until)\s*$/#) != nil,
                let from = previous.days.first, let to = item.days.first, from < to,
                let span = calendar.dateComponents([.day], from: from, to: to).day, span <= 31 {
                 merged[merged.count - 1] = Found(range: NSUnionRange(previous.range, item.range),
@@ -491,8 +522,7 @@ public enum JobMessageParser {
     /// sentences and lines with numbers are not headings.
     private static func heading(_ line: String) -> (name: String?, venue: String?)? {
         guard line.count <= 60, line.rangeOfCharacter(from: .decimalDigits) == nil, !line.hasSuffix("?"),
-              line.range(of: #"(?i)^(hi|hello|hey|dear|urgent|good\s+(morning|afternoon|evening)|thank|thanks|pm|dm|whatsapp|text|looking|hiring|need|needed|seeking|urgently|anyone|available|calling)\b"#,
-                         options: .regularExpression) == nil
+              line.range(of: greeting, options: .regularExpression) == nil, !recruitingOnly(line)
         else { return nil }
         let found = leftover(line.lowercased(), original: line)
         return found.name == nil ? nil : found
