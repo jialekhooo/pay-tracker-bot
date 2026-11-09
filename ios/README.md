@@ -205,3 +205,4 @@ Build 64: Dark Mode: the launch screen stays light (no black flash), the Face ID
 Build 65: Full Dark Mode. Theme colors adapt (deep green-black canvas, dark jade cards, bright jade text, deep accent for filled buttons), Penny's room turns to night, and Settings → Appearance offers Match iPhone, Light or Dark.
 Build 66: The Appearance caption describes the chosen option (Match iPhone, Light or Dark).
 Build 67: Friends. Add friends by code or invite link (both must agree), visit their pet, and say hi once a day: they get a notification and you both earn 2 coins. Friends see only the pet, never shifts or pay.
+Build 68: A short opening animation (Penny's icon pops in and hops, then fades into the app) on launch and when coming back after 30 seconds or more away. Tap to skip; Reduce Motion just fades.
