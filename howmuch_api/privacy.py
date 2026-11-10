@@ -131,7 +131,7 @@ BODY = f"""
  <p>A private calendar link lets Apple Calendar, Google Calendar or TimeTree read your shifts. Anyone with the link can see that calendar, so treat it like a password. Rotate the link in the app to cancel the old one.</p>
 
  <h3>Friends and Penny</h3>
- <p>Your friend code connects you with people you choose, and both sides must agree. Friends see your display name, your pet's name, look, level, mood, streak and badges, and whether you said hi today. Anyone who has your invite link can see your display name. We store your pet's card, friend list, requests and hellos, and use your display name in notifications to friends. Friends never see your shifts, pay, payers or places.</p>
+ <p>Your friend code connects you with people you choose, and both sides must agree. Friends see your display name, your pet's name, look, level, mood, streak and badges, whether you said hi today, and when your pet visits them or they give it a treat. Anyone who has your invite link can see your display name. We store your pet's card, friend list, requests, hellos and pet visits, and use your display name in notifications to friends. Friends never see your shifts, pay, payers or places.</p>
  <p>If you redeem a gift code, we store that you used it and the coins or items it gave you.</p>
 
  <h3>Telegram bot</h3>

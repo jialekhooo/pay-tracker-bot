@@ -562,6 +562,37 @@ final class HowMuchUITests: XCTestCase {
         attach("Said hi to a friend's pet", app: app)
     }
     @MainActor
+    func testPetsVisitFriendsGetTreatsAndComeHomeWithPostcards() {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-test-account", "--ui-test-friends", "--ui-test-friend-visits"]; app.launch()
+        let card = app.buttons["pet.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()
+        let friends = app.buttons["pet.friends"]; reveal(friends, in: app); friends.tap()
+        // A postcard from an earlier visit, and Sam's Mochi staying here.
+        let keep = app.buttons["visit.postcard.collect"]
+        XCTAssertTrue(keep.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["visit.guest.PENNY-SAMSAM"].exists)
+        attach("A guest and a postcard", app: app)
+        keep.tap()
+        XCTAssertTrue(keep.waitForNonExistence(timeout: 5), "the postcard is put away")
+        // Give Mochi a treat: once only, and it pays.
+        let boba = app.buttons["visit.treat.boba"]; XCTAssertTrue(boba.waitForExistence(timeout: 5)); boba.tap()
+        XCTAssertTrue(app.staticTexts["Mochi loved it! You and Sam each got 3 coins."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["visit.treat.cookie"].exists, "one treat a visit")
+        attach("Gave a visiting pet a treat", app: app)
+        // Send your own pet to Sam's, then bring it back.
+        let sam = app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-SAMSAM").firstMatch
+        reveal(sam, in: app); sam.tap()
+        let visit = app.buttons["friend.visit"]; reveal(visit, in: app); XCTAssertTrue(visit.isEnabled); visit.tap()
+        let message = app.staticTexts["friend.visitMessage"]
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertTrue(NSPredicate(format: "label CONTAINS %@", "walked over").evaluate(with: message), message.label)
+        XCTAssertTrue(visit.label.hasPrefix("Bring "), visit.label)
+        attach("Your pet at a friend's place", app: app)
+        visit.tap()
+        expectation(for: NSPredicate(format: "NOT (label BEGINSWITH %@)", "Bring "), evaluatedWith: visit); waitForExpectations(timeout: 5)
+        XCTAssertFalse(visit.isEnabled, "once per friend per day")
+    }
+    @MainActor
     func testFailedFriendRemovalStaysOpenAndCanRetry() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-test-account", "--ui-test-friends", "--ui-test-friend-remove-error"]

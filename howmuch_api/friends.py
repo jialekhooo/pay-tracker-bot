@@ -4,6 +4,10 @@ Each account has a friend code (PENNY-K7Q2MX). Sending someone's code asks to be
 friends when the other person sends yours back or accepts. Friends see only Penny's card (name, look,
 stage, level, mood, streak and badges) — never shifts, pay, payers or places. Saying hi is once per
 friend per day; it notifies the friend and both earn coins.
+
+Pets can also visit. Your pet goes to one friend at a time, once per friend per day, for up to
+VISIT_SECONDS. The friend can give it one treat, which earns you both coins, and it comes home with a
+postcard saying how it went.
 """
 from __future__ import annotations
 import hashlib
@@ -24,6 +28,9 @@ from .pet_codes import gift_coins
 router = APIRouter()
 page = APIRouter()
 HELLO_COINS = 2
+TREAT_COINS = 3
+VISIT_SECONDS = 6 * 3600
+TREATS = {'cookie': ('🍪', 'a cookie'), 'strawberry': ('🍓', 'a strawberry'), 'fish': ('🐟', 'a fish'), 'boba': ('🧋', 'a boba')}
 ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # no 0/O or 1/I to misread
 ITEM = re.compile(r'^[a-z0-9-]{1,40}$')
 MOODS = {'thriving', 'happy', 'okay', 'hungry', 'sad', 'worried'}
@@ -50,6 +57,14 @@ CREATE TABLE IF NOT EXISTS pet_hellos (
  to_account TEXT NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
  day TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY(from_account, to_account, day)
 );
+CREATE TABLE IF NOT EXISTS pet_visits (
+ visit_id TEXT PRIMARY KEY,
+ from_account TEXT NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+ to_account TEXT NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+ day TEXT NOT NULL, created INTEGER NOT NULL, ends INTEGER NOT NULL, treat TEXT, collected INTEGER,
+ UNIQUE(from_account, to_account, day)
+);
+CREATE INDEX IF NOT EXISTS pet_visits_to ON pet_visits(to_account, ends);
 """
 
 
@@ -93,12 +108,22 @@ def friend_notification_id(kind, sender, recipient):
     return hashlib.sha256(f'{kind}|{sender}|{recipient}'.encode()).hexdigest()[:16]
 
 
+def queue_friend_push(db, kind, sender, recipient, now, title, body, lifetime=86400):
+    # Kinds start with friend_ so rebuilding someone's shift reminders leaves them alone.
+    db.execute("INSERT INTO notification_jobs(job_id,account_id,kind,shift_id,fire_at,expires,title,body) VALUES(?,?,?,?,?,?,?,?)",
+               (friend_notification_id(kind, sender, recipient) + secrets.token_hex(16), recipient, kind, '', now, now + lifetime, title, body))
+
+
+def cancel_friend_push(db, kind, sender, recipient):
+    db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id LIKE ? AND status='pending'",
+               (friend_notification_id(kind, sender, recipient) + '%',))
+
+
 def notify_friend(db, kind, sender, recipient, now):
     who = card_of(db, sender).get('ownerName') or 'A friend'
     title = f'👋 {who} wants to be friends' if kind == 'friend_request' else f'🎉 {who} accepted your request'
     body = 'Open HowMuch to review the request.' if kind == 'friend_request' else "Visit each other's Penny and say hi."
-    db.execute("INSERT INTO notification_jobs(job_id,account_id,kind,shift_id,fire_at,expires,title,body) VALUES(?,?,?,?,?,?,?,?)",
-               (friend_notification_id(kind, sender, recipient) + secrets.token_hex(16), recipient, kind, '', now, now + 86400, title, body))
+    queue_friend_push(db, kind, sender, recipient, now, title, body)
 
 
 def today_for(db, account_id) -> str:
@@ -116,12 +141,14 @@ def today_for(db, account_id) -> str:
 
 
 def bonus_coins(db, account_id) -> int:
-    """Coins kept on the server: gift codes, plus hellos sent and received at HELLO_COINS each.
+    """Coins kept on the server: gift codes, hellos sent and received at HELLO_COINS each, and treats
+    given or received on visits at TREAT_COINS each.
     Sent to the app as helloCoins, so builds from before coin codes count them too."""
     db.executescript(SCHEMA)
     sent = db.execute('SELECT COUNT(*) FROM pet_hellos WHERE from_account=?', (account_id,)).fetchone()[0]
     got = db.execute('SELECT COUNT(*) FROM pet_hellos WHERE to_account=?', (account_id,)).fetchone()[0]
-    return HELLO_COINS * (sent + got) + gift_coins(db, account_id)
+    treats = db.execute('SELECT COUNT(*) FROM pet_visits WHERE treat IS NOT NULL AND (from_account=? OR to_account=?)', (account_id, account_id)).fetchone()[0]
+    return HELLO_COINS * (sent + got) + TREAT_COINS * treats + gift_coins(db, account_id)
 
 
 def card_of(db, account_id) -> dict:
@@ -168,7 +195,17 @@ def person(db, me, other):
     today = today_for(db, me)
     return {'code': 'PENNY-' + code_for(db, other), 'card': card_of(db, other),
             'saidHiToday': bool(db.execute('SELECT 1 FROM pet_hellos WHERE from_account=? AND to_account=? AND day=?', (me, other, today)).fetchone()),
-            'theySaidHiToday': bool(db.execute('SELECT 1 FROM pet_hellos WHERE from_account=? AND to_account=? AND day=?', (other, me, today_for(db, other))).fetchone())}
+            'theySaidHiToday': bool(db.execute('SELECT 1 FROM pet_hellos WHERE from_account=? AND to_account=? AND day=?', (other, me, today_for(db, other))).fetchone()),
+            'visitedToday': bool(db.execute('SELECT 1 FROM pet_visits WHERE from_account=? AND to_account=? AND day=?', (me, other, today)).fetchone())}
+
+
+def visit_seen_by(db, row, other):
+    """A visit as one side sees it: the other person's code and card, when it ends and any treat."""
+    return {'id': row['visit_id'], 'code': 'PENNY-' + code_for(db, other), 'card': card_of(db, other), 'ends': row['ends'], 'treat': row['treat']}
+
+
+def active_visit(db, account_id, now):
+    return db.execute('SELECT * FROM pet_visits WHERE from_account=? AND ends>? ORDER BY created DESC LIMIT 1', (account_id, now)).fetchone()
 
 
 def overview(request, db, me):
@@ -177,8 +214,15 @@ def overview(request, db, me):
     incoming = [person(db, me, r['from_account']) for r in db.execute('SELECT from_account FROM friend_requests WHERE to_account=? ORDER BY created', (me,))]
     outgoing = [person(db, me, r['to_account']) for r in db.execute('SELECT to_account FROM friend_requests WHERE from_account=? ORDER BY created', (me,))]
     base = str(request.base_url).rstrip('/')
+    now = int(time.time())
+    away = active_visit(db, me, now)
+    guests = db.execute('SELECT * FROM pet_visits WHERE to_account=? AND ends>? ORDER BY created', (me, now)).fetchall()
+    postcards = db.execute('SELECT * FROM pet_visits WHERE from_account=? AND ends<=? AND collected IS NULL ORDER BY ends DESC LIMIT 5', (me, now)).fetchall()
     return {'code': f'PENNY-{code}', 'link': f'{base}/friend/{code}', 'friends': friends, 'incoming': incoming,
-            'outgoing': outgoing, 'helloCoins': bonus_coins(db, me)}
+            'outgoing': outgoing, 'helloCoins': bonus_coins(db, me),
+            'away': visit_seen_by(db, away, away['to_account']) if away else None,
+            'guests': [visit_seen_by(db, g, g['from_account']) for g in guests],
+            'postcards': [visit_seen_by(db, p, p['to_account']) for p in postcards]}
 
 
 @router.get('/friends')
@@ -231,10 +275,13 @@ async def remove_friend(code: str, request: Request, authorization: str | None =
         with db:
             db.execute('DELETE FROM friendships WHERE (account_id=? AND friend_id=?) OR (account_id=? AND friend_id=?)', (me, other, other, me))
             db.execute('DELETE FROM friend_requests WHERE (from_account=? AND to_account=?) OR (from_account=? AND to_account=?)', (me, other, other, me))
+            # Pets at each other's homes go straight back, with no postcard from someone you've removed.
+            now = int(time.time())
+            db.execute('UPDATE pet_visits SET ends=MIN(ends,?), collected=COALESCE(collected,?) WHERE (from_account=? AND to_account=?) OR (from_account=? AND to_account=?)',
+                       (now, now, me, other, other, me))
             for sender, recipient in ((me, other), (other, me)):
-                for kind in ('friend_request', 'friend_accepted'):
-                    db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id LIKE ? AND status='pending'",
-                               (friend_notification_id(kind, sender, recipient) + '%',))
+                for kind in ('friend_request', 'friend_accepted', 'friend_visit', 'friend_treat'):
+                    cancel_friend_push(db, kind, sender, recipient)
     return overview(request, db, me)
 
 
@@ -274,6 +321,83 @@ async def say_hello(code: str, request: Request, authorization: str | None = Hea
                    (job, other, 'hello', '', now, now + 6 * 3600, f'👋 {who} said hi!',
                     f"{mine.get('petName') or 'Penny'} visited {theirs.get('petName') or 'Penny'}. You both earned {HELLO_COINS} coins."))
     return {'friend': person(db, me, other), 'helloCoins': bonus_coins(db, me)}
+
+
+@router.post('/friends/visit/home')
+async def bring_pet_home(request: Request, authorization: str | None = Header(default=None)):
+    """Call your pet home early. You were there for it, so no postcard."""
+    account = authenticated_account(request, authorization)
+    db = db_for(request)
+    me, now = account['account_id'], int(time.time())
+    with db:
+        away = active_visit(db, me, now)
+        if away:
+            db.execute('UPDATE pet_visits SET ends=?, collected=? WHERE visit_id=?', (now, now, away['visit_id']))
+            cancel_friend_push(db, 'friend_visit', me, away['to_account'])
+    return overview(request, db, me)
+
+
+@router.post('/friends/{code}/visit')
+async def send_pet(code: str, request: Request, authorization: str | None = Header(default=None)):
+    """Send your pet to a friend's home. It can only be in one place, and visits each friend once a day."""
+    account = authenticated_account(request, authorization)
+    db = db_for(request)
+    me, other = account['account_id'], account_for_code(db, code)
+    if not other or not are_friends(db, me, other):
+        raise HTTPException(404, "Your pet can only visit friends.")
+    today, now = today_for(db, me), int(time.time())
+    mine, theirs = card_of(db, me), card_of(db, other)
+    pet = mine.get('petName') or 'Penny'
+    with db:
+        if active_visit(db, me, now):
+            raise HTTPException(409, f"{pet} is already out visiting. Bring {pet} home first.")
+        added = db.execute('INSERT OR IGNORE INTO pet_visits(visit_id,from_account,to_account,day,created,ends) VALUES(?,?,?,?,?,?)',
+                           (secrets.token_hex(12), me, other, today, now, now + VISIT_SECONDS)).rowcount
+        if not added:
+            raise HTTPException(409, f"{pet} has already visited {theirs.get('ownerName') or 'this friend'} today. Come back tomorrow!")
+        who = mine.get('ownerName') or 'A friend'
+        queue_friend_push(db, 'friend_visit', me, other, now, f'🐾 {pet} came to visit!',
+                          f'{who} sent {pet} over. Give {pet} a treat and you both get {TREAT_COINS} coins.', lifetime=6 * 3600)
+    return overview(request, db, me)
+
+
+class GiveTreat(BaseModel):
+    treat: str = Field(max_length=20)
+
+
+@router.post('/friends/visits/{visit_id}/treat')
+async def give_treat(visit_id: str, payload: GiveTreat, request: Request, authorization: str | None = Header(default=None)):
+    """Give a visiting pet its one treat. You and its owner both earn coins."""
+    account = authenticated_account(request, authorization)
+    if payload.treat not in TREATS:
+        raise HTTPException(400, 'Pick a treat from the list.')
+    db = db_for(request)
+    me, now = account['account_id'], int(time.time())
+    with db:
+        visit = db.execute('SELECT * FROM pet_visits WHERE visit_id=? AND to_account=?', (visit_id, me)).fetchone()
+        if not visit:
+            raise HTTPException(404, "That pet isn't at your place.")
+        pet = card_of(db, visit['from_account']).get('petName') or 'Penny'
+        if visit['ends'] <= now:
+            raise HTTPException(409, f'{pet} has already gone home.')
+        if visit['treat']:
+            raise HTTPException(409, f'{pet} has already had a treat.')
+        db.execute('UPDATE pet_visits SET treat=? WHERE visit_id=?', (payload.treat, visit_id))
+        emoji, name = TREATS[payload.treat]
+        who = card_of(db, me).get('ownerName') or 'A friend'
+        queue_friend_push(db, 'friend_treat', me, visit['from_account'], now, f'{emoji} {who} gave {pet} {name}',
+                          f'{pet} loved it. You both earned {TREAT_COINS} coins.', lifetime=6 * 3600)
+    return overview(request, db, me)
+
+
+@router.post('/friends/postcards/{visit_id}/collect')
+async def collect_postcard(visit_id: str, request: Request, authorization: str | None = Header(default=None)):
+    account = authenticated_account(request, authorization)
+    db = db_for(request)
+    me, now = account['account_id'], int(time.time())
+    with db:
+        db.execute('UPDATE pet_visits SET collected=? WHERE visit_id=? AND from_account=? AND ends<=? AND collected IS NULL', (now, visit_id, me, now))
+    return overview(request, db, me)
 
 
 @page.get('/friend/{code}', response_class=HTMLResponse)

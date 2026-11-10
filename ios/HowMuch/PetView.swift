@@ -862,6 +862,7 @@ struct PetDetailView: View {
     @State private var buying: PetItem?
     @State private var notice: String?
     @State private var purchased = 0
+    @State private var visits: FriendsOverview?
     @FocusState private var naming: Bool
 
     private var displayName: String { store.petPreferences.displayName }
@@ -874,6 +875,7 @@ struct PetDetailView: View {
             VStack(alignment: .leading, spacing: 18) {
                 stage(pet, closet)
                 nameRow
+                if visits?.hasVisitNews == true { Card { PetVisitsPanel(overview: $visits, showsScene: false) } }
                 if balance < 0 { owedNote(balance) }
                 statsCard(pet)
                 NavigationLink { FriendsView() } label: {
@@ -882,7 +884,7 @@ struct PetDetailView: View {
                             .background(Palette.accent, in: RoundedRectangle(cornerRadius: 11))
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Friends").font(.appHeadline).foregroundStyle(Palette.ink)
-                            Text("Visit friends' pets and say hi. You both get 2 coins.").font(.caption).foregroundStyle(Palette.muted)
+                            Text("Say hi and send \(displayName) to visit. You both earn coins.").font(.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer()
                         Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
@@ -903,6 +905,7 @@ struct PetDetailView: View {
         .toolbar { ToolbarItem(placement: .topBarTrailing) { CoinLabel(amount: balance) } }
         .onAppear { name = displayName }
         .onDisappear(perform: saveName)
+        .task { visits = (try? await auth.api.request("/v1/friends")).flatMap { try? JSONDecoder().decode(FriendsOverview.self, from: $0) } }
         .sensoryFeedback(.success, trigger: purchased)
         .confirmationDialog(buying.map { "Buy \($0.name) for \($0.requirement)?" } ?? "", isPresented: Binding(get: { buying != nil }, set: { if !$0 { buying = nil } }), titleVisibility: .visible) {
             if let item = buying { Button("Buy \(item.name)") { buy(item, pet) } }
@@ -947,8 +950,14 @@ struct PetDetailView: View {
 
     private func stage(_ pet: PetProgress, _ closet: PetCloset) -> some View {
         ZStack(alignment: .bottom) {
-            PetStage(pet: pet, outfit: petOutfit(closet, pet), name: displayName, size: 200, corner: 24, wide: true)
-            Text(pet.message(name: displayName, currency: store.data.rules.currency))
+            if let away = visits?.away {
+                PetPlaydate(home: away.card, visitors: [(store.petCard, away.givenTreat)], height: 320)
+            } else if let guests = visits?.guests, !guests.isEmpty {
+                PetPlaydate(home: store.petCard, visitors: guests.map { ($0.card, $0.givenTreat) }, height: 320)
+            } else {
+                PetStage(pet: pet, outfit: petOutfit(closet, pet), name: displayName, size: 200, corner: 24, wide: true)
+            }
+            Text(visits?.away.map { "\(displayName) is visiting \($0.card.owner)!" } ?? pet.message(name: displayName, currency: store.data.rules.currency))
                 .font(.footnote.weight(.semibold)).foregroundStyle(PetPalette.outline).multilineTextAlignment(.center)
                 .padding(.horizontal, 14).padding(.vertical, 8).background(.white.opacity(0.92), in: Capsule())
                 .padding(.horizontal, 14).padding(.bottom, 12).allowsHitTesting(false)
@@ -1349,7 +1358,32 @@ struct FriendPerson: Codable, Identifiable, Equatable {
     var card: FriendCard
     var saidHiToday: Bool
     var theySaidHiToday: Bool
+    /// Missing from servers older than pet visits, like the visit fields on `FriendsOverview`.
+    var visitedToday: Bool?
     var id: String { code }
+}
+
+/// A pet staying at someone's home, seen from either side: `card` and `code` are the other person's.
+struct PetVisit: Codable, Identifiable, Equatable {
+    var id: String
+    var code: String
+    var card: FriendCard
+    var ends: Int
+    var treat: String?
+
+    var homeBy: String { Date(timeIntervalSince1970: TimeInterval(ends)).formatted(date: .omitted, time: .shortened) }
+    var givenTreat: PetTreat? { treat.flatMap(PetTreat.init(rawValue:)) }
+}
+
+enum PetTreat: String, CaseIterable, Identifiable {
+    case cookie, strawberry, fish, boba
+    var id: String { rawValue }
+    var emoji: String {
+        switch self {
+        case .cookie: "🍪"; case .strawberry: "🍓"; case .fish: "🐟"; case .boba: "🧋"
+        }
+    }
+    var withArticle: String { "a \(rawValue)" }
 }
 
 struct FriendsOverview: Codable {
@@ -1359,6 +1393,11 @@ struct FriendsOverview: Codable {
     var incoming: [FriendPerson]
     var outgoing: [FriendPerson]
     var helloCoins: Int
+    var away: PetVisit?
+    var guests: [PetVisit]?
+    var postcards: [PetVisit]?
+
+    var hasVisitNews: Bool { away != nil || !(guests ?? []).isEmpty || !(postcards ?? []).isEmpty }
 }
 
 private struct HelloResult: Decodable { let friend: FriendPerson; let helloCoins: Int }
@@ -1483,6 +1522,205 @@ private struct FriendPennyThumb: View {
     }
 }
 
+/// One pet in a playdate. Tap it to play; it walks in when it arrives and reacts when given a treat.
+private struct PlaydatePet: View {
+    let card: FriendCard
+    let size: CGFloat
+    var treat: PetTreat?
+    var walksIn = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var arrived = false
+    @State private var hop = false
+    @State private var hearts: [UUID] = []
+    @State private var line: String?
+    @State private var falling: PetTreat?
+    @State private var eaten = false
+
+    var body: some View {
+        ZStack {
+            PetSprite(stage: card.progressStage, mood: card.progressMood, outfit: card.items.filter { $0.key != .background })
+                .frame(width: size, height: size)
+                .offset(y: hop ? -size * 0.14 : 0)
+            ForEach(Array(hearts.enumerated()), id: \.element) { index, _ in FloatingHeart(offset: CGFloat(index % 3 - 1) * size * 0.25, size: size) }
+            if let falling {
+                Text(falling.emoji).font(.system(size: size * 0.32))
+                    .offset(y: eaten ? size * 0.05 : -size * 0.75)
+                    .opacity(eaten ? 0 : 1)
+                    .accessibilityHidden(true)
+            }
+            if let line {
+                Text(line).font(.system(size: max(11, size * 0.11), weight: .semibold, design: .rounded)).foregroundStyle(PetPalette.outline)
+                    .lineLimit(1).fixedSize()
+                    .padding(.horizontal, 8).padding(.vertical, 5).background(.white.opacity(0.92), in: Capsule())
+                    .offset(y: -size * 0.62)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .frame(width: size, height: size)
+        .offset(x: walksIn && !arrived ? -420 : 0)
+        .contentShape(Rectangle())
+        .onTapGesture { react(["Wheee!", "Hi hi!", "Again!", "So comfy here!"].randomElement()!) }
+        .sensoryFeedback(.impact(weight: .light), trigger: hearts.count)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(card.petName), \(card.owner)'s pet")
+        .accessibilityAddTraits(.isButton).accessibilityHint("Tap to play")
+        .onAppear {
+            guard walksIn, !arrived else { return }
+            if reduceMotion { arrived = true } else { withAnimation(.easeOut(duration: 0.9)) { arrived = true } }
+        }
+        .onChange(of: treat) { _, new in if let new { eat(new) } }
+    }
+
+    private func eat(_ treat: PetTreat) {
+        falling = treat; eaten = false
+        withAnimation(.easeIn(duration: 0.55)) { eaten = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(560))
+            falling = nil
+            react("Yum!")
+        }
+    }
+
+    private func react(_ words: String) {
+        let id = UUID()
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) { hop = true; hearts.append(id); line = words }
+        Task {
+            try? await Task.sleep(for: .milliseconds(260))
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { hop = false }
+            try? await Task.sleep(for: .seconds(1.4))
+            withAnimation(.easeOut(duration: 0.3)) { hearts.removeAll { $0 == id }; if hearts.isEmpty { line = nil } }
+        }
+    }
+}
+
+/// Pets together at one home: whoever lives there, and up to two visitors walking in.
+struct PetPlaydate: View {
+    let home: FriendCard
+    let visitors: [(card: FriendCard, treat: PetTreat?)]
+    var height: CGFloat = 220
+
+    private var shown: [(card: FriendCard, treat: PetTreat?)] { Array(visitors.prefix(2)) }
+    private var size: CGFloat { shown.count > 1 ? height * 0.45 : height * 0.56 }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            PetScene(item: home.items[.background])
+            HStack(alignment: .bottom, spacing: 0) {
+                PlaydatePet(card: home, size: size)
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, visitor in
+                    PlaydatePet(card: visitor.card, size: size, treat: visitor.treat, walksIn: true)
+                }
+            }
+            .padding(.bottom, height * 0.08)
+        }
+        .frame(maxWidth: .infinity).frame(height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pet.playdate")
+    }
+}
+
+/// What's going on with visits: postcards, your pet out at a friend's, and pets staying with you.
+struct PetVisitsPanel: View {
+    @EnvironmentObject private var auth: AppleAccountStore
+    @EnvironmentObject private var store: TrackerStore
+    @Binding var overview: FriendsOverview?
+    /// Penny's page already shows the playdate at the top.
+    var showsScene = true
+    @State private var message = ""
+    @State private var busy = false
+    @State private var treated = 0
+
+    private var mine: String { store.petPreferences.displayName }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(overview?.postcards ?? []) { postcard($0) }
+            if let away = overview?.away { awayRow(away) }
+            let guests = overview?.guests ?? []
+            if !guests.isEmpty {
+                if showsScene { PetPlaydate(home: store.petCard, visitors: guests.map { ($0.card, $0.givenTreat) }) }
+                ForEach(guests) { guestRow($0) }
+            }
+            if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("visit.message") }
+        }
+        .sensoryFeedback(.success, trigger: treated)
+    }
+
+    private func postcard(_ visit: PetVisit) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(visit.givenTreat?.emoji ?? "💌").font(.system(size: 32)).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(mine) is home!").font(.subheadline.weight(.bold)).foregroundStyle(Palette.ink)
+                Text(visit.givenTreat.map { "Postcard from \(visit.card.owner)'s place: \(visit.card.owner) gave \(mine) \($0.withArticle)." }
+                     ?? "Postcard from \(visit.card.owner)'s place: \(mine) had a long nap with \(visit.card.petName).")
+                    .font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                Button("Keep it") { Task { await send("/v1/friends/postcards/\(visit.id)/collect") } }
+                    .font(.footnote.weight(.semibold)).buttonStyle(.borderless).disabled(busy).accessibilityIdentifier("visit.postcard.collect")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func awayRow(_ away: PetVisit) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if showsScene { PetPlaydate(home: away.card, visitors: [(store.petCard, away.givenTreat)]) }
+            Text("\(mine) is at \(away.card.owner)'s place").font(.subheadline.weight(.bold)).foregroundStyle(Palette.ink).accessibilityIdentifier("visit.away")
+            Text(away.givenTreat.map { "\(away.card.owner) gave \(mine) \($0.withArticle) \($0.emoji) Home by \(away.homeBy)." } ?? "Home by \(away.homeBy). If \(away.card.owner) gives \(mine) a treat, you both get 3 coins.")
+                .font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            Button("Bring \(mine) home", systemImage: "house.fill") { Task { await send("/v1/friends/visit/home") } }
+                .font(.subheadline.weight(.semibold)).buttonStyle(.borderless).disabled(busy).accessibilityIdentifier("visit.home")
+        }
+    }
+
+    private func guestRow(_ guest: PetVisit) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(guest.card.petName) is staying with you").font(.subheadline.weight(.bold)).foregroundStyle(Palette.ink).accessibilityIdentifier("visit.guest.\(guest.code)")
+            if let treat = guest.givenTreat {
+                Text("\(guest.card.petName) loved the \(treat.rawValue) \(treat.emoji) Going home by \(guest.homeBy).").font(.footnote).foregroundStyle(Palette.muted)
+            } else {
+                Text("\(guest.card.owner) sent \(guest.card.petName) over. Tap to play, or give a treat and you both get 3 coins.").font(.footnote).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    ForEach(PetTreat.allCases) { treat in
+                        Button { Task { await give(treat, to: guest) } } label: {
+                            Text(treat.emoji).font(.title2).frame(maxWidth: .infinity, minHeight: 44)
+                                .background(Palette.mint, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain).disabled(busy)
+                        .accessibilityLabel("Give \(treat.withArticle)").accessibilityIdentifier("visit.treat.\(treat.rawValue)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func give(_ treat: PetTreat, to guest: PetVisit) async {
+        guard let body = try? JSONSerialization.data(withJSONObject: ["treat": treat.rawValue]) else { return }
+        if await send("/v1/friends/visits/\(guest.id)/treat", body: body) {
+            treated += 1
+            message = "\(guest.card.petName) loved it! You and \(guest.card.owner) each got 3 coins."
+        }
+    }
+
+    @discardableResult
+    private func send(_ path: String, body: Data? = nil) async -> Bool {
+        guard !busy else { return false }
+        busy = true; defer { busy = false }; message = ""
+        do {
+            let result = try JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request(path, method: "POST", body: body))
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { overview = result }
+            store.setHelloCoins(result.helloCoins)
+            return true
+        } catch {
+            message = error.localizedDescription
+            // The pet may have left, or been treated on another device: show what's true now.
+            if let latest = try? JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request("/v1/friends")) { overview = latest }
+            return false
+        }
+    }
+}
+
 /// Penny's friends: your code to share, requests, and friends to visit.
 struct FriendsView: View {
     @EnvironmentObject private var auth: AppleAccountStore
@@ -1495,6 +1733,9 @@ struct FriendsView: View {
 
     var body: some View {
         AppForm {
+            if overview?.hasVisitNews == true {
+                Section(styled: "Visits") { PetVisitsPanel(overview: $overview) }
+            }
             if let friends = overview?.friends, !friends.isEmpty {
                 Section {
                     ForEach(FriendBoardEntry.ranked(you: store.petCard, friends: friends)) { FriendBoardRow(entry: $0) }
@@ -1509,7 +1750,7 @@ struct FriendsView: View {
                         Label("Invite a friend", systemImage: "square.and.arrow.up")
                     }.accessibilityIdentifier("friends.invite")
                 }
-                Text("Friends can visit \(store.petPreferences.displayName) and say hi. They never see your shifts or pay.").formFootnote()
+                Text("Friends can see \(store.petPreferences.displayName), say hi and send their pets to visit. They never see your shifts or pay.").formFootnote()
             } header: { FormHeader("Your friend code") }
 
             Section(styled: "Add a friend") {
@@ -1541,7 +1782,7 @@ struct FriendsView: View {
             Section(styled: "Friends") {
                 if let friends = overview?.friends, !friends.isEmpty {
                     ForEach(friends) { friend in
-                        NavigationLink { FriendPetView(friend: friend, onChange: { overview = $0 ?? overview; Task { await load() } }) } label: {
+                        NavigationLink { FriendPetView(friend: friend, away: overview?.away, onChange: { overview = $0 ?? overview; Task { await load() } }) } label: {
                             HStack(spacing: 12) {
                                 FriendPennyThumb(card: friend.card)
                                 VStack(alignment: .leading, spacing: 2) {
@@ -1549,6 +1790,9 @@ struct FriendsView: View {
                                     Text("\(friend.card.owner)'s pet · Lv \(friend.card.level)").font(.caption).foregroundStyle(Palette.muted)
                                 }
                                 Spacer()
+                                if overview?.away?.code == friend.code || overview?.guests?.contains(where: { $0.code == friend.code }) == true {
+                                    Text("🐾").accessibilityLabel("A pet is visiting")
+                                }
                                 if friend.theySaidHiToday { Text("👋").accessibilityLabel("Said hi to you today") }
                                 if friend.saidHiToday { Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.teal).accessibilityLabel("You said hi today") }
                             }
@@ -1572,7 +1816,7 @@ struct FriendsView: View {
             }
 
             Section(styled: "How it works") {
-                Text("Say hi to each friend once a day. You both get \(2) coins, and they get a notification. Remove a friend any time from their page.")
+                Text("Say hi to each friend once a day and you both get 2 coins. Send your pet to stay at a friend's for up to 6 hours, and if they give it a treat you both get 3 coins. Friends get a notification. Remove a friend any time from their page.")
                     .formFootnote()
             }
         }
@@ -1615,9 +1859,13 @@ struct FriendPetView: View {
     @EnvironmentObject private var store: TrackerStore
     @Environment(\.dismiss) private var dismiss
     @State var friend: FriendPerson
+    /// Where your own pet is staying right now, if it's out.
+    @State var away: PetVisit?
     var onChange: (FriendsOverview?) -> Void
     @State private var waving = false
     @State private var message = ""
+    @State private var visitMessage = ""
+    @State private var sentOff = 0
     @State private var confirmingRemove = false
     @State private var busy = false
 
@@ -1627,9 +1875,13 @@ struct FriendPetView: View {
                 ZStack {
                     PetScene(item: friend.card.items[.background])
                     PetSprite(stage: friend.card.progressStage, mood: friend.card.progressMood, outfit: friend.card.items.filter { $0.key != .background })
-                        .frame(width: 180, height: 180)
-                        .offset(y: waving ? -16 : 8)
+                        .frame(width: myPetIsHere ? 140 : 180, height: myPetIsHere ? 140 : 180)
+                        .offset(x: myPetIsHere ? 72 : 0, y: waving ? -16 : (myPetIsHere ? 34 : 8))
                         .animation(.spring(response: 0.3, dampingFraction: 0.45), value: waving)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: myPetIsHere)
+                    if myPetIsHere {
+                        PlaydatePet(card: store.petCard, size: 140, treat: away?.givenTreat, walksIn: true).offset(x: -72, y: 34)
+                    }
                     if waving {
                         Text("👋").font(.system(size: 44)).offset(x: 80, y: -60).transition(.scale.combined(with: .opacity))
                     }
@@ -1656,14 +1908,49 @@ struct FriendPetView: View {
                 .primaryButton().disabled(friend.saidHiToday || busy).accessibilityIdentifier("friend.hello")
                 Text(message.isEmpty ? "Once a day. You both get 2 coins." : message).font(.caption).foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center).accessibilityIdentifier("friend.helloMessage")
+                Button(visitTitle, systemImage: myPetIsHere ? "house.fill" : "pawprint.fill") { Task { await toggleVisit() } }
+                    .buttonStyle(VisitButtonStyle()).disabled(!canVisit || busy).accessibilityIdentifier("friend.visit")
+                Text(visitMessage.isEmpty ? visitHint : visitMessage).font(.caption).foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center).accessibilityIdentifier("friend.visitMessage")
                 Button("Remove friend", role: .destructive) { confirmingRemove = true }.font(.subheadline).foregroundStyle(.red).padding(.top, 20).disabled(busy)
             }.padding(20)
         }
         .detailStyle(friend.card.petName)
         .sensoryFeedback(.success, trigger: waving)
+        .sensoryFeedback(.success, trigger: sentOff)
         .confirmationDialog("Remove \(friend.card.owner) as a friend?", isPresented: $confirmingRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { Task { await remove() } }
         }
+    }
+
+    private var mine: String { store.petPreferences.displayName }
+    private var myPetIsHere: Bool { away?.code == friend.code }
+    private var canVisit: Bool { myPetIsHere || (away == nil && friend.visitedToday != true) }
+    private var visitTitle: String {
+        if myPetIsHere { return "Bring \(mine) home" }
+        if let away { return "\(mine) is at \(away.card.owner)'s" }
+        return friend.visitedToday == true ? "\(mine) visited today" : "Send \(mine) to visit"
+    }
+    private var visitHint: String {
+        if let away, myPetIsHere { return "\(mine) stays until \(away.homeBy). Tap \(mine) to play." }
+        if away != nil { return "\(mine) can only be in one place at a time." }
+        if friend.visitedToday == true { return "Come back tomorrow for another visit." }
+        return "Stays up to 6 hours. If \(friend.card.owner) gives \(mine) a treat, you both get 3 coins."
+    }
+
+    private func toggleVisit() async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        let path = myPetIsHere ? "/v1/friends/visit/home" : "/v1/friends/\(friend.code)/visit"
+        let arriving = !myPetIsHere
+        do {
+            let result = try JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request(path, method: "POST"))
+            withAnimation { away = result.away }
+            if let latest = result.friends.first(where: { $0.code == friend.code }) { friend = latest }
+            visitMessage = arriving ? "\(mine) walked over to \(friend.card.owner)'s place!" : "\(mine) is back home."
+            sentOff += 1
+            onChange(result)
+        } catch { visitMessage = error.localizedDescription }
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
@@ -1698,5 +1985,18 @@ struct FriendPetView: View {
         } catch {
             message = "Couldn't remove this friend. \(error.localizedDescription) Try again."
         }
+    }
+}
+
+/// The quieter partner to the primary button when two actions sit together.
+private struct VisitButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.font(.system(.headline, design: .rounded, weight: .semibold))
+            .foregroundStyle(isEnabled ? Palette.teal : Palette.muted)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(Palette.mint.opacity(isEnabled ? 1 : 0.5), in: RoundedRectangle(cornerRadius: 16))
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
