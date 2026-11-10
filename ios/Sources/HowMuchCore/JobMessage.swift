@@ -197,7 +197,7 @@ public enum JobMessageParser {
     private static func dayPrefix(_ line: String) -> ([Int], String)? {
         guard let match = line.firstMatch(of: #/^((?:\d{1,2}(?:st|nd|rd|th)?\s*(?:,|&|and|-|to|/)\s*)*\d{1,2}(?:st|nd|rd|th)?)\s*:(?!\d)\s*(.+)$/#.ignoresCase()) else { return nil }
         var days: [Int] = [], rangeNext = false
-        var number = ""
+        var number = "", lastChar: Character?
         func flush() {
             guard let value = Int(number) else { return }
             if rangeNext, let previous = days.last, value > previous, value - previous <= 31 { days += Array((previous + 1)...value) } else { days.append(value) }
@@ -205,7 +205,8 @@ public enum JobMessageParser {
         }
         for char in match.1.lowercased() {
             if char.isNumber { number.append(char) }
-            else { flush(); if char == "-" || char == "t" { rangeNext = true } }
+            else { flush(); if char == "-" || (lastChar == "t" && char == "o") { rangeNext = true } }
+            lastChar = char
         }
         flush()
         let valid = days.filter { (1...31).contains($0) }
@@ -362,7 +363,9 @@ public enum JobMessageParser {
         }
         for item in found { blank(&line, item.range) }
         // Remove weekday words such as "(Wed)" so they are not read as names.
-        line = line.replacingOccurrences(of: #"\(?\b(mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\b\)?"#, with: " ", options: .regularExpression)
+        if let weekdays = try? NSRegularExpression(pattern: #"\(?\b(mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\b\)?"#) {
+            for match in weekdays.matches(in: line, range: NSRange(line.startIndex..., in: line)).reversed() { blank(&line, match.range) }
+        }
         return merged.flatMap(\.days).map { date in
             let parts = calendar.dateComponents([.year, .month, .day], from: date)
             return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)

@@ -174,6 +174,19 @@ final class JobMessageTests: XCTestCase {
         XCTAssertEqual(clock.dates, [PastedJobDate(day: "2026-11-12", startMinute: 600, endMinute: 1080)])
     }
 
+    func testOrdinalSuffixesInDayTimesAreNotRanges() {
+        XCTAssertEqual(slots(parse("Roadshow 19, 20, 21 Nov 8am-4pm\n19th, 21st: 9am-6pm")),
+                       ["2026-11-19 09:00-18:00", "2026-11-20 08:00-16:00", "2026-11-21 09:00-18:00"])
+    }
+
+    func testDayTimesStillReadWrittenRanges() {
+        for prefix in ["21-23", "21 to 23", "21to23", "21st to 23rd", "21st-23rd"] {
+            XCTAssertEqual(slots(parse("Roadshow 20, 21, 22, 23, 24 Nov 8am-4pm\n\(prefix): 9am-6pm")),
+                           ["2026-11-20 08:00-16:00", "2026-11-21 09:00-18:00", "2026-11-22 09:00-18:00",
+                            "2026-11-23 09:00-18:00", "2026-11-24 08:00-16:00"], prefix)
+        }
+    }
+
     func testHeadingLineNamesTheEventWhenNoDateLineDoes() {
         let job = parse("Nike Pop-up\n19 Nov 3.30pm-6pm\n$15/h")
         XCTAssertEqual(job.event, "Nike Pop-up")
@@ -216,6 +229,19 @@ final class JobMessageTests: XCTestCase {
                        ["2026-11-20 09:00-18:00", "2026-11-21 09:00-18:00", "2026-11-22 09:00-18:00"])
         // A weekday on its own still means the next one.
         XCTAssertEqual(slots(parse("Roadshow\nSat 10am-7pm")), ["2026-11-07 10:00-19:00"])
+    }
+
+    func testWeekdaysDoNotShiftTheEventOrVenue() {
+        for line in ["Sat 21 Nov 10am-7pm Roadshow @ VivoCity", "Saturday 21 Nov 10am-7pm Roadshow @ VivoCity", "(Sat) 21 Nov 10am-7pm Roadshow @ VivoCity"] {
+            let job = parse(line)
+            XCTAssertEqual(slots(job), ["2026-11-21 10:00-19:00"], line)
+            XCTAssertEqual(job.event, "Roadshow", line)
+            XCTAssertEqual(job.location, "VivoCity", line)
+        }
+        let middle = parse("Roadshow Sat 21 Nov 10am-7pm at MBS")
+        XCTAssertEqual(slots(middle), ["2026-11-21 10:00-19:00"])
+        XCTAssertEqual(middle.event, "Roadshow")
+        XCTAssertEqual(middle.location, "MBS")
     }
 
     func testEmojiAreNotPartOfTheNameOrVenue() {
