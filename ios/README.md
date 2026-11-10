@@ -207,6 +207,7 @@ Build 66: The Appearance caption describes the chosen option (Match iPhone, Ligh
 Build 67: Friends. Add friends by code or invite link (both must agree), visit their pet, and say hi once a day: they get a notification and you both earn 2 coins. Friends see only the pet, never shifts or pay.
 Build 68: A short opening animation (Penny's icon pops in and hops, then fades into the app) on launch and when coming back after 30 seconds or more away. Tap to skip; Reduce Motion just fades.
 Build 69: Job messages keep every date in "Sat 21 & Sun 22 Nov", drop emoji from names and venues, and find the event after a greeting line. Friends has a leaderboard (weekly streak, then level; pets only). New Penny Home Screen widget, small and medium.
+Build 70: Full backups are a ZIP that includes receipt photos. Alerts for friend requests and acceptances, and a failed friend removal can be retried. Availability shows free time between two bookings. Job messages keep event and venue aligned after weekday words, and "19th, 21st:" no longer adds the days between.
 
 ### Review fixes — 10 November 2026
 
