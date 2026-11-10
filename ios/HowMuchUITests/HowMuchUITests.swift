@@ -638,10 +638,10 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 15)); app.buttons["nav.add"].tap()
         let event = app.textFields["Event name"]
-        XCTAssertTrue(event.waitForExistence(timeout: 10)); event.tap(); event.typeText("Brief QA")
+        XCTAssertTrue(event.waitForExistence(timeout: 10)); event.tap(); event.typeText("Brief QA\n")  // return hides the keyboard
         let call = app.switches["shift.hasCall"]; reveal(call, in: app)
         XCTAssertEqual(call.value as? String, "0")
-        call.switches.firstMatch.exists ? call.switches.firstMatch.tap() : call.tap()
+        call.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()  // the switch itself, at the row's trailing edge
         XCTAssertTrue(app.datePickers["shift.callTime"].waitForExistence(timeout: 5), "turning on call time shows the picker")
         let dress = app.textFields["shift.dressCode"]; reveal(dress, in: app); dress.tap(); dress.typeText("All black")
         let contact = app.textFields["shift.contact"]; reveal(contact, in: app); contact.tap(); contact.typeText("Sarah")

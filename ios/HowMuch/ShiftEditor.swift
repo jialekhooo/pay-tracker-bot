@@ -129,30 +129,7 @@ struct ShiftEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if isDirty { confirmingDiscard = true } else { dismiss() } } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        do {
-                            let batch = try makeBatch()
-                            if store.update({ data in
-                                if let existing, !duplicating, let replacement = batch.first {
-                                    try data.editShift(original: existing, replacement: replacement)
-                                } else if !templateOnly { data.shifts.append(contentsOf: batch) }
-                                if !templateOnly, let first = batch.first {
-                                    var settings = data.settings; settings.assignPayer(payerID, to: first.event); data.preferences = settings
-                                }
-                                if keepTemplate || templateOnly, let first = batch.first {
-                                    let name = templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? first.event : templateName.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    var settings = data.settings
-                                    var templates = settings.jobTemplates ?? []
-                                    let old = templates.first { $0.name.caseInsensitiveCompare(name) == .orderedSame } ?? (templateOnly ? templates.first { $0.id == template?.id } : nil)
-                                    templates.removeAll { $0.id == old?.id }
-                                    let template = JobTemplate(id: old?.id ?? UUID(), name: name, shift: first, payerID: payerID)
-                                    try template.validate(); templates.append(template)
-                                    settings.jobTemplates = templates; data.preferences = settings
-                                }
-                            }) { dismiss() } else { error = store.error; store.error = nil }  // shown here only, not again as a global alert
-                        }
-                        catch { self.error = error.localizedDescription }
-                    }.fontWeight(.semibold)
+                    Button("Save") { save() }.fontWeight(.semibold)
                 }
             }
             .sheet(isPresented: $choosingPayer) { PayerPickerView(selected: payerID) { payerID = $0 } }
@@ -455,6 +432,36 @@ struct ShiftEditor: View {
         }
         return batch
     }
+    private func save() {
+        do {
+            let batch = try makeBatch()
+            if store.update({ data in try apply(batch, to: &data) }) { dismiss() }
+            else { error = store.error; store.error = nil }  // shown here only, not again as a global alert
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func apply(_ batch: [Shift], to data: inout TrackerData) throws {
+        if let existing, !duplicating, let replacement = batch.first {
+            try data.editShift(original: existing, replacement: replacement)
+        } else if !templateOnly { data.shifts.append(contentsOf: batch) }
+        guard let first = batch.first else { return }
+        if !templateOnly {
+            var settings = data.settings; settings.assignPayer(payerID, to: first.event); data.preferences = settings
+        }
+        guard keepTemplate || templateOnly else { return }
+        let typed = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = typed.isEmpty ? first.event : typed
+        var settings = data.settings
+        var templates = settings.jobTemplates ?? []
+        let byName = templates.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+        let opened: JobTemplate? = templateOnly ? templates.first { $0.id == template?.id } : nil
+        let old = byName ?? opened
+        templates.removeAll { $0.id == old?.id }
+        let saved = JobTemplate(id: old?.id ?? UUID(), name: name, shift: first, payerID: payerID)
+        try saved.validate(); templates.append(saved)
+        settings.jobTemplates = templates; data.preferences = settings
+    }
+
     private func loadBrief(_ shift: Shift) {
         hasCall = shift.callMinute != nil
         if let call = shift.callMinute { callTime = Calendar.current.date(bySettingHour: call / 60, minute: call % 60, second: 0, of: day) ?? callTime }
