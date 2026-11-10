@@ -209,6 +209,7 @@ Build 68: A short opening animation (Penny's icon pops in and hops, then fades i
 Build 69: Job messages keep every date in "Sat 21 & Sun 22 Nov", drop emoji from names and venues, and find the event after a greeting line. Friends has a leaderboard (weekly streak, then level; pets only). New Penny Home Screen widget, small and medium.
 Build 70: Full backups are a ZIP that includes receipt photos. Alerts for friend requests and acceptances, and a failed friend removal can be retried. Availability shows free time between two bookings. Job messages keep event and venue aligned after weekday words, and "19th, 21st:" no longer adds the days between.
 Build 71: Gift codes can give coins as well as items, to spend in Penny's shop.
+Build 72: Pets can visit friends. Send your pet to a friend's home for up to 6 hours, give visiting pets a treat so you both earn coins, and get a postcard when yours comes home.
 
 ### Review fixes — 10 November 2026
 
