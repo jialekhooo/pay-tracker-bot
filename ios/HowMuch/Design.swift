@@ -219,7 +219,7 @@ struct ShiftRow: View {
                 Text(money(shift.total, shift.currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).fixedSize()
             }
             VStack(alignment: .leading, spacing: 7) {
-                Label(shift.startDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " · " + Shift.clock(shift.startMinute) + "–" + Shift.clock(shift.endMinute) + (shift.endMinute <= shift.startMinute ? " (+1 day)" : ""), systemImage: "calendar")
+                Label(shift.whenLabel, systemImage: "calendar")
                 if !shift.location.isEmpty { Label(shift.location, systemImage: "mappin.and.ellipse").lineLimit(2) }
             }.font(.caption).foregroundStyle(Palette.muted)
             HStack {
@@ -372,4 +372,14 @@ extension View {
     func heroAmountFont() -> some View { scaledFont(40, relativeTo: .largeTitle, weight: .bold, design: .rounded, limit: 1.6).lineLimit(1).minimumScaleFactor(0.5) }
     func amountFont() -> some View { scaledFont(34, relativeTo: .largeTitle, weight: .bold, design: .rounded, limit: 1.6).lineLimit(1).minimumScaleFactor(0.5) }
     func amountFieldFont() -> some View { scaledFont(34, relativeTo: .largeTitle, weight: .semibold, design: .rounded, limit: 1.6).minimumScaleFactor(0.5) }
+}
+
+extension Shift {
+    /// "Mon 3 Nov · 09:00–18:00", plus "(+1 day)" overnight. Built in steps: as one chain of `+`,
+    /// Xcode 26 gives up type-checking it.
+    var whenLabel: String {
+        let day = startDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+        let overnight = endMinute <= startMinute ? " (+1 day)" : ""
+        return "\(day) · \(Shift.clock(startMinute))–\(Shift.clock(endMinute))\(overnight)"
+    }
 }

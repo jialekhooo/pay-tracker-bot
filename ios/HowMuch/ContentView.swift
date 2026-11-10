@@ -416,7 +416,7 @@ struct UpcomingEventCard: View {
                 Spacer(minLength: 0)
                 if navigates { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
             }
-            Label(next.startDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " · " + Shift.clock(next.startMinute) + "–" + Shift.clock(next.endMinute) + (next.endMinute <= next.startMinute ? " (+1 day)" : ""), systemImage: "calendar").font(.caption).foregroundStyle(Palette.muted)
+            Label(next.whenLabel, systemImage: "calendar").font(.caption).foregroundStyle(Palette.muted)
             if !locations.isEmpty {
                 Label(locations.count == 1 ? locations[0] : "\(locations.count) locations", systemImage: "mappin.and.ellipse").font(.caption).foregroundStyle(Palette.muted).lineLimit(2)
             }
