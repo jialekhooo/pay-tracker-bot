@@ -38,7 +38,7 @@ struct WorkCalendarView: View {
                             let clash = items.contains { a in store.data.shifts.contains { a.overlaps($0) } }
                             Button { selected = date } label: {
                                 VStack(spacing: 5) {
-                                    Text("\(TrackerCalendar.calendar.component(.day, from: date))").font(.system(size: 14, weight: chosen || today ? .bold : .medium))
+                                    Text("\(TrackerCalendar.calendar.component(.day, from: date))").scaledFont(14, relativeTo: .subheadline, weight: chosen || today ? .bold : .medium, limit: 1.5)
                                     HStack(spacing: 2) { ForEach(0..<min(3, items.count), id: \.self) { _ in Circle().fill(chosen ? .white : clash ? Color.orange : Palette.teal).frame(width: 3, height: 3) } }.frame(height: 4)
                                 }.frame(maxWidth: .infinity, minHeight: 44)
                                     .foregroundStyle(chosen ? .white : today ? Palette.teal : Palette.ink)

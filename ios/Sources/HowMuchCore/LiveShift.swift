@@ -9,6 +9,7 @@ public extension Shift {
                              startMinute: startMinute, endMinute: minute, breakMinutes: breakMinutes, paidBreak: paidBreak,
                              rate: rate, fixedPay: fixedPay, rules: rules, paid: paid, paymentDue: paymentDue)
         next.extra = extra; next.extraNote = extraNote
+        next.callMinute = callMinute; next.dressCode = dressCode; next.contact = contact
         return next
     }
 

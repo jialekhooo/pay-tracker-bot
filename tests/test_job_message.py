@@ -301,3 +301,26 @@ def test_unlinked_chat_saves_a_forwarded_job_in_the_bot(tmp_path, monkeypatch):
         (date(2026, 11, 22), "Roadshow", "VivoCity"),
     ]
     assert "Logged 2 shifts" in replies[-1]
+
+
+def test_bare_evening_range_stays_overnight():
+    job = parse_job_message("Event: Bar duty\nDate: 15/11\nTime: 6-2\nRate: $15/h", TODAY)
+    assert slots(job) == ["2026-11-15 18:00-02:00"]
+    daytime = parse_job_message("Event: Promo\nDate: 15/11\nTime: 9-5\nRate: $15/h", TODAY)
+    assert slots(daytime) == ["2026-11-15 09:00-17:00"]
+
+
+def test_bare_morning_range_ending_at_noon_stays_in_the_morning():
+    assert slots(parse("Event: Setup\nDate: 15/11\nTime: 6-12\nRate: $15/h")) == ["2026-11-15 06:00-12:00"]
+
+
+def test_job_brief_is_read_and_sent_on_to_the_app():
+    from paybot.howmuch_link import shift_payload
+    job = parse("Roadshow 15 Nov 6pm-11pm\nCall time: 5.30\nAttire: All black\nPIC: Sarah\nHP: 9123 4567")
+    assert (job.call_minute, job.dress_code, job.contact) == (17 * 60 + 30, "All black", "Sarah 9123 4567")
+    assert parse("Setup 15 Nov 9am-6pm\nReporting time: 8.30am").call_minute == 8 * 60 + 30
+    assert parse("Setup 15 Nov 9am-6pm\nCall time: 30 mins before").call_minute is None
+    [(_, shift)] = job_shifts(job)
+    payload = shift_payload(shift)
+    assert (payload["callMinute"], payload["dressCode"], payload["contact"]) == (1050, "All black", "Sarah 9123 4567")
+    assert "dressCode" not in shift_payload(job_shifts(parse("Promo 15 Nov 9am-5pm"))[0][1])

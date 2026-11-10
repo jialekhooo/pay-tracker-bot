@@ -38,8 +38,8 @@ from .calendar_export import event_title, google_link, to_ics
 from .feed import issue_token, serve
 from .howmuch_link import HowMuchLink, LinkError
 from .job_message import parse_message
-from .parsing import Break, ParseError, Shift, parse_time
-from .pay import RateConfig, calculate_pay, format_hours, round_money
+from .parsing import Break, ParseError, Shift, parse_time, parse_time_range
+from .pay import RateConfig, base_rate, calculate_pay, format_hours, round_money
 from .reminders import (
     DEFAULT_SEND_AT,
     DEFAULT_UTC_OFFSET_MINUTES,
@@ -691,9 +691,8 @@ def _edited_pay(value: str) -> tuple[Decimal, bool]:
 async def log_shift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     storage = _storage(context)
     user_id = update.effective_user.id
-    text = update.message.text or ""
-    if text.startswith("/log"):
-        text = text[len("/log") :]
+    text = update.effective_message.text or ""
+    text = re.sub(r"^/log(?:@\S+)?", "", text)
     if await _is_linked(update, context):
         await _log_to_app(update, context, text)
         return
@@ -854,7 +853,7 @@ def _edit_record(
             "pay_is_fixed": 0,
         }
     parts = re.split(r"\s*(?:-|–|—|to|till|until)\s*", value, maxsplit=1)
-    start, end = parse_time(parts[0]), parse_time(parts[1])
+    start, end = parse_time_range(parts[0], parts[1])
     hours = _rehours(record, start, end)
     changes = {
         "start_time": start.isoformat(timespec="minutes"),
@@ -864,7 +863,7 @@ def _edit_record(
     if record.pay_is_fixed:
         changes["pay"] = str(record.pay)
         return changes
-    old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
+    old_rate = base_rate(record.pay, record.hours, config) if record.hours else config.rate_for(record.event)
     changes["pay"] = str(calculate_pay(float(hours), record.event, config, round_money(old_rate)))
     return changes
 
@@ -1376,6 +1375,8 @@ async def undo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 pay=record.pay,
                 currency=record.currency,
                 pay_is_fixed=record.pay_is_fixed,
+                payment_due=record.payment_due,
+                paid=record.paid,
             ),
         )
         for record in records
@@ -1583,16 +1584,17 @@ async def calendar_export(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     ]
     for record in records[:10]:
         lines.append(
-            f"• [{record.day.strftime('%a %d %b')} "
+            f'• <a href="{escape(google_link(record, offset), quote=True)}">'
+            f"{record.day.strftime('%a %d %b')} "
             f"{record.start.strftime('%H:%M')}–{record.end.strftime('%H:%M')} "
-            f"{event_title(record)}]({google_link(record, offset)})"
+            f"{escape(event_title(record))}</a>"
         )
     if len(records) > 10:
         lines.append(f"…and {len(records) - 10} more in the file.")
     await update.effective_message.reply_document(document=data, filename=data.name)
     await update.effective_message.reply_text(
         "\n".join(lines),
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
 
@@ -1678,7 +1680,7 @@ async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    command = update.message.text.split()[0]
+    command = (update.effective_message.text or "").split()[0]
     await update.effective_message.reply_text(
         f"{command} isn't a command — send /commands to see what I understand."
     )
@@ -1912,8 +1914,10 @@ def build_application(
     application.add_handler(CallbackQueryHandler(action_button, pattern=r"^act:"))
     keys = "|".join(re.escape(k) for k in (KEY_LOG, KEY_OWED, KEY_UPCOMING, KEY_EARNINGS, KEY_HELP))
     application.add_handler(MessageHandler(filters.Regex(f"^({keys})$"), keyboard_button))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_shift))
-    application.add_handler(MessageHandler(filters.COMMAND, unknown))
+    application.add_handler(
+        MessageHandler(filters.UpdateType.MESSAGE & filters.TEXT & ~filters.COMMAND, log_shift)
+    )
+    application.add_handler(MessageHandler(filters.UpdateType.MESSAGE & filters.COMMAND, unknown))
     application.job_queue.run_repeating(send_due_reminders, interval=60, first=10)
     return application
 

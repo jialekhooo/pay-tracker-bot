@@ -237,7 +237,7 @@ struct EarningsHero: View {
                 Image(systemName: "wallet.bifold").font(.system(size: 21, weight: .light)).foregroundStyle(Palette.teal)
             }
             // Only what's been worked counts; booked shifts are shown separately below.
-            Text(money(split.earned, currency)).font(.heroAmount).tracking(-1.5)
+            Text(money(split.earned, currency)).heroAmountFont().tracking(-1.5)
                 .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink)
                 // With nothing booked, the headline is the total.
                 .accessibilityIdentifier(split.booked > 0 ? "earnings.earned" : "earnings.total")

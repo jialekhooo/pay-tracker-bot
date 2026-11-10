@@ -46,6 +46,9 @@ def shift_payload(shift: Shift) -> dict:
         "startMinute": shift.start.hour * 60 + shift.start.minute,
         "endMinute": shift.end.hour * 60 + shift.end.minute,
     }
+    for key, value in (("callMinute", shift.call_minute), ("dressCode", shift.dress_code), ("contact", shift.contact)):
+        if value is not None:
+            payload[key] = value
     if shift.break_specified:
         payload["breakMinutes"] = round(shift.rest.hours * 60)
         payload["paidBreak"] = shift.rest.paid

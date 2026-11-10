@@ -11,12 +11,6 @@ extension Font {
     static let cardTitle = Font.system(.title3, design: .rounded, weight: .bold)
     /// Everyday text, rows and controls: the same size on cards and in forms.
     static let appBody = Font.subheadline
-    /// The big amount at the top of a screen (earnings, a shift's pay).
-    static let heroAmount = Font.system(size: 40, weight: .bold, design: .rounded)
-    /// Amounts inside a card or sheet.
-    static let amount = Font.system(size: 34, weight: .bold, design: .rounded)
-    /// Amount text fields.
-    static let amountField = Font.system(size: 34, weight: .semibold, design: .rounded)
     /// Disclosure chevrons on rows and cards.
     static let chevron = Font.caption2.weight(.semibold)
     /// Icons in the 32-point tiles beside settings rows.
@@ -357,4 +351,25 @@ private struct GlassActionButtonStyle: ButtonStyle {
             .glassChrome(in: RoundedRectangle(cornerRadius: 16))
             .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
     }
+}
+
+/// A fixed design size that still follows the iPhone's text size setting, up to `limit` times larger.
+private struct ScaledFont: ViewModifier {
+    @ScaledMetric private var scaled: CGFloat
+    private let size: CGFloat, weight: Font.Weight, design: Font.Design, limit: CGFloat
+    init(size: CGFloat, relativeTo style: Font.TextStyle, weight: Font.Weight, design: Font.Design, limit: CGFloat) {
+        _scaled = ScaledMetric(wrappedValue: size, relativeTo: style)
+        self.size = size; self.weight = weight; self.design = design; self.limit = limit
+    }
+    func body(content: Content) -> some View { content.font(.system(size: min(scaled, size * limit), weight: weight, design: design)) }
+}
+
+extension View {
+    func scaledFont(_ size: CGFloat, relativeTo style: Font.TextStyle = .body, weight: Font.Weight = .regular, design: Font.Design = .default, limit: CGFloat = 2) -> some View {
+        modifier(ScaledFont(size: size, relativeTo: style, weight: weight, design: design, limit: limit))
+    }
+    /// Money stays on one line: it grows with the text size, then shrinks to fit rather than wrapping mid-number.
+    func heroAmountFont() -> some View { scaledFont(40, relativeTo: .largeTitle, weight: .bold, design: .rounded, limit: 1.6).lineLimit(1).minimumScaleFactor(0.5) }
+    func amountFont() -> some View { scaledFont(34, relativeTo: .largeTitle, weight: .bold, design: .rounded, limit: 1.6).lineLimit(1).minimumScaleFactor(0.5) }
+    func amountFieldFont() -> some View { scaledFont(34, relativeTo: .largeTitle, weight: .semibold, design: .rounded, limit: 1.6).minimumScaleFactor(0.5) }
 }

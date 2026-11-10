@@ -1,5 +1,8 @@
 """Linking a HowMuch account with the Telegram bot, and the bot adding shifts and reading summaries."""
 from datetime import date, datetime, timedelta, timezone
+
+import pytest
+from fastapi import HTTPException
 from .test_accounts import setup, login, headers, document, write
 from howmuch_api import telegram_link
 
@@ -112,3 +115,38 @@ def test_buttons_under_a_logged_shift_undo_it_or_mark_it_paid(setup, monkeypatch
     assert shifts['Done gig']['paid'] is True and 'Oops gig' not in shifts and 'Roadshow' in shifts
     assert setup.client.post('/v1/bot/shifts/undo', headers=BOT, json={'telegramUserId': 4242, 'ids': [oops]}).status_code == 404
     assert setup.client.post('/v1/bot/shifts/undo', json={'telegramUserId': 4242, 'ids': [done]}).status_code == 403
+
+
+def test_shifts_of_one_event_added_together_share_a_due_date(setup, monkeypatch):
+    me = prepare(setup, monkeypatch)
+    assert write(setup, me, document()).status_code == 200
+    link(setup, me)
+    sent = setup.client.post('/v1/bot/shifts', headers=BOT, json={'telegramUserId': 4242, 'shifts': [
+        {'event': 'Roadshow', 'day': day, 'startMinute': 540, 'endMinute': 1020}
+        for day in ('2026-11-03', '2026-11-05', '2026-11-07')]})
+    assert sent.status_code == 200, sent.text
+    saved = setup.client.get('/v1/data', headers=headers(me)).json()['data']['shifts']
+    assert {s['paymentDue'] for s in saved if s['event'] == 'Roadshow'} == {'2026-11-27'}, 'the Friday after two weeks past the last day'
+
+
+def test_blank_event_names_and_odd_secrets_are_refused_cleanly(setup, monkeypatch):
+    me = prepare(setup, monkeypatch)
+    link(setup, me)
+    blank = setup.client.post('/v1/bot/shifts', headers=BOT, json={'telegramUserId': 4242, 'shifts': [
+        {'event': '   ', 'day': '2026-11-03', 'startMinute': 540, 'endMinute': 1020}]})
+    assert blank.status_code == 422
+    with pytest.raises(HTTPException) as refused:  # a non-ASCII secret used to raise TypeError, a 500
+        telegram_link.require_bot('sécret')
+    assert refused.value.status_code == 403
+
+
+def test_a_job_brief_from_the_bot_reaches_the_app(setup, monkeypatch):
+    me = prepare(setup, monkeypatch)
+    assert write(setup, me, document()).status_code == 200
+    link(setup, me)
+    sent = setup.client.post('/v1/bot/shifts', headers=BOT, json={'telegramUserId': 4242, 'shifts': [
+        {'event': 'Gala', 'day': '2026-11-20', 'startMinute': 1080, 'endMinute': 1380,
+         'callMinute': 1050, 'dressCode': 'All black', 'contact': 'Sarah'}]})
+    assert sent.status_code == 200, sent.text
+    gala = next(s for s in setup.client.get('/v1/data', headers=headers(me)).json()['data']['shifts'] if s['event'] == 'Gala')
+    assert (gala['callMinute'], gala['dressCode'], gala['contact']) == (1050, 'All black', 'Sarah')

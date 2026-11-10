@@ -273,7 +273,7 @@ def parse_forwarded(raw: bytes) -> tuple[str | None, dict | None]:
 @inbound.post("/inbound-email/{secret}")
 async def inbound_email(secret: str, request: Request) -> dict:
     expected = os.environ.get("HOWMUCH_INBOUND_SECRET", "")
-    if not expected or not hmac.compare_digest(secret, expected):
+    if not expected or not hmac.compare_digest(secret.encode(), expected.encode()):
         raise HTTPException(404)
     raw = await request.body()
     if len(raw) > 2_000_000:

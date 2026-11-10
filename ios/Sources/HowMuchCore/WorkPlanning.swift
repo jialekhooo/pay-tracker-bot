@@ -15,6 +15,7 @@ public struct JobTemplate: Identifiable, Codable, Equatable {
         var made = try Shift(event: shift.event, location: shift.location, day: day, startMinute: shift.startMinute, endMinute: shift.endMinute,
                              breakMinutes: shift.breakMinutes, paidBreak: shift.paidBreak, rate: shift.rate, fixedPay: shift.fixedPay, rules: rules)
         made.extra = shift.extra; made.extraNote = shift.extraNote
+        made.callMinute = shift.callMinute; made.dressCode = shift.dressCode; made.contact = shift.contact
         return made
     }
 }

@@ -20,6 +20,10 @@ public struct PastedJob: Equatable {
     public var fixedPay: Decimal?
     public var currency: String?
     public var breakMinutes: Int?
+    /// The job brief, when the message states it.
+    public var callMinute: Int?
+    public var dressCode: String?
+    public var contact: String?
     public var dates: [PastedJobDate] = []
     /// Notes worth showing, such as how a lump sum was split.
     public var notes: [String] = []
@@ -44,6 +48,7 @@ public enum JobMessageParser {
     public static func parse(_ text: String, today: Date = Date(), calendar: Calendar = TrackerCalendar.calendar) -> PastedJob {
         var job = PastedJob()
         var address: String?
+        var callIsBare = false
         var role: String?
         // A heading line with no dates, times or pay ("Nike Pop-up"), used when no other line names the event.
         var title: String?
@@ -80,6 +85,11 @@ public enum JobMessageParser {
                 case .event: if job.event == nil { job.event = clean(value) }; continue
                 case .role: if role == nil { role = clean(value) }; continue
                 case .ignored: continue
+                case .callTime:
+                    if job.callMinute == nil, let call = callTime(value) { job.callMinute = call.minute; callIsBare = call.bare }
+                    continue
+                case .dress: if job.dressCode == nil { job.dressCode = value }; continue
+                case .contact: job.contact = [job.contact, value].compactMap { $0 }.joined(separator: " "); continue
                 case .breakTime: if job.breakMinutes == nil { job.breakMinutes = breakLength(value) }; continue
                 case .schedule, .pay: content = value
                 }
@@ -156,13 +166,17 @@ public enum JobMessageParser {
         }
         if let location = job.location, location.count > 1000 { job.location = String(location.prefix(1000)) }
         if let event = job.event, event.count > 120 { job.event = String(event.prefix(120)) }
+        // A bare "5.30" for a 6pm job means 17:30: the call comes before the start.
+        if callIsBare, let call = job.callMinute, call < 12 * 60, let first = job.dates.first, call + 12 * 60 <= first.startMinute { job.callMinute = call + 12 * 60 }
+        if let dress = job.dressCode, dress.count > Shift.maxBriefText { job.dressCode = String(dress.prefix(Shift.maxBriefText)) }
+        if let contact = job.contact, contact.count > Shift.maxBriefText { job.contact = String(contact.prefix(Shift.maxBriefText)) }
         return job
     }
 
     // MARK: - Lines
 
     private struct Item { var days: [String]; var time: (start: Int, end: Int)? }
-    private enum Label { case location, address, event, role, schedule, pay, breakTime, ignored }
+    private enum Label { case location, address, event, role, schedule, pay, breakTime, callTime, dress, contact, ignored }
 
     private static func normalized(_ text: String) -> String {
         text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
@@ -182,13 +196,15 @@ public enum JobMessageParser {
             (.role, ["role", "position", "job scope", "scope"]),
             (.schedule, ["date", "dates", "day", "days", "time", "timing", "timings", "schedule", "when", "working hours", "hours", "shift", "shifts"]),
             (.breakTime, ["break", "breaks", "lunch", "lunch break", "meal break"]),
+            (.callTime, ["reporting time", "report time", "call time"]),
+            (.dress, ["attire", "dress code", "dresscode"]),
+            (.contact, ["contact", "contact person", "contact no", "pic", "poc", "phone", "tel", "hp", "mobile"]),
             (.pay, ["pay", "rate", "pay rate", "salary", "wage", "wages", "remuneration", "payment"]),
         ]
         for (kind, keys) in groups where keys.contains(key) { return value.isEmpty ? (.ignored, value) : (kind, value) }
-        // Contact numbers, attire and similar details are deliberately not used.
-        let ignored = ["contact", "contact person", "contact no", "pic", "poc", "name", "phone", "tel", "hp", "mobile", "email",
-                       "attire", "dress code", "dresscode", "remarks", "remark", "note", "notes", "requirements", "requirement",
-                       "reporting time", "report time", "call time", "meal", "meals", "gender", "age", "pax", "headcount", "deadline"]
+        // Other details like these are deliberately not used.
+        let ignored = ["name", "email", "remarks", "remark", "note", "notes", "requirements", "requirement",
+                       "meal", "meals", "gender", "age", "pax", "headcount", "deadline"]
         return ignored.contains(key) ? (.ignored, value) : nil
     }
 
@@ -448,6 +464,17 @@ public enum JobMessageParser {
 
     private struct Clock { var hour: Int; var minute: Int; var twentyFour: Bool }
 
+    /// One clock time, such as "8.30am" or "0830". "30 mins before" is not a time of day.
+    private static func callTime(_ value: String) -> (minute: Int, bare: Bool)? {
+        let lower = value.lowercased()
+        guard !["before", "prior", "min", "hour", "hr"].contains(where: lower.contains),
+              let match = lower.firstMatch(of: #/\b(\d{4}|\d{1,2}(?:[:.]\d{2})?)\s*(am|pm)?\b/#),
+              let time = clock(String(match.1)) else { return nil }
+        guard let suffix = match.2, !time.twentyFour else { return (time.hour * 60 + time.minute, !time.twentyFour) }
+        guard (1...12).contains(time.hour) else { return nil }
+        return ((time.hour % 12 + (suffix == "pm" ? 12 : 0)) * 60 + time.minute, false)
+    }
+
     private static func clock(_ text: String?) -> Clock? {
         guard let text else { return nil }
         if text.count == 4, let value = Int(text) {
@@ -488,8 +515,10 @@ public enum JobMessageParser {
         guard var first = minutes(start, pm: startPM), var last = minutes(end, pm: endPM) else { return nil }
         if startPM == nil, endPM == nil, !start.twentyFour, !end.twentyFour {
             // Plain "9-6" or "2-10": assume daytime work.
-            if start.hour < 7 { first += 12 * 60 }
-            if last <= first, last + 12 * 60 < 24 * 60 { last += 12 * 60 }
+            // Except "6-12", which would otherwise run 18:00 to the next noon.
+            if start.hour < 7, end.hour != 12 { first += 12 * 60 }
+            // "6-2" is 18:00 to 02:00 overnight, not 18:00 to 14:00.
+            if last <= first, last + 12 * 60 < 24 * 60, last + 12 * 60 > first { last += 12 * 60 }
         }
         guard first != last, (0..<1440).contains(first), (0..<1440).contains(last) else { return nil }
         return (first, last)

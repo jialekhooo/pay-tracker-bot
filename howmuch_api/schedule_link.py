@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 import simplejson as json
 from fastapi import APIRouter, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .database import digest, limit
 from .telegram_link import (BotShift, BotUser, add_shifts, change_account_shifts, db_for, linked_account, make_shift,
@@ -154,6 +154,13 @@ class ShiftEdit(BaseModel):
     endMinute: int | None = Field(default=None, ge=0, lt=1440)
     event: str | None = Field(default=None, min_length=1, max_length=120)
     location: str | None = Field(default=None, max_length=1000)
+
+    @field_validator('event')
+    @classmethod
+    def event_has_text(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError('The event name is blank.')
+        return value
 
 
 @router.patch('/schedule/shifts/{shift_id}')

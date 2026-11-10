@@ -76,6 +76,8 @@ final class JobMessageTests: XCTestCase {
     func testMonthFirstRangesOvernightAndNextYear() {
         XCTAssertEqual(slots(parse("Nov 20-22 10pm-2am")), ["2026-11-20 22:00-02:00", "2026-11-21 22:00-02:00", "2026-11-22 22:00-02:00"])
         XCTAssertEqual(slots(parse("5 Jan 9-6")), ["2027-01-05 09:00-18:00"])
+        XCTAssertEqual(slots(parse("5 Jan 6-12")), ["2027-01-05 06:00-12:00"])
+        XCTAssertEqual(slots(parse("5 Jan 6-2")), ["2027-01-05 18:00-02:00"])
         XCTAssertEqual(slots(parse("30 Nov - 2 Dec 0800-1700")), ["2026-11-30 08:00-17:00", "2026-12-01 08:00-17:00", "2026-12-02 08:00-17:00"])
         XCTAssertEqual(slots(parse("Wed 12 Nov (Wed) 11-2pm")), ["2026-11-12 11:00-14:00"])
     }
@@ -270,5 +272,15 @@ final class JobMessageTests: XCTestCase {
         XCTAssertEqual(parse("Promoters needed\nSamsung Galaxy launch\n21 Nov 10am-7pm").event, "Samsung Galaxy launch")
         // Headings only count before the details start.
         XCTAssertNil(parse("21 Nov 10am-7pm\nPlease reply soon").event)
+    }
+
+    func testJobBriefIsReadFromLabelledLines() {
+        let job = parse("Roadshow 12 Nov 6pm-11pm\nCall time: 5.30\nAttire: All black\nPIC: Sarah\nHP: 9123 4567")
+        XCTAssertEqual(job.callMinute, 17 * 60 + 30)
+        XCTAssertEqual(job.dressCode, "All black")
+        XCTAssertEqual(job.contact, "Sarah 9123 4567")
+        XCTAssertEqual(parse("Setup 12 Nov 9am-6pm\nReporting time: 8.30am").callMinute, 8 * 60 + 30)
+        XCTAssertEqual(parse("Setup 12 Nov 9am-6pm\nCall time: 0815").callMinute, 8 * 60 + 15)
+        XCTAssertNil(parse("Setup 12 Nov 9am-6pm\nCall time: 30 mins before").callMinute)
     }
 }

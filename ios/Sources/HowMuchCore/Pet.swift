@@ -245,7 +245,7 @@ public struct PetItem: Identifiable, Equatable, Sendable {
     }
 
     public static let catalog: [PetItem] = [
-        .init(id: "party-hat", name: "Party hat", slot: .hat, unlock: .coins(40), stage: .hatchling),
+        .init(id: "party-hat", name: "Party hat", slot: .hat, unlock: .coins(40)),
         .init(id: "straw-hat", name: "Straw sun hat", slot: .hat, unlock: .coins(50), stage: .hatchling),
         .init(id: "beanie", name: "Cosy beanie", slot: .hat, unlock: .coins(60), stage: .hatchling),
         .init(id: "cap", name: "Jade cap", slot: .hat, unlock: .coins(80), stage: .coinling),
@@ -264,7 +264,7 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "star-glasses", name: "Star glasses", slot: .face, unlock: .coins(150), stage: .golden),
         .init(id: "visor", name: "Pixel visor", slot: .face, unlock: .coins(220), stage: .golden),
         .init(id: "sleep-mask", name: "Sleep mask", slot: .face, unlock: .achievement("night-owl")),
-        .init(id: "bow-tie", name: "Bow tie", slot: .neck, unlock: .coins(40), stage: .hatchling),
+        .init(id: "bow-tie", name: "Bow tie", slot: .neck, unlock: .coins(40)),
         .init(id: "necktie", name: "Office tie", slot: .neck, unlock: .coins(60), stage: .hatchling),
         .init(id: "scarf", name: "Red scarf", slot: .neck, unlock: .coins(70), stage: .hatchling),
         .init(id: "bandana", name: "Bandana", slot: .neck, unlock: .coins(90), stage: .coinling),

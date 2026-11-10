@@ -23,7 +23,7 @@ enum IntentActions {
             await AppleAccountStore.shared.synchronize()
         }
         for activity in Activity<LiveShiftAttributes>.activities where activity.attributes.shiftID == shiftID {
-            await activity.end(nil, dismissalPolicy: .immediate)
+            await LiveShiftCenter.close(activity)
         }
     }
 
@@ -37,7 +37,7 @@ enum IntentActions {
         let longer = try shift.extended(byMinutes: minutes)
         // A finished card can't come back to life, so close it; the update below starts a fresh one if the shift is on again.
         for activity in Activity<LiveShiftAttributes>.activities where activity.attributes.shiftID == shiftID && activity.activityState != .active {
-            await activity.end(nil, dismissalPolicy: .immediate)
+            await LiveShiftCenter.close(activity)
         }
         guard store.update({ try $0.editShift(original: shift, replacement: longer) }) else {
             throw TrackerError.invalid(store.error ?? "The shift couldn't be saved.")

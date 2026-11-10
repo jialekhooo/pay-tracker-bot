@@ -223,7 +223,7 @@ struct ProfileSettingsView: View {
     }
     private func statTile(_ icon: String, _ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.teal)
+            Image(systemName: icon).scaledFont(14, relativeTo: .subheadline, weight: .semibold).foregroundStyle(Palette.teal)
             Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(label).font(.caption).foregroundStyle(Palette.muted)
         }.padding(14).frame(maxWidth: .infinity, alignment: .leading)

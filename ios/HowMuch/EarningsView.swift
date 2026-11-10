@@ -275,7 +275,7 @@ struct EventMoneySummary: View {
     var body: some View {
         Card {
             Label("EVENT SUMMARY", systemImage: "chart.bar.xaxis").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
-            Text(money(summary.netWorkPay, currency)).font(.amount).foregroundStyle(Palette.ink).accessibilityIdentifier("event.netWork")
+            Text(money(summary.netWorkPay, currency)).amountFont().foregroundStyle(Palette.ink).accessibilityIdentifier("event.netWork")
             Text("Work earnings · including scheduled shifts").font(.caption).foregroundStyle(Palette.muted)
             Divider()
             LabeledContent("Work pay", value: money(summary.workPay, currency))

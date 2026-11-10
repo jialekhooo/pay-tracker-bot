@@ -28,6 +28,12 @@ enum LiveShiftCenter {
 
     /// Shifts whose Lock Screen card the person swiped away (kept until the app restarts).
     static var dismissedShifts: Set<UUID> = []
+    /// Cards the app ended itself: an immediate end also reports `.dismissed`, which must not count as a swipe.
+    private static var endedByApp: Set<String> = []
+    static func close(_ activity: Activity<LiveShiftAttributes>) async {
+        endedByApp.insert(activity.id)
+        await activity.end(nil, dismissalPolicy: .immediate)
+    }
     static func sync(_ data: TrackerData, accountID: String, now: Date = Date()) {
         preferences = data.settings.liveShift ?? LiveShiftPreferences()
         let details = data.settings.jobNotifications.showDetails
@@ -38,16 +44,16 @@ enum LiveShiftCenter {
         for activity in activities where activity.activityState == .active {
             let id = activity.attributes.shiftID
             if let kept = newest[id], firstSeen[kept.id, default: .distantPast] >= firstSeen[activity.id, default: .distantPast] {
-                Task { await activity.end(nil, dismissalPolicy: .immediate) }
+                Task { await close(activity) }
             } else {
-                if let kept = newest[id] { Task { await kept.end(nil, dismissalPolicy: .immediate) } }
+                if let kept = newest[id] { Task { await close(kept) } }
                 newest[id] = activity
             }
         }
         for activity in activities {
             guard lockScreenEnabled, activity.attributes.accountID == accountID,
                   let shift = data.shifts.first(where: { $0.id == activity.attributes.shiftID }) else {
-                Task { await activity.end(nil, dismissalPolicy: .immediate) }
+                Task { await close(activity) }
                 continue
             }
             let content = ActivityContent(state: state(for: shift, accountID: accountID, details: details), staleDate: shift.endDate)
@@ -64,7 +70,7 @@ enum LiveShiftCenter {
               !activities.contains(where: { $0.attributes.shiftID == current.id && $0.attributes.accountID == accountID && $0.activityState == .active }),
               // Swiped away by the person: don't bring this shift's card back every minute.
               !dismissedShifts.contains(current.id),
-              !activities.contains(where: { $0.attributes.shiftID == current.id && $0.activityState == .dismissed })
+              !activities.contains(where: { $0.attributes.shiftID == current.id && $0.activityState == .dismissed && !endedByApp.contains($0.id) })
         else { return }
         let content = ActivityContent(state: state(for: current, accountID: accountID, details: details), staleDate: current.endDate)
         if let activity = try? Activity.request(attributes: LiveShiftAttributes(shiftID: current.id, accountID: accountID), content: content, pushType: .token) {
@@ -106,7 +112,7 @@ enum LiveShiftCenter {
         firstSeen[activity.id] = Date()
         Task { @MainActor in
             for await state in activity.activityStateUpdates where state == .dismissed {
-                dismissedShifts.insert(activity.attributes.shiftID)
+                if !endedByApp.contains(activity.id) { dismissedShifts.insert(activity.attributes.shiftID) }
             }
         }
         Task { @MainActor in
@@ -137,7 +143,7 @@ enum LiveShiftCenter {
     private static func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0) }.joined() }
 
     static func endAll() {
-        for activity in Activity<LiveShiftAttributes>.activities { Task { await activity.end(nil, dismissalPolicy: .immediate) } }
+        for activity in Activity<LiveShiftAttributes>.activities { Task { await close(activity) } }
     }
 
     private static func state(for shift: Shift, accountID: String, details: Bool) -> LiveShiftAttributes.ContentState {
@@ -211,7 +217,7 @@ struct FinishShiftSheet: View {
                             .frame(minHeight: 44).accessibilityIdentifier("finish.time")
                         if let updated {
                             Divider()
-                            Text(money(updated.total, updated.currency)).font(.amount).foregroundStyle(Palette.ink)
+                            Text(money(updated.total, updated.currency)).amountFont().foregroundStyle(Palette.ink)
                                 .accessibilityIdentifier("finish.pay")
                             Text(change(from: latest, to: updated)).font(.caption).foregroundStyle(Palette.muted)
                         }

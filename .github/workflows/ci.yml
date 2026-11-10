@@ -30,3 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift test
+
+  ios-app:
+    name: HowMuch iOS app build
+    # The app uses iOS 26 APIs, so it needs Xcode 26 or later.
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - run: xcodebuild -project HowMuch.xcodeproj -scheme HowMuch -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build

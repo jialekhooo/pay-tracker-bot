@@ -208,6 +208,10 @@ enum PetPixels {
                 if d < 0.45 && x < 11 && y < 11 { return PetPalette.white }
                 return y > 17 ? PetPalette.shellShade : PetPalette.shell
             }
+            // The two items an egg can buy, so a first purchase shows straight away.
+            let colors: [Character: Color] = ["o": PetPalette.outline, "y": PetPalette.gold, "r": PetPalette.red]
+            if outfit[.neck]?.id == "bow-tie" { stamp(["ro.or", "rrorr", "ro.or"], x: 10, y: 17, colors) }
+            if outfit[.hat]?.id == "party-hat" { stamp(["...y...", "..oro..", "..oyo..", ".oryro.", ".oyryo.", ".ooooo."], x: 9, y: 2, colors) }
             return flatten(canvas)
         }
 
@@ -656,7 +660,7 @@ struct PetStage: View {
                 .offset(y: (hop ? -size * 0.12 : size * 0.06) - (wide ? size * 0.16 : 0))
             ForEach(Array(hearts.enumerated()), id: \.element) { index, _ in FloatingHeart(offset: CGFloat(index % 3 - 1) * size * 0.25, size: size) }
             if let line {
-                Text(line).font(.system(size: max(11, size * 0.09), weight: .semibold, design: .rounded)).foregroundStyle(PetPalette.outline)
+                Text(line).scaledFont(max(11, size * 0.09), relativeTo: .caption, weight: .semibold, design: .rounded, limit: 1.5).foregroundStyle(PetPalette.outline)
                     .padding(.horizontal, 10).padding(.vertical, 6).background(.white.opacity(0.92), in: Capsule())
                     .frame(maxHeight: .infinity, alignment: .top).padding(.top, 8)
                     .transition(.scale.combined(with: .opacity))
@@ -1419,7 +1423,9 @@ extension AppleAccountStore {
         guard let store = tracker, let id = account?.id else { return }
         let card = store.petCard
         let key = "petCard.\(id)"
-        guard let body = try? JSONEncoder().encode(["card": card]),
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys  // dictionary key order varies per launch; the bytes must not
+        guard let body = try? encoder.encode(["card": card]),
               UserDefaults.standard.data(forKey: key) != body else { return }
         if (try? await api.request("/v1/friends/card", method: "PUT", body: body)) != nil {
             UserDefaults.standard.set(body, forKey: key)
@@ -1549,7 +1555,7 @@ private struct PlaydatePet: View {
                     .accessibilityHidden(true)
             }
             if let line {
-                Text(line).font(.system(size: max(11, size * 0.11), weight: .semibold, design: .rounded)).foregroundStyle(PetPalette.outline)
+                Text(line).scaledFont(max(11, size * 0.11), relativeTo: .caption, weight: .semibold, design: .rounded, limit: 1.5).foregroundStyle(PetPalette.outline)
                     .lineLimit(1).fixedSize()
                     .padding(.horizontal, 8).padding(.vertical, 5).background(.white.opacity(0.92), in: Capsule())
                     .offset(y: -size * 0.62)

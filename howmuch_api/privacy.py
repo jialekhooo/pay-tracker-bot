@@ -1,6 +1,6 @@
 """The public privacy policy at /privacy. Self-contained: no scripts, fonts or images from anywhere else."""
 
-UPDATED = '10 November 2026'
+UPDATED = '11 November 2026'
 CONTACT = 'jialexkhoo@gmail.com'
 
 STYLE = """
@@ -95,6 +95,7 @@ BODY = f"""
    <tr><td>Account</td><td>Your Apple account identifier, and any name and email you choose to share</td><td>To sign you in and keep your records yours</td></tr>
    <tr><td>Profile</td><td>Your display name and an optional photo</td><td>To show your profile. Friends can see your display name</td></tr>
    <tr><td>Work records</td><td>Shifts, events, venues, pay rates, payment status, payers, claims, notes and preferences</td><td>To work out your pay and sync across your devices</td></tr>
+   <tr><td>Job briefs</td><td>A shift's call time, dress code and contact person, if you add them. The contact can include another person's name and phone number</td><td>To show you the brief with the shift. Only add contact details you were given for the job</td></tr>
    <tr><td>Device details</td><td>A random installation ID, push tokens and your reminder preferences</td><td>To send notifications and Lock Screen updates to your iPhone</td></tr>
   </tbody>
  </table>
@@ -158,7 +159,7 @@ BODY = f"""
    <tr><td>Fly.io</td><td>Hosts the HowMuch service and database in Singapore</td></tr>
    <tr><td>Apple</td><td>Sign in with Apple, push notifications and Apple Maps routes</td></tr>
    <tr><td>Google, Microsoft, Apple iCloud</td><td>Only if you connect that mailbox</td></tr>
-   <tr><td>Email routing provider</td><td>Delivers emails you forward to your private HowMuch address</td></tr>
+   <tr><td>Cloudflare</td><td>Email Routing delivers emails you forward to your private HowMuch address</td></tr>
    <tr><td>Telegram</td><td>Only if you use the bot</td></tr>
   </tbody>
  </table>

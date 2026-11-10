@@ -58,6 +58,11 @@ public struct Shift: Identifiable, Codable, Equatable {
     /// What the extra is for ("Transport allowance").
     public var extraNote: String?
     public static let maxExtraNote = 60, maxExtra: Decimal = 1_000_000
+    /// The job brief: when to report (minutes after midnight), what to wear and who to ask for.
+    public var callMinute: Int?
+    public var dressCode: String?
+    public var contact: String?
+    public static let maxBriefText = 120
 
     public init(id: UUID = UUID(), sourceID: String? = nil, event: String, location: String = "",
                 day: String, startMinute: Int, endMinute: Int, breakMinutes: Int = 0,
@@ -140,6 +145,7 @@ public extension Shift {
         try c.encode(currency, forKey: .currency); try c.encode(paid, forKey: .paid); try c.encodeIfPresent(paymentDue, forKey: .paymentDue)
         try c.encodeIfPresent(overtimeAfter, forKey: .overtimeAfter); try c.encode(overtimeMultiplier, forKey: .overtimeMultiplier)
         try c.encode(extra, forKey: .extra); try c.encode(extraNote, forKey: .extraNote)
+        try c.encode(callMinute, forKey: .callMinute); try c.encode(dressCode, forKey: .dressCode); try c.encode(contact, forKey: .contact)
     }
 }
 
@@ -273,6 +279,9 @@ public struct TrackerData: Codable, Equatable {
                 guard extra > 0, extra <= Shift.maxExtra, !extra.isNaN, PayEngine.rounded(extra) == extra else { throw TrackerError.invalid("A shift extra is invalid.") }
             }
             guard (shift.extraNote ?? "").count <= Shift.maxExtraNote else { throw TrackerError.invalid("A shift extra note is too long.") }
+            guard (0..<1440).contains(shift.callMinute ?? 0), (shift.dressCode ?? "").count <= Shift.maxBriefText, (shift.contact ?? "").count <= Shift.maxBriefText else {
+                throw TrackerError.invalid("A job brief is too long or has an invalid call time.")
+            }
         }
         guard (expenses ?? []).count <= 20000, Set((expenses ?? []).map(\.id)).count == (expenses ?? []).count else { throw TrackerError.invalid("Invalid reimbursement records.") }
         for claim in claims + (expenses ?? []) {

@@ -215,7 +215,7 @@ struct AppleWelcomeView: View {
                 Image("BrandLogo").resizable().scaledToFit().frame(width: 100, height: 100).clipShape(RoundedRectangle(cornerRadius: 24))
                 VStack(alignment: .leading, spacing: 16) {
                     Text("HOWMUCH").font(.caption2.weight(.bold)).tracking(3).foregroundStyle(Palette.teal)
-                    Text("Your work.\nYour account.").font(.system(size: 42, weight: .bold, design: .rounded)).tracking(-1.4).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text("Your work.\nYour account.").scaledFont(42, relativeTo: .largeTitle, weight: .bold, design: .rounded, limit: 1.4).tracking(-1.4).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                     Text("Your jobs, earnings and reminders, together in one place.").font(.title3).foregroundStyle(Palette.muted)
                 }
                 VStack(alignment: .leading, spacing: 16) {
@@ -557,7 +557,7 @@ struct IntroPagesView: View {
                 art(item, index: index).frame(maxWidth: .infinity).frame(height: 220)
                 VStack(alignment: .leading, spacing: 12) {
                     Text(item.eyebrow).font(.caption2.weight(.bold)).tracking(2.5).foregroundStyle(Palette.teal)
-                    Text(item.title).font(.system(size: 34, weight: .bold, design: .rounded)).tracking(-1).foregroundStyle(Palette.ink)
+                    Text(item.title).scaledFont(34, relativeTo: .largeTitle, weight: .bold, design: .rounded, limit: 1.5).tracking(-1).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(item.body).font(.body).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }

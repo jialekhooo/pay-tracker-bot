@@ -14,6 +14,13 @@ public enum AccountMerge {
         var result = TrackerData()
         result.rules = try select(base.rules, local.rules, remote.rules)
         result.preferences = try select(base.preferences, local.preferences, remote.preferences)
+        // Merging additions from both sides can exceed a rolling cap; keep the newest rather than refuse the sync.
+        if let finishes = result.preferences?.liveShift?.confirmedFinishes, finishes.count > 300 {
+            result.preferences?.liveShift?.confirmedFinishes = Array(finishes.suffix(300))
+        }
+        if let blocked = result.preferences?.blockedDays, blocked.count > 400 {
+            result.preferences?.blockedDays = Array(blocked.sorted().suffix(400))
+        }
         result.shifts = try mergeRecords(base: base.shifts, local: local.shifts, remote: remote.shifts)
         let costs = try mergeRecords(base: base.expenses ?? [], local: local.expenses ?? [], remote: remote.expenses ?? [])
         result.expenses = costs.isEmpty && base.expenses == nil && local.expenses == nil && remote.expenses == nil ? nil : costs

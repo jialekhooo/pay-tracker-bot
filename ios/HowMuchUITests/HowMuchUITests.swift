@@ -634,6 +634,27 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 5), "the shift with an extra saves")
     }
     @MainActor
+    func testJobBriefIsSavedAndShownOnTheShift() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 15)); app.buttons["nav.add"].tap()
+        let event = app.textFields["Event name"]
+        XCTAssertTrue(event.waitForExistence(timeout: 10)); event.tap(); event.typeText("Brief QA")
+        let call = app.switches["shift.hasCall"]; reveal(call, in: app)
+        XCTAssertEqual(call.value as? String, "0")
+        call.switches.firstMatch.exists ? call.switches.firstMatch.tap() : call.tap()
+        XCTAssertTrue(app.datePickers["shift.callTime"].waitForExistence(timeout: 5), "turning on call time shows the picker")
+        let dress = app.textFields["shift.dressCode"]; reveal(dress, in: app); dress.tap(); dress.typeText("All black")
+        let contact = app.textFields["shift.contact"]; reveal(contact, in: app); contact.tap(); contact.typeText("Sarah")
+        attach("Job brief filled in", app: app)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Search shifts"].waitForExistence(timeout: 5))
+        openShift("Brief QA", in: app)
+        for text in ["Call time 09:00", "Dress code: All black", "Contact: Sarah"] {
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.waitForExistence(timeout: 5), text)
+        }
+        attach("Job brief shown on the shift", app: app)
+    }
+    @MainActor
     func testFaceIDLockCoversTheAppUntilUnlocked() {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-app-lock"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()

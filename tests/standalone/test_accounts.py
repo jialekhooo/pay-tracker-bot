@@ -627,3 +627,24 @@ def test_shift_extras_count_in_matching_survive_older_apps_and_can_be_cleared(se
     for bad in [0,-5,1.234]:
         data['shifts'][0]['extra']=bad
         assert write(setup,session,data,3).status_code==422
+
+
+def test_job_brief_syncs_survives_older_apps_and_can_be_cleared(setup):
+    session,_=login(setup)
+    data=document()
+    data['shifts'][0].update(callMinute=510,dressCode='All black',contact='Sarah 91234567')
+    assert write(setup,session,data).status_code==200
+    saved=setup.client.get('/v1/data',headers=headers(session)).json()
+    shift=saved['data']['shifts'][0]
+    assert (shift['callMinute'],shift['dressCode'],shift['contact'])==(510,'All black','Sarah 91234567')
+    older=copy.deepcopy(data)
+    for field in ('callMinute','dressCode','contact'): older['shifts'][0].pop(field)
+    assert write(setup,session,older,saved['revision']).status_code==200
+    saved=setup.client.get('/v1/data',headers=headers(session)).json()
+    assert saved['data']['shifts'][0]['dressCode']=='All black', 'an older app leaves it out and the server keeps it'
+    data['shifts'][0].update(callMinute=None,dressCode=None,contact=None)
+    assert write(setup,session,data,saved['revision']).status_code==200
+    saved=setup.client.get('/v1/data',headers=headers(session)).json()
+    assert saved['data']['shifts'][0].get('dressCode') is None and saved['data']['shifts'][0].get('callMinute') is None
+    data['shifts'][0]['callMinute']=1440
+    assert write(setup,session,data,saved['revision']).status_code==422

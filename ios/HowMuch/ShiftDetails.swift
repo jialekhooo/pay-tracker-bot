@@ -18,7 +18,7 @@ struct ShiftDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         Card {
                             HStack { Text("WORK PAYOUT").font(.caption.weight(.semibold)).tracking(1.3).foregroundStyle(Palette.muted); Spacer(); StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date()) }
-                            Text(money(shift.total, shift.currency)).font(.heroAmount).foregroundStyle(Palette.ink).minimumScaleFactor(0.6).lineLimit(1)
+                            Text(money(shift.total, shift.currency)).heroAmountFont().foregroundStyle(Palette.ink).minimumScaleFactor(0.6).lineLimit(1)
                             Text("\(PayEngine.rounded(shift.hours)) paid hours · \(shift.fixedPay == nil ? "Hourly" : "Fixed payout")").font(.subheadline).foregroundStyle(Palette.muted)
                             if let extra = shift.extra {
                                 Text("\(money(shift.pay, shift.currency)) pay + \(money(extra, shift.currency)) \(shift.extraNote ?? "extra")")
@@ -35,6 +35,9 @@ struct ShiftDetailView: View {
                             Label(shift.startDate.formatted(.dateTime.weekday(.wide).day().month(.wide).year()), systemImage: "calendar").font(.subheadline.weight(.semibold))
                             Label("\(Shift.clock(shift.startMinute))–\(Shift.clock(shift.endMinute))\(shift.endMinute <= shift.startMinute ? " (+1 day)" : "")", systemImage: "clock").font(.subheadline)
                             if !shift.location.isEmpty { Label(shift.location, systemImage: "mappin.and.ellipse").font(.subheadline) }
+                            if let call = shift.callMinute { Label("Call time \(Shift.clock(call))", systemImage: "alarm").font(.subheadline) }
+                            if let dress = shift.dressCode { Label("Dress code: \(dress)", systemImage: "tshirt").font(.subheadline) }
+                            if let person = shift.contact { Label("Contact: \(person)", systemImage: "person.crop.circle").font(.subheadline).textSelection(.enabled) }
                             if let due = shift.paymentDue { Divider(); LabeledContent("Payment due", value: displayDay(due)).font(.subheadline) }
                         }
                         if !shift.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

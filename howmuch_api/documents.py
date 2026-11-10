@@ -43,6 +43,10 @@ class WorkShift(BaseModel):
     # A bonus, allowance or tip on top of pay (1.1); not part of the pay-rule check.
     extra: Decimal | None=Field(default=None,gt=0,le=1000000,decimal_places=2)
     extraNote: str | None=Field(default=None,max_length=60)
+    # The job brief: when to report, what to wear and who to ask for.
+    callMinute: int | None=Field(default=None,ge=0,lt=1440)
+    dressCode: str | None=Field(default=None,max_length=120)
+    contact: str | None=Field(default=None,max_length=120)
     @property
     def total(self): return self.pay+(self.extra or 0)
     @model_validator(mode='after')
@@ -392,6 +396,9 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
         prior=prior_shifts.get(str(shift.id))
         if prior and 'extra' not in shift.model_fields_set and prior.get('extra') is not None:
             shift.extra=Decimal(str(prior['extra'])); shift.extraNote=prior.get('extraNote')
+        for field in ('callMinute','dressCode','contact'):
+            if prior and field not in shift.model_fields_set and prior.get(field) is not None:
+                setattr(shift,field,prior[field])
     if 'expenses' not in payload.data.model_fields_set:
         remaining={str(s.id) for s in payload.data.shifts}
         payload.data.expenses=[Claim.model_validate(c) for c in current['data'].get('expenses',[]) if str(c['shiftID']) in remaining] or None

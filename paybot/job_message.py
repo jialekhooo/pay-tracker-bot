@@ -34,6 +34,10 @@ class PastedJob:
     currency: str | None = None
     break_minutes: int | None = None
     break_paid: bool | None = None
+    # The job brief, when the message states it. Only shifts sent on to the HowMuch app keep it.
+    call_minute: int | None = None
+    dress_code: str | None = None
+    contact: str | None = None
     dates: list[JobDate] = field(default_factory=list)
     lump_sum: Decimal | None = None
     no_time: list[date] = field(default_factory=list)
@@ -124,14 +128,34 @@ _LABELS = {
                  "working hours", "hours", "shift", "shifts"),
     "break": ("break", "breaks", "lunch", "lunch break", "meal break"),
     "pay": ("pay", "rate", "pay rate", "salary", "wage", "wages", "remuneration", "payment"),
+    "call": ("reporting time", "report time", "call time"),
+    "dress": ("attire", "dress code", "dresscode"),
+    "contact": ("contact", "contact person", "contact no", "pic", "poc", "phone", "tel", "hp", "mobile"),
 }
 _LABEL_OF = {key: kind for kind, keys in _LABELS.items() for key in keys}
-# Contact numbers, attire and similar details are deliberately not used.
+# Other details like these are deliberately not used.
 _IGNORED_LABELS = frozenset((
-    "contact", "contact person", "contact no", "pic", "poc", "name", "phone", "tel", "hp", "mobile", "email",
-    "attire", "dress code", "dresscode", "remarks", "remark", "note", "notes", "requirements", "requirement",
-    "reporting time", "report time", "call time", "meal", "meals", "gender", "age", "pax", "headcount", "deadline",
+    "name", "email", "remarks", "remark", "note", "notes", "requirements", "requirement",
+    "meal", "meals", "gender", "age", "pax", "headcount", "deadline",
 ))
+BRIEF_TEXT_LIMIT = 120
+_CALL_TIME = re.compile(r"\b(\d{4}|\d{1,2}(?:[:.]\d{2})?)\s*(am|pm)?\b", re.IGNORECASE)
+
+
+def _call_time(value: str) -> tuple[int, bool] | None:
+    """One clock time, such as "8.30am" or "0830", and whether it was bare. "30 mins before" is not one."""
+    lower = value.lower()
+    if any(word in lower for word in ("before", "prior", "min", "hour", "hr")):
+        return None
+    match = _CALL_TIME.search(lower)
+    clock = _clock(match.group(1)) if match else None
+    if clock is None:
+        return None
+    if match.group(2) is None or clock.twenty_four:
+        return clock.hour * 60 + clock.minute, not clock.twenty_four
+    if not 1 <= clock.hour <= 12:
+        return None
+    return (clock.hour % 12 + (12 if match.group(2).lower() == "pm" else 0)) * 60 + clock.minute, False
 
 
 def _normalized(text: str) -> str:
@@ -429,9 +453,11 @@ def _resolve(start: _Clock, start_suffix: str | None, end: _Clock, end_suffix: s
         return None
     if start_pm is None and end_pm is None and not start.twenty_four and not end.twenty_four:
         # Plain "9-6" or "2-10": assume daytime work.
-        if start.hour < 7:
+        # Except "6-12", which would otherwise run 18:00 to the next noon.
+        if start.hour < 7 and end.hour != 12:
             first += 12 * 60
-        if last <= first and last + 12 * 60 < 24 * 60:
+        # "6-2" is 18:00 to 02:00 overnight, not 18:00 to 14:00.
+        if last <= first and last + 12 * 60 < 24 * 60 and last + 12 * 60 > first:
             last += 12 * 60
     if first == last or not (0 <= first < 1440 and 0 <= last < 1440):
         return None
@@ -508,6 +534,7 @@ def parse_job_message(text: str, today: date | None = None) -> PastedJob:
     items: list[_Item] = []
     flat: Decimal | None = None
     day_times: list[tuple[list[int], tuple[int, int]]] = []
+    call_is_bare = False
 
     for raw in _normalized(text[:MAXIMUM_LENGTH]).split("\n"):
         line = _LINE_EDGE.sub("", raw)
@@ -546,6 +573,17 @@ def parse_job_message(text: str, today: date | None = None) -> PastedJob:
                 role = role if role is not None else _clean(value)
                 continue
             if kind == "ignored":
+                continue
+            if kind == "call":
+                call = _call_time(value) if job.call_minute is None else None
+                if call is not None:
+                    job.call_minute, call_is_bare = call
+                continue
+            if kind == "dress":
+                job.dress_code = job.dress_code if job.dress_code is not None else value.strip()
+                continue
+            if kind == "contact":
+                job.contact = f"{job.contact} {value.strip()}" if job.contact else value.strip()
                 continue
             if kind == "break":
                 if job.break_minutes is None:
@@ -636,6 +674,12 @@ def parse_job_message(text: str, today: date | None = None) -> PastedJob:
         job.location = job.location[:1000]
     if job.event and len(job.event) > 120:
         job.event = job.event[:120]
+    # A bare "5.30" for a 6pm job means 17:30: the call comes before the start.
+    if call_is_bare and job.call_minute is not None and job.call_minute < 720 and job.dates \
+            and job.call_minute + 720 <= job.dates[0].start_minute:
+        job.call_minute += 720
+    job.dress_code = job.dress_code[:BRIEF_TEXT_LIMIT] if job.dress_code else None
+    job.contact = job.contact[:BRIEF_TEXT_LIMIT] if job.contact else None
     return job
 
 
@@ -672,6 +716,9 @@ def job_shifts(job: PastedJob, default_break_paid: bool = False) -> list[tuple[s
             location=job.location or "",
             rate_override=amount,
             pay_is_fixed=pay_is_fixed,
+            call_minute=job.call_minute,
+            dress_code=job.dress_code,
+            contact=job.contact,
         )
         if job.break_minutes is not None:
             paid = default_break_paid if job.break_paid is None else job.break_paid

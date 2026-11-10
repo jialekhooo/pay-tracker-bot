@@ -15,7 +15,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 import simplejson as json
 from fastapi import APIRouter, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from .auth import authenticated_account
 from .database import limit
 
@@ -80,7 +80,7 @@ async def unlink_account(request: Request, authorization: str | None = Header(de
 
 def require_bot(secret: str | None):
     expected = os.environ.get('HOWMUCH_BOT_SECRET', '')
-    if not expected or not secret or not hmac.compare_digest(secret, expected):
+    if not expected or not secret or not hmac.compare_digest(secret.encode(), expected.encode()):
         raise HTTPException(403, 'Not allowed.')
 
 
@@ -147,6 +147,17 @@ class BotShift(BaseModel):
     paidBreak: bool = False
     rate: Decimal | None = Field(default=None, ge=0, le=1000000)
     fixedPay: Decimal | None = Field(default=None, ge=0, le=1000000000)
+    # The job brief from a pasted job post.
+    callMinute: int | None = Field(default=None, ge=0, lt=1440)
+    dressCode: str | None = Field(default=None, max_length=120)
+    contact: str | None = Field(default=None, max_length=120)
+
+    @field_validator('event')
+    @classmethod
+    def event_has_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError('The event name is blank.')
+        return value
 
 
 class BotShifts(BotUser):
@@ -195,6 +206,9 @@ def make_shift(item: BotShift, data) -> dict:
              'paymentDue': due_date(item.day, event, data.get('shifts', [])).isoformat(), 'overtimeMultiplier': multiplier}
     if fixed:
         shift['fixedPay'] = money(item.fixedPay)
+    for key in ('callMinute', 'dressCode', 'contact'):
+        if getattr(item, key) is not None:
+            shift[key] = getattr(item, key)
     if threshold is not None:
         shift['overtimeAfter'] = threshold
     return shift
@@ -224,6 +238,10 @@ def add_shifts(request, account, items: list[BotShift]) -> dict:
     data = json.loads(json.dumps(current['data'], use_decimal=True), use_decimal=True)
     zone = ZoneInfo(current.get('timezone') or 'Asia/Singapore')
     added = [make_shift(item, data) for item in items]
+    # The app gives every shift of an event added together one due date, from the batch's last day.
+    for shift in added:
+        last = max(date.fromisoformat(s['day']) for s in added if s['event'].lower() == shift['event'].lower())
+        shift['paymentDue'] = due_date(last, shift['event'], data.get('shifts', [])).isoformat()
     clashes = []
     for shift in added:
         start, end = span(shift, zone)

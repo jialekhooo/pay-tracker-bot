@@ -27,6 +27,15 @@ def format_hours(hours: Decimal) -> str:
     return f"{round_money(hours).normalize():f}"
 
 
+def base_rate(pay: Decimal, hours: Decimal, config: RateConfig) -> Decimal:
+    """Recover the hourly rate that produced ``pay`` for ``hours``, undoing any overtime premium."""
+    threshold = config.overtime_after_hours
+    if threshold is None or hours <= threshold:
+        return pay / hours
+    paid_hours = threshold + (hours - threshold) * config.overtime_multiplier
+    return pay / paid_hours
+
+
 def calculate_pay(
     hours: float, event: str, config: RateConfig, rate_override: Decimal | None = None
 ) -> Decimal:

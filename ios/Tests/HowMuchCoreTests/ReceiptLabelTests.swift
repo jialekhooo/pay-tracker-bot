@@ -62,7 +62,41 @@ final class ReviewFixTests: XCTestCase {
     }
 }
 
+final class JobBriefTests: XCTestCase {
+    func testBriefSurvivesSavingCopyingAndClearing() throws {
+        var shift = try Shift(event: "Gala", day: "2026-11-02", startMinute: 540, endMinute: 1080, rate: 20)
+        shift.callMinute = 510; shift.dressCode = "All black"; shift.contact = "Sarah"
+        var data = TrackerData(); data.shifts = [shift]
+        let saved = try JSONDecoder().decode(TrackerData.self, from: JSONEncoder().encode(data))
+        XCTAssertEqual(saved.shifts[0], shift)
+        let series = try ShiftSeries.make(from: shift, every: 7, count: 2)
+        XCTAssertEqual(series[1].dressCode, "All black"); XCTAssertEqual(series[1].callMinute, 510)
+        shift.dressCode = nil
+        let cleared = try JSONSerialization.jsonObject(with: JSONEncoder().encode(shift)) as? [String: Any]
+        XCTAssertTrue(cleared?["dressCode"] is NSNull) // written as null, or the server would keep the old value
+        data.shifts[0].callMinute = 1440
+        XCTAssertThrowsError(try data.validate())
+    }
+}
+
 final class FieldMergeTests: XCTestCase {
+    func testTwoDevicesAddingAtTheRollingCapMergeInsteadOfConflicting() throws {
+        var base = TrackerData(); base.preferences = AppPreferences()
+        var live = LiveShiftPreferences()
+        for _ in 0..<300 { live.confirm(UUID()) }
+        base.preferences?.liveShift = live
+        let start = Shift.date("2024-01-01")!
+        base.preferences?.blockedDays = (0..<399).map { Shift.dayString(TrackerCalendar.calendar.date(byAdding: .day, value: $0, to: start)!) }
+        var local = base; local.preferences?.liveShift?.confirm(UUID()); local.preferences?.blockedDays?.append("2026-12-30")
+        var remote = base; remote.preferences?.liveShift?.confirm(UUID()); remote.preferences?.blockedDays?.append("2026-12-31")
+        let merged = try AccountMerge.merge(base: base, local: local, remote: remote)
+        XCTAssertEqual(merged.preferences?.liveShift?.confirmedFinishes?.count, 300)
+        XCTAssertTrue(merged.preferences?.liveShift?.confirmed.contains(local.preferences!.liveShift!.confirmedFinishes!.last!) == true)
+        XCTAssertTrue(merged.preferences?.liveShift?.confirmed.contains(remote.preferences!.liveShift!.confirmedFinishes!.last!) == true)
+        XCTAssertEqual(merged.preferences?.blockedDays?.count, 400)
+        XCTAssertTrue(merged.preferences?.blocked.isSuperset(of: ["2026-12-30", "2026-12-31"]) == true)
+    }
+
     func testPaidOnTheServerAndANoteEditHereBothSurvive() throws {
         let shift = try Shift(event: "Roadshow", location: "ION", day: "2026-11-02", startMinute: 540, endMinute: 1080, rate: 20)
         var base = TrackerData(); base.shifts = [shift]
