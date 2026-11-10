@@ -60,6 +60,8 @@ def main():
                             'com.apple.developer.team-identifier': TEAM, 'get-task-allow': False}
         widget_entitlements = scratch/'widget-entitlements.plist'
         widget_entitlements.write_bytes(plistlib.dumps(widget_requested))
+        # iCloud Drive (a synced Desktop) tags files with Finder info, which codesign refuses as "detritus".
+        run('xattr', '-cr', ARCHIVE/'Products/Applications/HowMuch.app')
         run('codesign', '--force', '--sign', '-', '--entitlements', widget_entitlements,
             ARCHIVE/'Products/Applications/HowMuch.app/PlugIns/HowMuchWidgets.appex')
         share_requested = {'com.apple.security.application-groups': [WIDGET_GROUP],
