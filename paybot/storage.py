@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS shifts (
 
 CREATE INDEX IF NOT EXISTS idx_shifts_user_day ON shifts (user_id, day);
 
+CREATE TABLE IF NOT EXISTS shift_counters (
+    user_id INTEGER PRIMARY KEY,
+    last_ref INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS cab_claims (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -298,10 +303,24 @@ class Storage:
         paid: bool = False,
         pay_is_fixed: bool = False,
     ) -> int:
+        # Numbers are never reused: Undo and Mark paid buttons hold them for a day after a delete.
         ref = int(
             self._conn.execute(
-                "SELECT COALESCE(MAX(ref), 0) + 1 FROM shifts WHERE user_id = ?", (user_id,)
+                """
+                SELECT MAX(
+                    COALESCE((SELECT MAX(ref) FROM shifts WHERE user_id = ?), 0),
+                    COALESCE((SELECT last_ref FROM shift_counters WHERE user_id = ?), 0)
+                ) + 1
+                """,
+                (user_id, user_id),
             ).fetchone()[0]
+        )
+        self._conn.execute(
+            """
+            INSERT INTO shift_counters (user_id, last_ref) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET last_ref = excluded.last_ref
+            """,
+            (user_id, ref),
         )
         self._conn.execute(
             """

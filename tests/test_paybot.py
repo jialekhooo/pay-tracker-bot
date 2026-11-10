@@ -1788,6 +1788,10 @@ class _FakeUpdate:
         self.message = _FakeMessage()
         self.effective_user = type("U", (), {"id": user_id})()
 
+    @property
+    def effective_message(self):
+        return self.message
+
 
 class _FakeContext:
     def __init__(self, storage: Storage, args=None):
@@ -2191,3 +2195,117 @@ def test_webapp_settings_reports_has_custom_avatar(tmp_path):
     after = client.get("/webapp/api/settings", headers=_auth_headers("TESTTOKEN"))
     assert after.json()["has_custom_avatar"] is True
     storage.close()
+
+
+def test_parse_shift_reads_bare_range_as_daytime():
+    shift = parse_shift("Office today 9-5", today=TODAY)
+    assert (shift.start, shift.end, shift.hours) == (time(9, 0), time(17, 0), 8.0)
+    promo = parse_shift("Promo 15/8 10-4 25/h", today=TODAY)
+    assert (promo.start, promo.end, promo.hours) == (time(10, 0), time(16, 0), 6.0)
+    mixed = parse_shift("15/8 9am-5 Promo", today=TODAY)
+    assert (mixed.start, mixed.end) == (time(9, 0), time(17, 0))
+    night = parse_shift("Bar 15/8 22-2", today=TODAY)
+    assert (night.start, night.end, night.hours) == (time(22, 0), time(2, 0), 4.0)
+
+
+def test_parse_shift_accepts_leap_day_without_year():
+    from paybot.parsing import parse_date
+
+    assert parse_date("29/2", date(2028, 1, 10)) == date(2028, 2, 29)
+    with pytest.raises(ParseError):
+        parse_date("29/2", date(2026, 1, 10))
+
+
+def test_edit_record_retime_keeps_base_rate_under_overtime(tmp_path):
+    storage = Storage(tmp_path / "overtime.sqlite3")
+    config = RateConfig(Decimal("15"), {}, overtime_after_hours=Decimal("8"))
+    storage.save_config(1, config)
+    storage.add_shift(
+        1, date(2026, 8, 15), time(9, 0), time(19, 0), "Wedding gig",
+        Decimal("0"), False, Decimal("10"), calculate_pay(10.0, "Wedding gig", config), "SGD",
+    )
+    record = storage.find_shifts(1, "Wedding gig")[0]
+    assert record.pay == Decimal("165.00")
+
+    same = _edit_record(record, "time", "9am-7pm", config)
+    assert same["pay"] == "165.00"
+    shorter = _edit_record(record, "time", "9-5", config)
+    assert (shorter["hours"], shorter["pay"]) == ("8", "120.00")
+    storage.close()
+
+
+def test_webapp_update_shift_keeps_base_rate_under_overtime(tmp_path):
+    storage = Storage(tmp_path / "webapp.sqlite3")
+    config = RateConfig(Decimal("15"), {}, overtime_after_hours=Decimal("8"))
+    storage.save_config(42, config)
+    shift_id = storage.add_shift(
+        42, date(2026, 8, 18), time(9, 0), time(19, 0), "Test gig",
+        Decimal("0"), False, Decimal("10"), Decimal("165"), "SGD",
+    )
+    client = _webapp_client(storage)
+    response = client.patch(
+        f"/webapp/api/shifts/{shift_id}",
+        headers=_auth_headers("TESTTOKEN"),
+        json={"end": "19:00"},
+    )
+    assert response.status_code == 200
+    assert response.json()["pay"] == "165.00"
+    storage.close()
+
+
+def test_bot_undo_restores_paid_state(tmp_path):
+    import asyncio
+
+    storage = Storage(tmp_path / "bot.sqlite3")
+    shift_id = storage.add_shift(
+        1, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+        payment_due=date(2026, 9, 15), paid=True,
+    )
+
+    async def scenario():
+        _, context = await _run_delete(storage, 1, [shift_id])
+        await undo(_FakeUpdate(1), context)
+        restored = storage.list_shifts(1)
+        assert len(restored) == 1
+        assert restored[0].paid is True
+        assert restored[0].payment_due == date(2026, 9, 15)
+
+    asyncio.run(scenario())
+    storage.close()
+
+
+def test_parse_shift_keeps_early_bare_starts_as_typed():
+    for text, start, end in (
+        ("Setup 15/8 6-12", time(6, 0), time(12, 0)),
+        ("Setup 15/8 5-9", time(5, 0), time(9, 0)),
+        ("Setup 15/8 0-6", time(0, 0), time(6, 0)),
+    ):
+        shift = parse_shift(text, today=TODAY)
+        assert (shift.start, shift.end) == (start, end), text
+
+
+def test_shift_numbers_are_not_reused_after_delete(tmp_path):
+    path = tmp_path / "refs.sqlite3"
+    storage = Storage(path)
+
+    def add(user=1):
+        return storage.add_shift(
+            user, date(2026, 8, 30), time(9, 0), time(17, 0), "Gig",
+            Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+        )
+
+    first, second = add(), add()
+    assert (first, second) == (1, 2)
+    assert storage.delete_shift(1, second)
+    assert add() == 3
+    assert add(user=2) == 1, "each person has their own numbers"
+    storage.close()
+
+    reopened = Storage(path)
+    assert reopened.delete_shift(1, 3)
+    assert reopened.add_shift(
+        1, date(2026, 8, 31), time(9, 0), time(17, 0), "Gig",
+        Decimal("0"), False, Decimal("8"), Decimal("120"), "SGD",
+    ) == 4
+    reopened.close()
