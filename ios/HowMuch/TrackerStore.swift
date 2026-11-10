@@ -56,7 +56,7 @@ final class TrackerStore: ObservableObject {
         UserDefaults.standard.set(value, forKey: "petUnlocks.\(accountID)")
     }
     func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, developer: developer, unlocked: petUnlocks, currency: data.rules.currency, bonusCoins: helloCoins) }
-    /// Coins from saying hi to friends and being said hi to.
+    /// Coins kept on the server: saying hi to friends, being said hi to, and gift codes.
     @Published private(set) var helloCoins = 0
     func setHelloCoins(_ value: Int?) {
         guard let value, value != helloCoins else { return }

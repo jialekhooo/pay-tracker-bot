@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 from .auth import authenticated_account
 from .database import limit
+from .pet_codes import gift_coins
 
 router = APIRouter()
 page = APIRouter()
@@ -114,12 +115,13 @@ def today_for(db, account_id) -> str:
         return datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat()
 
 
-def hello_coins(db, account_id) -> int:
-    """Coins from hellos: sent and received, HELLO_COINS each."""
+def bonus_coins(db, account_id) -> int:
+    """Coins kept on the server: gift codes, plus hellos sent and received at HELLO_COINS each.
+    Sent to the app as helloCoins, so builds from before coin codes count them too."""
     db.executescript(SCHEMA)
     sent = db.execute('SELECT COUNT(*) FROM pet_hellos WHERE from_account=?', (account_id,)).fetchone()[0]
     got = db.execute('SELECT COUNT(*) FROM pet_hellos WHERE to_account=?', (account_id,)).fetchone()[0]
-    return HELLO_COINS * (sent + got)
+    return HELLO_COINS * (sent + got) + gift_coins(db, account_id)
 
 
 def card_of(db, account_id) -> dict:
@@ -176,7 +178,7 @@ def overview(request, db, me):
     outgoing = [person(db, me, r['to_account']) for r in db.execute('SELECT to_account FROM friend_requests WHERE from_account=? ORDER BY created', (me,))]
     base = str(request.base_url).rstrip('/')
     return {'code': f'PENNY-{code}', 'link': f'{base}/friend/{code}', 'friends': friends, 'incoming': incoming,
-            'outgoing': outgoing, 'helloCoins': hello_coins(db, me)}
+            'outgoing': outgoing, 'helloCoins': bonus_coins(db, me)}
 
 
 @router.get('/friends')
@@ -271,7 +273,7 @@ async def say_hello(code: str, request: Request, authorization: str | None = Hea
         db.execute('INSERT OR IGNORE INTO notification_jobs(job_id,account_id,kind,shift_id,fire_at,expires,title,body) VALUES(?,?,?,?,?,?,?,?)',
                    (job, other, 'hello', '', now, now + 6 * 3600, f'👋 {who} said hi!',
                     f"{mine.get('petName') or 'Penny'} visited {theirs.get('petName') or 'Penny'}. You both earned {HELLO_COINS} coins."))
-    return {'friend': person(db, me, other), 'helloCoins': hello_coins(db, me)}
+    return {'friend': person(db, me, other), 'helloCoins': bonus_coins(db, me)}
 
 
 @page.get('/friend/{code}', response_class=HTMLResponse)

@@ -33,7 +33,7 @@ struct CloudEnvelope: Codable {
     let developer: Bool?
     /// Penny items unlocked with gift codes.
     let petUnlocks: [String]?
-    /// Coins from hellos with friends.
+    /// Coins kept on the server: hellos with friends and gift codes.
     let helloCoins: Int?
 }
 
@@ -156,11 +156,14 @@ private enum PetCodesUITestFixture {
         guard CommandLine.arguments.contains("--ui-test-pet-codes"), let path = request.url?.path, path.hasPrefix("/v1/pet/") else { return nil }
         let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
         if path == "/v1/pet/redeem" {
+            if (body["code"] as? String)?.uppercased() == "COINS100" {
+                return try JSONSerialization.data(withJSONObject: ["items": [], "coins": 100, "unlocked": [], "helloCoins": 100])
+            }
             guard (body["code"] as? String)?.uppercased() == "LAUNCH2026" else { throw AccountHTTPError(status: 404, message: "That code isn't valid. Check it and try again.") }
             return try JSONSerialization.data(withJSONObject: ["items": ["halo", "fireworks"], "unlocked": ["fireworks", "halo"]])
         }
         if path == "/v1/pet/codes", request.httpMethod == "POST" {
-            let code: [String: Any] = ["code": (body["code"] as? String)?.uppercased() ?? "PENNY-TEST-CODE", "items": body["items"] ?? [], "label": body["label"] ?? "",
+            let code: [String: Any] = ["code": (body["code"] as? String)?.uppercased() ?? "PENNY-TEST-CODE", "items": body["items"] ?? [], "coins": body["coins"] ?? 0, "label": body["label"] ?? "",
                                        "maxUses": body["max_uses"] ?? 1, "uses": 0, "expires": 0, "created": 0, "disabled": false]
             codes.insert(code, at: 0)
             return try JSONSerialization.data(withJSONObject: code)

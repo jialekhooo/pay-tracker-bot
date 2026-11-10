@@ -841,6 +841,42 @@ final class HowMuchUITests: XCTestCase {
         attach("Developer deleted a revoked gift code", app: dev)
     }
     @MainActor
+    func testCoinCodesAddCoinsToSpendAndDevelopersMakeThem() {
+        let app = XCUIApplication()
+        // Start from no server-side coins, however earlier runs left this simulator.
+        app.launchArguments = ["--preview", "--ui-test-pet-codes", "-helloCoins.00000000-0000-4000-8000-000000000001", "0"]
+        app.launch()
+        let card = app.buttons["pet.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()
+        let balance = app.navigationBars.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", " coins")).firstMatch
+        XCTAssertTrue(balance.waitForExistence(timeout: 5))
+        let before = Int(balance.label.split(separator: " ")[0]) ?? -1
+        let redeem = app.buttons["pet.code.redeem"]
+        reveal(redeem, in: app); redeem.tap()
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5)); field.typeText("coins100")
+        app.alerts.buttons["Redeem"].tap()
+        XCTAssertTrue(app.alerts.staticTexts["Added 100 coins! Spend them in the shop."].waitForExistence(timeout: 5))
+        attach("Coin code redeemed", app: app)
+        app.alerts.buttons["OK"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "\(before + 100) coins"), evaluatedWith: balance)
+        waitForExpectations(timeout: 5)
+        app.terminate()
+
+        let dev = XCUIApplication(); dev.launchArguments = ["--preview", "--ui-test-pet-codes", "--ui-test-developer"]; dev.launch()
+        XCTAssertTrue(dev.buttons["pet.card"].waitForExistence(timeout: 10)); dev.buttons["pet.card"].tap()
+        let make = dev.buttons["pet.code.make"]
+        reveal(make, in: dev); make.tap()
+        let makeCode = dev.buttons["code.make"]
+        let hundred = dev.buttons["code.coins.100"]
+        XCTAssertTrue(hundred.waitForExistence(timeout: 5)); hundred.tap()
+        attach("Choosing coins for a gift code", app: dev)
+        reveal(makeCode, in: dev); XCTAssertTrue(makeCode.isEnabled); makeCode.tap()
+        XCTAssertTrue(dev.staticTexts["code.new"].waitForExistence(timeout: 5))
+        XCTAssertTrue(dev.staticTexts["100 coins"].waitForExistence(timeout: 5))
+        attach("Developer made a coin code", app: dev)
+    }
+    @MainActor
     func testPetCardOpensItsPage() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         let card = app.buttons["pet.card"]

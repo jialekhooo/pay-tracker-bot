@@ -938,9 +938,8 @@ struct PetDetailView: View {
         do {
             let body = try JSONSerialization.data(withJSONObject: ["code": code])
             let result = try JSONDecoder().decode(RedeemedCode.self, from: await auth.api.request("/v1/pet/redeem", method: "POST", body: body))
-            store.setPetUnlocks(result.unlocked)
-            let names = result.items.compactMap { PetItem.named($0)?.name }
-            notice = names.isEmpty ? "Code redeemed." : "Unlocked " + ListFormatter.localizedString(byJoining: names) + (names.count > 1 ? "! Find them in the wardrobe." : "! Find it in the wardrobe.")
+            store.setPetUnlocks(result.unlocked); store.setHelloCoins(result.helloCoins)
+            notice = result.notice
             if let first = result.items.compactMap({ PetItem.named($0) }).first { slot = first.slot }
             purchased += 1; giftCode = ""
         } catch { notice = error.localizedDescription }
@@ -1143,26 +1142,44 @@ struct PetDetailView: View {
     }
 }
 
-private struct RedeemedCode: Decodable { let items: [String]; let unlocked: [String] }
+private struct RedeemedCode: Decodable {
+    let items: [String]
+    let coins: Int?
+    let unlocked: [String]
+    let helloCoins: Int?
+
+    var notice: String {
+        let names = items.compactMap { PetItem.named($0)?.name }
+        let list = ListFormatter.localizedString(byJoining: names)
+        let added = coins ?? 0
+        if added > 0 { return names.isEmpty ? "Added \(added) coins! Spend them in the shop." : "Added \(added) coins and unlocked \(list)!" }
+        return names.isEmpty ? "Code redeemed." : "Unlocked \(list)" + (names.count > 1 ? "! Find them in the wardrobe." : "! Find it in the wardrobe.")
+    }
+}
 
 struct PetGiftCode: Decodable, Identifiable {
     let code: String
     let items: [String]
+    let coins: Int?
     let label: String
     let maxUses: Int
     let uses: Int
     let expires: Int
     let disabled: Bool
     var id: String { code }
-    var itemNames: String { ListFormatter.localizedString(byJoining: items.map { PetItem.named($0)?.name ?? $0 }) }
-    var shareText: String { "Use the code \(code) in HowMuch (Penny → Redeem a gift code) to unlock \(itemNames)." }
+    var rewards: String {
+        let money = (coins ?? 0) > 0 ? ["\(coins ?? 0) coins"] : []
+        return ListFormatter.localizedString(byJoining: money + items.map { PetItem.named($0)?.name ?? $0 })
+    }
+    var shareText: String { "Use the code \(code) in HowMuch (Penny → Redeem a gift code) to get \(rewards)." }
 }
 private struct PetGiftCodes: Decodable { let codes: [PetGiftCode] }
 
-/// Developers only: make codes that unlock wardrobe items, then share them.
+/// Developers only: make codes that give coins or unlock wardrobe items, then share them.
 struct PetCodesView: View {
     @EnvironmentObject private var auth: AppleAccountStore
     @State private var selected: Set<String> = []
+    @State private var coins = 0
     @State private var uses = 1
     @State private var days = 0
     @State private var label = ""
@@ -1175,9 +1192,10 @@ struct PetCodesView: View {
     var body: some View {
         AppForm {
             Section {
-                Text("Choose up to 12 items. Items marked ✦ are specials that only a code can unlock.")
+                HStack(spacing: 6) { ForEach([50, 100, 200, 500, 1000], id: \.self) { coinChip($0) } }.padding(.vertical, 4)
+                Text("Pick an amount of coins, up to 12 items, or both. Items marked ✦ are specials that only a code can unlock.")
                     .font(.caption).foregroundStyle(Palette.muted)
-            } header: { FormHeader("What the code unlocks · \(selected.count) chosen") }
+            } header: { FormHeader("What the code gives · \(coins > 0 ? "\(coins) coins, " : "")\(counted(selected.count, "item"))") }
             ForEach(PetSlot.allCases, id: \.self) { slot in
                 Section(slot.title) {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
@@ -1191,14 +1209,14 @@ struct PetCodesView: View {
                 TextField("Note for you (optional)", text: $label)
                 TextField("Custom code, e.g. LAUNCH2026 (optional)", text: $custom).textInputAutocapitalization(.characters).autocorrectionDisabled()
                     .accessibilityIdentifier("code.custom")
-                Button(busy ? "Making…" : "Make code") { Task { await make() } }.primaryButton().disabled(busy || selected.isEmpty)
+                Button(busy ? "Making…" : "Make code") { Task { await make() } }.primaryButton().disabled(busy || (selected.isEmpty && coins == 0))
                     .listRowBackground(Color.clear).listRowInsets(EdgeInsets()).accessibilityIdentifier("code.make")
                 if !message.isEmpty { Text(message).font(.caption).foregroundStyle(.orange) }
             }
             if let made {
                 Section(styled: "New code") {
                     Text(made.code).font(.system(.title2, design: .monospaced, weight: .bold)).textSelection(.enabled).accessibilityIdentifier("code.new")
-                    Text(made.itemNames).font(.caption).foregroundStyle(Palette.muted)
+                    Text(made.rewards).font(.caption).foregroundStyle(Palette.muted)
                     Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = made.code }.rowAction()
                     ShareLink(item: made.shareText) { Label("Share code", systemImage: "square.and.arrow.up") }
                 }
@@ -1214,7 +1232,7 @@ struct PetCodesView: View {
                             Text(code.disabled ? "Revoked" : "\(code.uses)/\(code.maxUses) used").font(.caption.weight(.semibold))
                                 .foregroundStyle(code.disabled ? Palette.muted : Palette.teal).accessibilityIdentifier("code.status." + code.code)
                         }
-                        Text([code.label, code.itemNames].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted)
+                        Text([code.label, code.rewards].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted)
                         if code.expires > 0 { Text("Expires " + Date(timeIntervalSince1970: TimeInterval(code.expires)).formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(Palette.muted) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
@@ -1233,6 +1251,19 @@ struct PetCodesView: View {
         }
         .detailStyle("Gift codes")
         .task { await load() }
+    }
+
+    /// Tap an amount to put that many coins in the code, tap it again for none.
+    private func coinChip(_ amount: Int) -> some View {
+        let chosen = coins == amount
+        return Button { coins = chosen ? 0 : amount } label: {
+            Text("\(amount)").font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                .foregroundStyle(chosen ? Color.white : Palette.ink)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(chosen ? Palette.accent : Palette.mint.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }.buttonStyle(.plain).accessibilityIdentifier("code.coins.\(amount)")
+            .accessibilityLabel("\(amount) coins").accessibilityAddTraits(chosen ? .isSelected : [])
     }
 
     /// A compact tap-to-choose chip for one wardrobe item.
@@ -1260,7 +1291,7 @@ struct PetCodesView: View {
 
     private func make() async {
         busy = true; defer { busy = false }; message = ""
-        var payload: [String: Any] = ["items": PetItem.catalog.map(\.id).filter(selected.contains), "max_uses": uses, "days": days, "label": label]
+        var payload: [String: Any] = ["items": PetItem.catalog.map(\.id).filter(selected.contains), "coins": coins, "max_uses": uses, "days": days, "label": label]
         let trimmed = custom.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { payload["code"] = trimmed }
         do {

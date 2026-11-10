@@ -1,6 +1,6 @@
-"""Penny gift codes: developers make codes that unlock wardrobe items; anyone signed in can redeem one.
+"""Penny gift codes: developers make codes that give coins or unlock wardrobe items; anyone signed in can redeem one.
 
-What an account has unlocked lives on the server (not in the editable account document), so it can't be
+What an account has unlocked, and the coins from codes, live on the server (not in the editable account document), so it can't be
 typed in by hand. Codes are short, readable and rate limited; each account can use a code once."""
 from __future__ import annotations
 
@@ -18,24 +18,32 @@ from .database import limit
 router = APIRouter(prefix='/pet')
 ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # no 0/O or 1/I
 ITEM = re.compile(r'[a-z0-9-]{1,40}')
+MAX_COINS = 5000
 CODE = re.compile(r'[A-Z0-9-]{4,24}')
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pet_codes (
  code TEXT PRIMARY KEY, items TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', max_uses INTEGER NOT NULL,
  uses INTEGER NOT NULL DEFAULT 0, expires INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL,
- created INTEGER NOT NULL, disabled INTEGER NOT NULL DEFAULT 0
+ created INTEGER NOT NULL, disabled INTEGER NOT NULL DEFAULT 0, coins INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS pet_redemptions (
  account_id TEXT NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE, code TEXT NOT NULL,
- items TEXT NOT NULL, redeemed INTEGER NOT NULL, PRIMARY KEY(account_id, code)
+ items TEXT NOT NULL, redeemed INTEGER NOT NULL, coins INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(account_id, code)
 );
 """
 
 
+def ensure_schema(db):
+    db.executescript(SCHEMA)
+    for table in ('pet_codes', 'pet_redemptions'):  # tables made before codes could give coins
+        if 'coins' not in {row['name'] for row in db.execute(f'PRAGMA table_info({table})')}:
+            db.execute(f'ALTER TABLE {table} ADD COLUMN coins INTEGER NOT NULL DEFAULT 0')
+
+
 def db_for(request):
     db = request.app.state.storage._conn
-    db.executescript(SCHEMA)
+    ensure_schema(db)
     return db
 
 
@@ -45,11 +53,17 @@ def normalized(code: str) -> str:
 
 def unlocks(db, account_id) -> list[str]:
     """Every item an account has unlocked with codes."""
-    db.executescript(SCHEMA)
+    ensure_schema(db)
     items = set()
     for row in db.execute('SELECT items FROM pet_redemptions WHERE account_id=?', (account_id,)):
         items.update(json.loads(row['items']))
     return sorted(items)
+
+
+def gift_coins(db, account_id) -> int:
+    """Coins an account has received from codes. Kept per redemption, so deleting a code never takes them back."""
+    ensure_schema(db)
+    return db.execute('SELECT COALESCE(SUM(coins),0) FROM pet_redemptions WHERE account_id=?', (account_id,)).fetchone()[0]
 
 
 def require_developer(request, authorization):
@@ -60,12 +74,13 @@ def require_developer(request, authorization):
 
 
 def public(row):
-    return {'code': row['code'], 'items': json.loads(row['items']), 'label': row['label'], 'maxUses': row['max_uses'],
+    return {'code': row['code'], 'items': json.loads(row['items']), 'coins': row['coins'], 'label': row['label'], 'maxUses': row['max_uses'],
             'uses': row['uses'], 'expires': row['expires'], 'created': row['created'], 'disabled': bool(row['disabled'])}
 
 
 class NewCode(BaseModel):
-    items: list[str] = Field(min_length=1, max_length=12)
+    items: list[str] = Field(default_factory=list, max_length=12)
+    coins: int = Field(default=0, ge=0, le=MAX_COINS)
     max_uses: int = Field(default=1, ge=1, le=10000)
     days: int = Field(default=0, ge=0, le=365)  # 0: never expires
     label: str = Field(default='', max_length=60)
@@ -78,6 +93,8 @@ async def create_code(payload: NewCode, request: Request, authorization: str | N
     items = list(dict.fromkeys(item.strip().lower() for item in payload.items))
     if not all(ITEM.fullmatch(item) for item in items):
         raise HTTPException(400, 'Choose items from the wardrobe.')
+    if not items and not payload.coins:
+        raise HTTPException(400, 'Choose coins or at least one item.')
     db = db_for(request)
     custom = normalized(payload.code) if payload.code else ''
     if custom and not CODE.fullmatch(custom):
@@ -87,8 +104,8 @@ async def create_code(payload: NewCode, request: Request, authorization: str | N
         code = custom or 'PENNY-' + ''.join(secrets.choice(ALPHABET) for _ in range(4)) + '-' + ''.join(secrets.choice(ALPHABET) for _ in range(4))
         try:
             with db:
-                db.execute('INSERT INTO pet_codes(code,items,label,max_uses,expires,created_by,created) VALUES(?,?,?,?,?,?,?)',
-                           (code, json.dumps(items), payload.label.strip(), payload.max_uses,
+                db.execute('INSERT INTO pet_codes(code,items,coins,label,max_uses,expires,created_by,created) VALUES(?,?,?,?,?,?,?,?)',
+                           (code, json.dumps(items), payload.coins, payload.label.strip(), payload.max_uses,
                             now + payload.days * 86400 if payload.days else 0, account['account_id'], now))
             return public(db.execute('SELECT * FROM pet_codes WHERE code=?', (code,)).fetchone())
         except Exception as error:  # sqlite3.IntegrityError: the code already exists
@@ -149,5 +166,8 @@ async def redeem(payload: Redeem, request: Request, authorization: str | None = 
             raise HTTPException(410, 'This code has expired.')
         if not db.execute('UPDATE pet_codes SET uses=uses+1 WHERE code=? AND uses<max_uses', (code,)).rowcount:
             raise HTTPException(410, 'This code has already been used up.')
-        db.execute('INSERT INTO pet_redemptions VALUES(?,?,?,?)', (account['account_id'], code, row['items'], now))
-    return {'items': json.loads(row['items']), 'unlocked': unlocks(db, account['account_id'])}
+        db.execute('INSERT INTO pet_redemptions(account_id,code,items,coins,redeemed) VALUES(?,?,?,?,?)',
+                   (account['account_id'], code, row['items'], row['coins'], now))
+    from .friends import bonus_coins
+    return {'items': json.loads(row['items']), 'coins': row['coins'], 'unlocked': unlocks(db, account['account_id']),
+            'helloCoins': bonus_coins(db, account['account_id'])}
