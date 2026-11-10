@@ -210,6 +210,7 @@ Build 69: Job messages keep every date in "Sat 21 & Sun 22 Nov", drop emoji from
 Build 70: Full backups are a ZIP that includes receipt photos. Alerts for friend requests and acceptances, and a failed friend removal can be retried. Availability shows free time between two bookings. Job messages keep event and venue aligned after weekday words, and "19th, 21st:" no longer adds the days between.
 Build 71: Gift codes can give coins as well as items, to spend in Penny's shop.
 Build 72: Pets can visit friends. Send your pet to a friend's home for up to 6 hours, give visiting pets a treat so you both earn coins, and get a postcard when yours comes home.
+Build 73: A job brief on each shift (call time, dress code and contact person), read from pasted job posts too. Money and titles grow with the iPhone's text size. Eggs can buy the party hat and bow tie. Lock Screen shift cards come back after the app closes one, and syncing at the finish-time and blocked-day limits no longer asks you to choose a version.
 
 ### Review fixes — 10 November 2026
 
