@@ -351,3 +351,15 @@ Widget preview pay/location controls now use AppStorage keys scoped to the curre
 Native tests passed (/tmp/howmuch29-ui.log; Test-HowMuch-2026.11.05_10-52-41-+0800.xcresult), verifying both preview switches persist after leaving/reopening, process relaunch, and saving the opposite values; notification delivery has one status and no repeated registration text. Screenshots build29-widget-preferences.png/build29-notification-delivery.png saved and inspected. Release archive/export verifies signed IPA, primary/notification H icons, WidgetKit/app-group profiles, Share extension and Live Activity support (/tmp/howmuch29-package.log). Upload in progress /tmp/howmuch29-upload.log.
 
 Build 29 upload succeeded 5 November 2026 at 10:58 SGT; App Store Connect 4e6b6ef3-4990-4452-9372-d2debf705e90. Saved test notes, assigned existing Internal Beta (2 testers) and Friends Beta (3 testers), automatically notify selected. iOS Builds confirms Testing with both groups and 4 invitations. Proof build29-groups.jpg/build29-testing.jpg. No membership/public-link changes or older-build withdrawals; no email delivery/acceptance claim. Local fixes remain uncommitted; baseline origin sync was verified before edits.
+
+## Review fixes — 10 November 2026
+
+Implemented friend removal failure/retry, in-flight friend action guards, request/acceptance push alerts, middle-of-day availability gaps and receipt-inclusive ZIP backup/restore. Existing untracked output/ assets were left untouched.
+
+Verification:
+- Swift core: 127 tests passed (`/tmp/howmuch-review-fixes-core.log`). Includes ZIP byte/document round trips, complete receipt-reference mapping, missing photos, corruption/truncation, unexpected paths and independent system `unzip -t` validation; overlapping bookings and the 10am–6pm availability gap are covered.
+- Full Python suite: 409 tests passed (`/tmp/howmuch-review-fixes-final-python.log`). Friends was rechecked after making new request delivery IDs unique, including their APNs UUID prefix (`/tmp/howmuch-review-fixes-friends-final.log`, 7 passed). Tests include private encrypted restore uploads beyond 40 photos, immutable IDs, quota/format/authentication checks, request notification deduplication/cancellation and mocked APNs recipient/payload delivery.
+- Native simulator: `testFailedFriendRemovalStaysOpenAndCanRetry` and `testFriendsVisitPetsAndSayHiOnceADay` passed (`/tmp/howmuch-review-fixes-ui.log`). `testBackupAndCalendarButtonsOpenSystemPickers` passed (`/tmp/howmuch-review-fixes-backup-ui.log`); the export sheet displayed the howmuch-backup ZIP filename.
+- Final simulator app build succeeded (`/tmp/howmuch-review-fixes-final-build.log`); `git diff --check` passed.
+
+Limits: no live APNs notification was sent and no production account receipts were exported or restored. Receipt archive content/mapping and authenticated storage were tested separately; live account restore on a physical device remains a release check. No backend deployment, TestFlight upload or release assignment was performed for these changes.

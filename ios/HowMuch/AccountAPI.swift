@@ -192,6 +192,7 @@ enum FriendsUITestFixture {
     static var friends: [[String: Any]] = [["code": "PENNY-SAMSAM", "card": card("Mochi", "Sam", hat: "party-hat"), "saidHiToday": false, "theySaidHiToday": true]]
     static var incoming: [[String: Any]] = [["code": "PENNY-ALEXAL", "card": card("Bean", "Alex", hat: "beanie"), "saidHiToday": false, "theySaidHiToday": false]]
     static var coins = 0
+    static var failedRemoval = false
     static func response(for request: URLRequest) throws -> Data? {
         guard CommandLine.arguments.contains("--ui-test-friends"), let path = request.url?.path, path.hasPrefix("/v1/friends") else { return nil }
         if path.hasSuffix("/hello"), let index = friends.firstIndex(where: { path.contains(($0["code"] as! String)) }) {
@@ -204,7 +205,13 @@ enum FriendsUITestFixture {
             if let index = incoming.firstIndex(where: { $0["code"] as? String == body["code"] as? String }) { friends.append(incoming.remove(at: index)) }
             else { throw AccountHTTPError(status: 404, message: "That friend code isn't right. Check it and try again.") }
         }
-        if request.httpMethod == "DELETE" { friends.removeAll { path.hasSuffix($0["code"] as! String) }; incoming.removeAll { path.hasSuffix($0["code"] as! String) } }
+        if request.httpMethod == "DELETE" {
+            if CommandLine.arguments.contains("--ui-test-friend-remove-error"), !failedRemoval {
+                failedRemoval = true
+                throw AccountHTTPError(status: 503, message: "Server unavailable.")
+            }
+            friends.removeAll { path.hasSuffix($0["code"] as! String) }; incoming.removeAll { path.hasSuffix($0["code"] as! String) }
+        }
         return try JSONSerialization.data(withJSONObject: ["code": "PENNY-MYCODE", "link": "https://howmuch-ios.fly.dev/friend/MYCODE",
                                                            "friends": friends, "incoming": incoming, "outgoing": [], "helloCoins": coins])
     }

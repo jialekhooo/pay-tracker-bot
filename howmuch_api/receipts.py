@@ -26,8 +26,13 @@ def jpeg_dimensions(data):
     raise ValueError('Unsupported JPEG')
 
 @router.put('/{receipt_id}')
+@router.put('/{receipt_id}/restore')
 async def upload(receipt_id:uuid.UUID,request:Request,authorization:str|None=Header(default=None)):
-    account=authenticated_account(request,authorization);limit(request,'receipt:'+account['account_id'],maximum=40)
+    account=authenticated_account(request,authorization)
+    # A complete backup may contain more than 40 photos. Restore still uses the
+    # same ownership, image-size, immutable-ID and 100 MB storage checks below.
+    restoring=request.url.path.endswith('/restore')
+    limit(request,('receipt-restore:' if restoring else 'receipt:')+account['account_id'],maximum=2000 if restoring else 40)
     chunks=[];size=0
     async for part in request.stream():
         size+=len(part)

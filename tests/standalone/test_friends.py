@@ -84,3 +84,61 @@ def test_invite_page_opens_the_app(setup):
     page = setup.client.get(f'/friend/{code}')
     assert page.status_code == 200 and f'howmuch://friend/{code}' in page.text and '&lt;b&gt;Jia' in page.text
     assert setup.client.get('/friend/ZZZZZZ').status_code == 404
+
+
+def test_requests_notify_once_acceptance_notifies_and_removed_requests_cancel(setup):
+    a, b = prepare(setup)
+    code_b = setup.client.get('/v1/friends', headers=headers(b)).json()['code']
+    code_a = setup.client.get('/v1/friends', headers=headers(a)).json()['code']
+    for _ in range(2):
+        assert setup.client.post('/v1/friends', headers=headers(a), json={'code': code_b}).status_code == 200
+    db = setup.storage._conn
+    jobs = db.execute("SELECT * FROM notification_jobs WHERE kind='friend_request'").fetchall()
+    assert len(jobs) == 1 and jobs[0]['account_id'] == b['account']['id']
+    assert len(jobs[0]['job_id'].encode()) <= 64  # APNs collapse ID limit
+    # Work sync must never cancel a social notification.
+    assert write(setup, b, document()).status_code == 200
+    assert db.execute('SELECT status FROM notification_jobs WHERE job_id=?', (jobs[0]['job_id'],)).fetchone()[0] == 'pending'
+    assert setup.client.post('/v1/friends', headers=headers(b), json={'code': code_a}).status_code == 200
+    assert db.execute('SELECT status FROM notification_jobs WHERE job_id=?', (jobs[0]['job_id'],)).fetchone()[0] == 'cancelled'
+    accepted = db.execute("SELECT * FROM notification_jobs WHERE kind='friend_accepted'").fetchall()
+    assert len(accepted) == 1 and accepted[0]['account_id'] == a['account']['id']
+    assert setup.client.delete('/v1/friends/' + code_b, headers=headers(a)).status_code == 200
+    assert db.execute('SELECT status FROM notification_jobs WHERE job_id=?', (accepted[0]['job_id'],)).fetchone()[0] == 'cancelled'
+    # A genuinely new request can notify again; it has its own delivery ID.
+    setup.client.post('/v1/friends', headers=headers(a), json={'code': code_b})
+    new_job = db.execute("SELECT * FROM notification_jobs WHERE kind='friend_request' AND status='pending'").fetchone()
+    assert new_job and new_job['job_id'] != jobs[0]['job_id']
+    assert new_job['job_id'][:32] != jobs[0]['job_id'][:32]  # Fresh APNs UUID too
+    setup.client.delete('/v1/friends/' + code_a, headers=headers(b))
+    assert db.execute('SELECT status FROM notification_jobs WHERE job_id=?', (new_job['job_id'],)).fetchone()[0] == 'cancelled'
+
+
+def test_friend_request_push_reaches_only_recipient_and_deduplicates(setup, monkeypatch):
+    import asyncio
+    import json
+    import time
+    import uuid
+    import httpx
+    from howmuch_api import push
+    monkeypatch.setattr(push, 'configured', lambda *args: True)
+    monkeypatch.setattr(push, 'provider_token', lambda *args: 'test-provider')
+    a, b = prepare(setup)
+    for session, token in [(a, 'a' * 64), (b, 'b' * 64)]:
+        assert setup.client.put('/v1/devices/push', json={'token': token, 'environment': 'sandbox'}, headers=headers(session)).status_code == 200
+    code = setup.client.get('/v1/friends', headers=headers(b)).json()['code']
+    setup.client.post('/v1/friends', headers=headers(a), json={'code': code})
+    sent = []
+    def transport(request):
+        assert len(request.headers['apns-collapse-id'].encode()) <= 64
+        uuid.UUID(request.headers['apns-id'])
+        sent.append((str(request.url), json.loads(request.content)))
+        return httpx.Response(200, json={})
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+            await push.deliver_due(setup.storage, client=client, now=int(time.time()) + 1)
+            await push.deliver_due(setup.storage, client=client, now=int(time.time()) + 2)
+    asyncio.run(run())
+    assert len(sent) == 1 and sent[0][0].endswith('/device/' + 'b' * 64)
+    assert sent[0][1]['kind'] == 'friend_request'
+    assert sent[0][1]['account_id'] == b['account']['id']

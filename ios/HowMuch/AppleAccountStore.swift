@@ -374,7 +374,9 @@ final class AppleAccountStore: ObservableObject {
         guard let owner = payload["account_id"] as? String, owner.lowercased() == account?.id.lowercased() else { return }
         await synchronize()
         guard owner.lowercased() == account?.id.lowercased() else { return }
-        if payload["kind"] as? String == "hello" { PushCenter.shared.widgetURL = URL(string: "howmuch://friends"); return }
+        if let kind = payload["kind"] as? String, ["hello", "friend_request", "friend_accepted"].contains(kind) {
+            PushCenter.shared.widgetURL = URL(string: "howmuch://friends"); return
+        }
         if let value = payload["shift_id"] as? String, let id = UUID(uuidString: value), tracker?.data.shifts.contains(where: { $0.id == id }) == true { notificationJob = NotificationJobRoute(id: id, directions: (payload["kind"] as? String)?.hasPrefix("travel_") == true) }
     }
 }

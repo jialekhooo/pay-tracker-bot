@@ -107,3 +107,21 @@ def test_unused_receipt_photos_are_deleted_after_a_grace_period(setup):
     assert collect_unused(db,'acct-gc',{'claims':[{'receiptID':'kept'}]})==1
     left={r[0] for r in db.execute("SELECT receipt_id FROM receipt_photos WHERE account_id='acct-gc'")}
     assert left=={'kept','fresh'}
+
+
+def test_backup_restore_supports_many_private_receipts_and_retains_validation(receipt_app):
+    s = receipt_app
+    owner, _ = login(s)
+    other, _ = login(s, 'other')
+    for _ in range(41):
+        key = str(uuid.uuid4())
+        route = '/v1/receipts/' + key
+        assert s.client.put(route + '/restore', content=jpeg(), headers=headers(owner)).status_code == 200
+    assert s.client.get(route, headers=headers(owner)).content == jpeg()
+    assert s.client.get(route, headers=headers(other)).status_code == 404
+    assert s.client.put(route + '/restore', content=jpeg(), headers=headers(owner)).status_code == 409
+    assert s.client.put('/v1/receipts/' + str(uuid.uuid4()) + '/restore', content=b'invalid', headers=headers(owner)).status_code == 422
+    assert s.client.put('/v1/receipts/' + str(uuid.uuid4()) + '/restore', content=jpeg()).status_code == 401
+    with s.storage._conn as db:
+        db.execute('INSERT INTO receipt_photos VALUES(?,?,?,?,?)', (owner['account']['id'], str(uuid.uuid4()), b'placeholder', 100000000, 1))
+    assert s.client.put('/v1/receipts/' + str(uuid.uuid4()) + '/restore', content=jpeg(), headers=headers(owner)).status_code == 413

@@ -87,6 +87,19 @@ def are_friends(db, a, b) -> bool:
     return bool(db.execute('SELECT 1 FROM friendships WHERE account_id=? AND friend_id=?', (a, b)).fetchone())
 
 
+def friend_notification_id(kind, sender, recipient):
+    # Leave room for a fresh delivery suffix within APNs' 64-byte collapse ID.
+    return hashlib.sha256(f'{kind}|{sender}|{recipient}'.encode()).hexdigest()[:16]
+
+
+def notify_friend(db, kind, sender, recipient, now):
+    who = card_of(db, sender).get('ownerName') or 'A friend'
+    title = f'👋 {who} wants to be friends' if kind == 'friend_request' else f'🎉 {who} accepted your request'
+    body = 'Open HowMuch to review the request.' if kind == 'friend_request' else "Visit each other's Penny and say hi."
+    db.execute("INSERT INTO notification_jobs(job_id,account_id,kind,shift_id,fire_at,expires,title,body) VALUES(?,?,?,?,?,?,?,?)",
+               (friend_notification_id(kind, sender, recipient) + secrets.token_hex(16), recipient, kind, '', now, now + 86400, title, body))
+
+
 def today_for(db, account_id) -> str:
     row = db.execute('SELECT body FROM documents WHERE account_id=?', (account_id,)).fetchone()
     zone = 'Asia/Singapore'
@@ -196,8 +209,13 @@ async def add_friend(payload: AddFriend, request: Request, authorization: str | 
             db.execute('DELETE FROM friend_requests WHERE (from_account=? AND to_account=?) OR (from_account=? AND to_account=?)', (other, me, me, other))
             db.execute('INSERT OR IGNORE INTO friendships VALUES(?,?,?)', (me, other, now))
             db.execute('INSERT OR IGNORE INTO friendships VALUES(?,?,?)', (other, me, now))
+            db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id LIKE ? AND status='pending'",
+                       (friend_notification_id('friend_request', other, me) + '%',))
+            notify_friend(db, 'friend_accepted', me, other, now)
         else:
-            db.execute('INSERT OR IGNORE INTO friend_requests VALUES(?,?,?)', (me, other, now))
+            added = db.execute('INSERT OR IGNORE INTO friend_requests VALUES(?,?,?)', (me, other, now)).rowcount
+            if added:
+                notify_friend(db, 'friend_request', me, other, now)
     return overview(request, db, me)
 
 
@@ -211,6 +229,10 @@ async def remove_friend(code: str, request: Request, authorization: str | None =
         with db:
             db.execute('DELETE FROM friendships WHERE (account_id=? AND friend_id=?) OR (account_id=? AND friend_id=?)', (me, other, other, me))
             db.execute('DELETE FROM friend_requests WHERE (from_account=? AND to_account=?) OR (from_account=? AND to_account=?)', (me, other, other, me))
+            for sender, recipient in ((me, other), (other, me)):
+                for kind in ('friend_request', 'friend_accepted'):
+                    db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id LIKE ? AND status='pending'",
+                               (friend_notification_id(kind, sender, recipient) + '%',))
     return overview(request, db, me)
 
 

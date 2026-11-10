@@ -207,3 +207,13 @@ Build 66: The Appearance caption describes the chosen option (Match iPhone, Ligh
 Build 67: Friends. Add friends by code or invite link (both must agree), visit their pet, and say hi once a day: they get a notification and you both earn 2 coins. Friends see only the pet, never shifts or pay.
 Build 68: A short opening animation (Penny's icon pops in and hops, then fades into the app) on launch and when coming back after 30 seconds or more away. Tap to skip; Reduce Motion just fades.
 Build 69: Job messages keep every date in "Sat 21 & Sun 22 Nov", drop emoji from names and venues, and find the event after a greeting line. Friends has a leaderboard (weekly streak, then level; pets only). New Penny Home Screen widget, small and medium.
+
+### Review fixes — 10 November 2026
+
+Friends: Say hi and Remove friend share an in-flight guard. Failed removals keep the visit screen open with a retry message. New friend requests and acceptances queue account-scoped push alerts routed to Friends; repeated requests do not queue duplicates. Accepting, declining or cancelling a request cancels its undelivered request alert. Work reminder reconciliation preserves social alerts.
+
+Availability now considers usable gaps between bookings, merging overlapping intervals before choosing a window. For example, 08:00–10:00 and 18:00–22:00 work shows “from 10am to 6pm”. Blocked days and overnight bookings still apply.
+
+Settings → Data & backups → Export full archive now creates a standard ZIP with tracker.json and receipts/<UUID>.jpg. The ZIP is stored without extra compression because the receipts are already JPEGs. A photo the account no longer has is left out of the backup and its claim loses the attachment, and the app says how many; any other download failure stops the export. Limits: 2,000 photos, 750 KB per photo, 100 MB combined photos, 10 MB document and 110 MB ZIP. The app accepts its original ZIP format or older JSON archives. Restore checks paths, lengths, CRCs, document validity and complete attachment references before confirmation. Receipts already present with identical bytes are reused; other copies upload with fresh IDs owned by the signed-in account. All uploads finish before current records are replaced. Account changes, cancellation and local edits abort replacement; failed imports attempt to remove only newly uploaded copies. Old JSON archives have no embedded images. ZIP backups contain private work/receipt data, never account credentials.
+
+Backend deployment is required for the authenticated PUT /v1/receipts/{id}/restore endpoint (same image/ownership/quota checks, a larger per-account upload allowance) and friend-request alerts. Native changes require a new app build.

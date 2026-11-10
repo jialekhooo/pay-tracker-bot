@@ -1588,6 +1588,7 @@ struct FriendPetView: View {
     @State private var waving = false
     @State private var message = ""
     @State private var confirmingRemove = false
+    @State private var busy = false
 
     var body: some View {
         ScrollView {
@@ -1621,10 +1622,10 @@ struct FriendPetView: View {
                 Button(friend.saidHiToday ? "You said hi today" : "👋 Say hi", systemImage: friend.saidHiToday ? "checkmark.circle" : "") {
                     Task { await sayHi() }
                 }
-                .primaryButton().disabled(friend.saidHiToday).accessibilityIdentifier("friend.hello")
+                .primaryButton().disabled(friend.saidHiToday || busy).accessibilityIdentifier("friend.hello")
                 Text(message.isEmpty ? "Once a day. You both get 2 coins." : message).font(.caption).foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center).accessibilityIdentifier("friend.helloMessage")
-                Button("Remove friend", role: .destructive) { confirmingRemove = true }.font(.subheadline).foregroundStyle(.red).padding(.top, 20)
+                Button("Remove friend", role: .destructive) { confirmingRemove = true }.font(.subheadline).foregroundStyle(.red).padding(.top, 20).disabled(busy)
             }.padding(20)
         }
         .detailStyle(friend.card.petName)
@@ -1642,6 +1643,8 @@ struct FriendPetView: View {
     }
 
     private func sayHi() async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
         do {
             let result = try JSONDecoder().decode(HelloResult.self, from: await auth.api.request("/v1/friends/\(friend.code)/hello", method: "POST"))
             friend = result.friend
@@ -1655,8 +1658,14 @@ struct FriendPetView: View {
     }
 
     private func remove() async {
-        let result = try? JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request("/v1/friends/" + friend.code, method: "DELETE"))
-        onChange(result)
-        dismiss()
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        do {
+            let result = try JSONDecoder().decode(FriendsOverview.self, from: await auth.api.request("/v1/friends/" + friend.code, method: "DELETE"))
+            onChange(result)
+            dismiss()
+        } catch {
+            message = "Couldn't remove this friend. \(error.localizedDescription) Try again."
+        }
     }
 }

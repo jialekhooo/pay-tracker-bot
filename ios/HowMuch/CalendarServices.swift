@@ -40,6 +40,17 @@ struct TextFile: FileDocument {
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: Data(text.utf8)) }
 }
 
+struct BackupFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.zip, .json, .commaSeparatedText] }
+    var data: Data
+    init(_ data: Data = Data()) { self.data = data }
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else { throw TrackerError.invalid("Unreadable file.") }
+        self.data = data
+    }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
+}
+
 struct CalendarSettingsView: View {
     @EnvironmentObject private var store: TrackerStore
     @State private var export = false

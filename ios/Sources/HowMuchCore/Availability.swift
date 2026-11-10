@@ -30,6 +30,21 @@ public enum Availability {
         guard !taken.isEmpty else { return .free }
         let earliest = taken.map(\.0).min()!, latest = taken.map(\.1).max()!
         let before = earliest - dayStart, after = dayEnd - latest
+        // Merge overlaps while looking for usable gaps between bookings. Looking only
+        // at the first and last shift hides a free afternoon between two jobs.
+        var end = dayStart
+        var middle: (start: Int, end: Int)?
+        for (from, to) in taken.sorted(by: { $0.0 < $1.0 }) {
+            let start = max(dayStart, end), finish = min(dayEnd, from)
+            if end > dayStart, finish - start >= usefulGap,
+               finish - start > (middle.map { $0.end - $0.start } ?? 0) {
+                middle = (start, finish)
+            }
+            end = max(end, to)
+        }
+        if let middle, middle.end - middle.start >= max(before, after) {
+            return .partly("from " + clock(middle.start) + " to " + clock(middle.end))
+        }
         if after >= usefulGap, after >= before { return .partly("after " + clock(latest)) }
         if before >= usefulGap { return .partly("before " + clock(earliest)) }
         return .busy

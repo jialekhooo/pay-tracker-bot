@@ -316,14 +316,20 @@ struct PaySettingsView: View {
 
 struct DataToolsView: View {
     @EnvironmentObject private var store: TrackerStore
+    @EnvironmentObject private var auth: AppleAccountStore
     @State private var importing = false
     @State private var exporting = false
     @State private var archiveImport = false
     @State private var restore = false
-    @State private var document = TextFile("")
+    @State private var document = BackupFile()
     @State private var exportType = UTType.commaSeparatedText
     @State private var legacyImport = false
     @State private var pending: TrackerData?
+    @State private var pendingReceipts: [UUID: Data] = [:]
+    @State private var working = false
+    @State private var progress = ""
+    @State private var operation: Task<Void, Never>?
+    @State private var exportNote: String?
     @State private var message: String?
     var body: some View {
         AppForm {
@@ -331,7 +337,7 @@ struct DataToolsView: View {
                 Button("Import Telegram CSV", systemImage: "square.and.arrow.down") { archiveImport = false; importing = true }.rowAction()
                 Link(destination: TelegramBot.url) { Label("Open \(TelegramBot.handle) to export with /export", systemImage: "paperplane") }
                     .rowAction().accessibilityIdentifier("data.telegramBot")
-                Button("Export shifts as CSV", systemImage: "tablecells") { document = TextFile(ShiftCSV.encode(store.data.shifts)); exportType = .commaSeparatedText; exporting = true }.rowAction()
+                Button("Export shifts as CSV", systemImage: "tablecells") { document = BackupFile(Data(ShiftCSV.encode(store.data.shifts).utf8)); exportType = .commaSeparatedText; exporting = true }.rowAction()
                 NavigationLink("Export calendar (.ics)") { CalendarSettingsView() }
                 Text("Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.caption).foregroundStyle(Palette.muted)
             }
@@ -342,32 +348,144 @@ struct DataToolsView: View {
                 }
             }
             Section(styled: "Full backups") {
-                Button("Export full archive", systemImage: "externaldrive") {
-                    do { let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; document = TextFile(String(decoding: try encoder.encode(store.data), as: UTF8.self)); exportType = .json; exporting = true }
-                    catch { store.error = error.localizedDescription }
-                }.rowAction()
+                Button("Export full archive", systemImage: "externaldrive") { run { try await exportBackup() } }.rowAction()
                 Button("Restore full archive", systemImage: "arrow.counterclockwise") { archiveImport = true; importing = true }.rowAction()
-                Text("Full archives preserve all local shifts, claims, paid status, due dates, profile and preferences. HowMuch CSV also preserves paid status and due dates when those columns are present. Older Telegram exports without them import as unpaid with no due date. Account credentials stay in Keychain and are never included in an archive.").font(.caption).foregroundStyle(Palette.muted)
+                Text("ZIP backups include shifts, claims, receipt photos, profile and preferences. Keep the ZIP private: it contains your work and receipt details. Earlier JSON archives can still be restored, but contain no receipt photos. Account credentials are never included.").font(.caption).foregroundStyle(Palette.muted)
             }
             if store.canUndo { Section { Button("Undo last change", systemImage: "arrow.uturn.backward") { store.undo() }.rowAction() } }
-        }.detailStyle("Data & backups")
-            .fileImporter(isPresented: $importing, allowedContentTypes: archiveImport ? [.json] : [.commaSeparatedText, .plainText]) { result in
+        }.disabled(working).detailStyle("Data & backups")
+            .overlay {
+                if working {
+                    VStack(spacing: 16) {
+                        ProgressView(progress)
+                        Button("Cancel") { operation?.cancel() }
+                    }.padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+                }
+            }
+            .onDisappear { operation?.cancel() }
+            .fileImporter(isPresented: $importing, allowedContentTypes: archiveImport ? [.zip, .json] : [.commaSeparatedText, .plainText]) { result in
                 do {
                     let url = try result.get()
-                    if archiveImport { pending = try store.readArchive(url); restore = true }
+                    if archiveImport {
+                        let access = url.startAccessingSecurityScopedResource()
+                        defer { if access { url.stopAccessingSecurityScopedResource() } }
+                        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                        guard size <= AccountBackup.maximumBytes else { throw TrackerError.invalid("Choose a backup smaller than 110 MB.") }
+                        let bytes = try Data(contentsOf: url, options: .mappedIfSafe)
+                        guard bytes.count <= AccountBackup.maximumBytes else { throw TrackerError.invalid("Choose a backup smaller than 110 MB.") }
+                        run {
+                            progress = "Checking backup…"
+                            if bytes.starts(with: [0x50, 0x4b]) {
+                                let backup = try await Task.detached { try AccountBackup.decode(bytes) }.value
+                                try checkAccount()
+                                pending = backup.data; pendingReceipts = backup.receipts
+                            } else {
+                                guard bytes.count <= 10_000_000 else { throw TrackerError.invalid("Choose a JSON archive smaller than 10 MB.") }
+                                let records = try JSONDecoder().decode(TrackerData.self, from: bytes)
+                                try records.validate(); pending = records; pendingReceipts = [:]
+                            }
+                            try checkAccount(); restore = true
+                        }
+                    }
                     else { let report = try store.importCSV(url); message = "Imported \(counted(report.added, "shift")); skipped \(counted(report.skipped, "repeat"))." }
                 } catch { if (error as NSError).code != NSUserCancelledError { store.error = error.localizedDescription } }
             }
-            .fileExporter(isPresented: $exporting, document: document, contentType: exportType, defaultFilename: exportType == .json ? "howmuch-archive" : "howmuch-shifts") { result in if case .failure(let error) = result { store.error = error.localizedDescription } }
+            .fileExporter(isPresented: $exporting, document: document, contentType: exportType, defaultFilename: exportType == .zip ? "howmuch-backup" : "howmuch-shifts") { result in
+                if case .failure(let error) = result { store.error = error.localizedDescription } else if let exportNote { message = exportNote }
+                exportNote = nil
+            }
             .confirmationDialog("Replace all current records? Export a full archive first to keep a copy.", isPresented: $restore, titleVisibility: .visible) {
-                Button("Restore \(counted(pending?.shifts.count ?? 0, "shift"))", role: .destructive) { if let pending, store.update({ $0 = pending }) { message = "Archive restored." }; pending = nil }
-                Button("Cancel", role: .cancel) { pending = nil }
+                Button("Restore \(counted(pending?.shifts.count ?? 0, "shift"))", role: .destructive) { run { try await restoreBackup() } }
+                Button("Cancel", role: .cancel) { pending = nil; pendingReceipts = [:] }
             }
             .confirmationDialog("Import the earlier version’s work records into this Apple account?", isPresented: $legacyImport, titleVisibility: .visible) {
                 Button("Import into my account") { do { try store.importEarlierPhoneRecords(); message = "Earlier iPhone records imported." } catch { store.error = error.localizedDescription } }
             }
             .alert("Your data", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) { Button("OK") { message = nil } } message: { Text(message ?? "") }
     }
+
+    private func checkAccount() throws {
+        try Task.checkCancellation()
+        guard auth.account?.id.lowercased() == store.accountID.lowercased(), auth.tracker === store else {
+            throw TrackerError.invalid("The signed-in account changed. Open backups again for your current account.")
+        }
+    }
+
+    private func run(_ action: @escaping @MainActor () async throws -> Void) {
+        guard !working else { return }
+        working = true
+        operation = Task { @MainActor in
+            defer { working = false; progress = ""; operation = nil }
+            do { try await action() }
+            catch is CancellationError { }
+            catch { store.error = error.localizedDescription }
+        }
+    }
+
+    private func exportBackup() async throws {
+        try checkAccount()
+        let records = store.data
+        let ids = Set(records.claims.compactMap(\.receiptID) + (records.expenses ?? []).compactMap(\.receiptID))
+        guard ids.count <= 2000 else { throw TrackerError.invalid("A ZIP backup supports up to 2,000 receipt photos.") }
+        var photos: [UUID: Data] = [:], missing: Set<UUID> = []
+        for id in ids.sorted(by: { $0.uuidString < $1.uuidString }) {
+            progress = "Saving receipt \(photos.count + missing.count + 1) of \(ids.count)…"
+            // A photo the account no longer has must not block the whole backup.
+            do { photos[id] = try await auth.api.request("/v1/receipts/" + id.uuidString) }
+            catch let error as AccountHTTPError where error.status == 404 { missing.insert(id) }
+            try checkAccount()
+        }
+        progress = "Preparing backup…"
+        let complete = AccountBackup.removingReceipts(missing, from: records), saved = photos
+        let bytes = try await Task.detached { try AccountBackup(data: complete, receipts: saved).encoded() }.value
+        try checkAccount()
+        exportNote = missing.isEmpty ? nil : "Backup saved without \(counted(missing.count, "receipt photo")) your account no longer has."
+        document = BackupFile(bytes); exportType = .zip; exporting = true
+    }
+
+    private func restoreBackup() async throws {
+        try checkAccount()
+        guard var records = pending else { return }
+        let owner = store.accountID
+        var uploaded: [UUID] = []
+        do {
+            let baseline = store.data
+            var replacement: [UUID: UUID] = [:]
+            for (id, bytes) in pendingReceipts.sorted(by: { $0.key.uuidString < $1.key.uuidString }) {
+                progress = "Restoring receipt \(replacement.count + 1) of \(pendingReceipts.count)…"
+                // Reuse an identical attachment on this account; otherwise upload with a
+                // fresh ID so restoring into a different account never references its old owner.
+                var existing: Data?
+                do { existing = try await auth.api.request("/v1/receipts/" + id.uuidString) }
+                catch let error as AccountHTTPError where error.status == 404 { }
+                try checkAccount()
+                if existing == bytes { replacement[id] = id; continue }
+                let newID = UUID(); uploaded.append(newID)
+                _ = try await auth.api.request("/v1/receipts/" + newID.uuidString + "/restore", method: "PUT", body: bytes, contentType: "image/jpeg")
+                try checkAccount(); replacement[id] = newID
+            }
+            if !pendingReceipts.isEmpty {
+                records = try AccountBackup(data: records, receipts: pendingReceipts).restoringReceipts(replacement)
+            }
+            try checkAccount()
+            guard store.data == baseline else { throw TrackerError.invalid("Your records changed during restore. Review them and try the restore again.") }
+            guard store.update({ $0 = records }) else { throw TrackerError.invalid(store.error ?? "Could not save the restored records.") }
+            message = pendingReceipts.isEmpty ? "Archive restored. Earlier JSON archives do not include receipt photos." : "Backup and receipt photos restored."
+            pending = nil; pendingReceipts = [:]
+        } catch {
+            // Failed/cancelled restores leave current records alone and remove only
+            // newly uploaded copies, never attachments reused from existing claims.
+            await Task { @MainActor in
+                for id in uploaded {
+                    guard auth.account?.id.lowercased() == owner.lowercased() else { break }
+                    do { _ = try await auth.api.request("/v1/receipts/" + id.uuidString, method: "DELETE") }
+                    catch { break } // Unreferenced uploads also have server-side garbage collection.
+                }
+            }.value
+            throw error
+        }
+    }
+
 }
 
 struct PayersSettingsView: View {

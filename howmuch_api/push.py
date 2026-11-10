@@ -132,7 +132,7 @@ def rebuild_jobs(storage,account,data,timezone_name,now=None):
     with db:
         # Only cancel reminders that haven't come due yet; one that is due but not yet delivered still goes out
         # (its expiry ends it). A payment reminder is the exception: once the shift is paid it must not arrive.
-        for row in db.execute("SELECT job_id,kind,fire_at,expires FROM notification_jobs WHERE account_id=? AND status='pending' AND kind NOT LIKE 'travel_%' AND kind!='hello'",(account['account_id'],)).fetchall():
+        for row in db.execute("SELECT job_id,kind,fire_at,expires FROM notification_jobs WHERE account_id=? AND status='pending' AND kind NOT LIKE 'travel_%' AND kind NOT LIKE 'friend_%' AND kind!='hello'",(account['account_id'],)).fetchall():
             if row['job_id'] in wanted: continue
             if row['expires']<=now: db.execute("UPDATE notification_jobs SET status='expired' WHERE job_id=?",(row['job_id'],))
             elif row['fire_at']>now or row['kind']=='payment_due':

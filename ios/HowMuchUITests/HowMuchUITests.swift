@@ -562,6 +562,28 @@ final class HowMuchUITests: XCTestCase {
         attach("Said hi to a friend's pet", app: app)
     }
     @MainActor
+    func testFailedFriendRemovalStaysOpenAndCanRetry() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-account", "--ui-test-friends", "--ui-test-friend-remove-error"]
+        app.launch()
+        let pet = app.buttons["pet.card"]; XCTAssertTrue(pet.waitForExistence(timeout: 10)); pet.tap()
+        let friends = app.buttons["pet.friends"]; reveal(friends, in: app); friends.tap()
+        let sam = app.descendants(matching: .any).matching(identifier: "friends.friend.PENNY-SAMSAM").firstMatch
+        reveal(sam, in: app); sam.tap()
+        let remove = app.buttons["Remove friend"]; reveal(remove, in: app); remove.tap()
+        app.buttons["Remove"].tap()
+        let error = app.staticTexts["friend.helloMessage"]
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        let failure = NSPredicate(format: "label CONTAINS %@", "Couldn't remove this friend")
+        expectation(for: failure, evaluatedWith: error)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(remove.exists, "Stay on the friend's page after a failed removal")
+        remove.tap(); app.buttons["Remove"].tap()
+        XCTAssertTrue(app.staticTexts["PENNY-MYCODE"].waitForExistence(timeout: 5), "Successful retry returns to Friends")
+        XCTAssertFalse(sam.exists)
+    }
+
+    @MainActor
     func testShiftExtraIsAddedToThePayout() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         app.buttons["nav.add"].tap()
