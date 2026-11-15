@@ -6,7 +6,7 @@ import AppIntents
 private let teal = Color(red: 0.071, green: 0.42, blue: 0.369)
 private let mint = Color(red: 0.55, green: 0.86, blue: 0.74)
 
-/// Lock Screen and Dynamic Island card while a shift is on.
+/// Lock Screen and Dynamic Island card while a shift is on, with Penny keeping you company.
 /// The timer and progress bar run on their own, so the card stays current without the app open.
 struct LiveShiftWidget: Widget {
     var body: some WidgetConfiguration {
@@ -19,8 +19,10 @@ struct LiveShiftWidget: Widget {
             let state = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label(state.event, systemImage: "briefcase.fill").font(.subheadline.weight(.semibold)).lineLimit(1)
-                        .foregroundStyle(mint).padding(.leading, 4)
+                    PennyFace(size: 40).padding(.leading, 4)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    Text(state.event).font(.subheadline.weight(.semibold)).lineLimit(1).foregroundStyle(mint)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(state.payText).font(.subheadline.weight(.bold)).monospacedDigit().padding(.trailing, 4)
@@ -38,12 +40,12 @@ struct LiveShiftWidget: Widget {
                     }.padding(.horizontal, 4)
                 }
             } compactLeading: {
-                Image(systemName: "briefcase.fill").foregroundStyle(mint)
+                PennyFace(size: 26)
             } compactTrailing: {
                 if context.isStale { Image(systemName: "checkmark.circle").foregroundStyle(mint) }
                 else { Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit().multilineTextAlignment(.trailing).frame(width: 66).foregroundStyle(mint) }
             } minimal: {
-                Image(systemName: "briefcase.fill").foregroundStyle(mint)
+                PennyFace(size: 24)
             }
             .widgetURL(context.isStale ? state.finishURL : state.shiftURL)
             .keylineTint(mint)
@@ -57,7 +59,8 @@ private struct LiveShiftLockScreen: View {
     let ended: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 10) {
+                PennyFace(size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(state.event).font(.headline).lineLimit(1)
                     if !state.location.isEmpty { Text(state.location).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
@@ -80,6 +83,21 @@ private struct LiveShiftLockScreen: View {
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+}
+
+/// Penny, drawn by the app into the shared app group (the extension can't run her drawing code).
+/// The briefcase stands in until she has been drawn on this iPhone.
+private struct PennyFace: View {
+    let size: CGFloat
+    var body: some View {
+        if let url = PennyWidgetFile.faceURL, let image = UIImage(contentsOfFile: url.path) {
+            Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
+                .frame(width: size, height: size)
+                .accessibilityLabel(PennyWidgetFile.read()?.name ?? "Penny")
+        } else {
+            Image(systemName: "briefcase.fill").foregroundStyle(mint)
+        }
     }
 }
 

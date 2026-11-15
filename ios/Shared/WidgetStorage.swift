@@ -33,6 +33,8 @@ struct PennyWidgetInfo: Codable, Equatable {
 enum PennyWidgetFile {
     private static let infoName = "penny-widget.json"
     private static func imageName(dark: Bool) -> String { dark ? "penny-dark.png" : "penny-light.png" }
+    /// Penny on her own, with no room behind her, for the shift's Live Activity.
+    private static let faceName = "penny-face.png"
     private static func url(_ name: String) -> URL? { SharedWidgetStorage.directory?.appendingPathComponent(name) }
 
     static func read() -> PennyWidgetInfo? {
@@ -43,7 +45,11 @@ enum PennyWidgetFile {
         guard let url = url(imageName(dark: dark)), FileManager.default.fileExists(atPath: url.path) else { return nil }
         return url
     }
-    static func write(_ info: PennyWidgetInfo, light: Data, dark: Data) throws {
+    static var faceURL: URL? {
+        guard let url = url(faceName), FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+    static func write(_ info: PennyWidgetInfo, light: Data, dark: Data, face: Data?) throws {
         guard let directory = SharedWidgetStorage.directory, let infoURL = url(infoName),
               let lightURL = url(imageName(dark: false)), let darkURL = url(imageName(dark: true)) else {
             throw TrackerError.invalid("Widget sharing is unavailable in this installation.")
@@ -52,11 +58,12 @@ enum PennyWidgetFile {
         let options: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
         try light.write(to: lightURL, options: options)
         try dark.write(to: darkURL, options: options)
+        if let face, let faceURL = url(faceName) { try face.write(to: faceURL, options: options) }
         try JSONEncoder().encode(info).write(to: infoURL, options: options)
         WidgetCenter.shared.reloadTimelines(ofKind: "HowMuch.Penny")
     }
     static func clear() {
-        for name in [infoName, imageName(dark: false), imageName(dark: true)] {
+        for name in [infoName, imageName(dark: false), imageName(dark: true), faceName] {
             if let url = url(name), FileManager.default.fileExists(atPath: url.path) { try? FileManager.default.removeItem(at: url) }
         }
     }

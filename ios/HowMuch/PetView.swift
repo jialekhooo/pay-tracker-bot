@@ -1442,7 +1442,7 @@ extension TrackerStore {
         let info = PennyWidgetInfo(accountID: accountID.lowercased(), name: petPreferences.displayName, stage: pet.stage.title,
                                    level: pet.level, mood: pet.mood.label, streakWeeks: pet.streakWeeks, hatched: pet.stage != .egg)
         let worn = outfit.map { $0.key.rawValue + "=" + $0.value.id }.sorted()
-        guard lastPennyWidget?.info != info || lastPennyWidget?.outfit != worn || PennyWidgetFile.imageURL(dark: false) == nil else { return }
+        guard lastPennyWidget?.info != info || lastPennyWidget?.outfit != worn || PennyWidgetFile.imageURL(dark: false) == nil || PennyWidgetFile.faceURL == nil else { return }
         func draw(_ scheme: ColorScheme) -> Data? {
             let room = ZStack {
                 PetScene(item: outfit[.background])
@@ -1454,7 +1454,30 @@ extension TrackerStore {
             return renderer.uiImage?.pngData()
         }
         guard let light = draw(.light), let dark = draw(.dark) else { return }
-        do { try PennyWidgetFile.write(info, light: light, dark: dark); lastPennyWidget = (info, worn) } catch {}
+        // Just Penny, for the shift's Live Activity (Dynamic Island and Lock Screen), drawn the size the island shows her.
+        let faceRenderer = ImageRenderer(content: PetSprite(stage: pet.stage, mood: pet.mood, outfit: outfit.filter { $0.key != .background }, animate: false)
+            .frame(width: 48, height: 48))
+        faceRenderer.scale = 3
+        faceRenderer.isOpaque = false
+        do { try PennyWidgetFile.write(info, light: light, dark: dark, face: faceRenderer.uiImage.flatMap(Self.trimmedPNG)); lastPennyWidget = (info, worn) } catch {}
+    }
+
+    /// Penny's sprite sits inside empty space; cut it away so she fills the island's small spot.
+    private static func trimmedPNG(_ image: UIImage) -> Data? {
+        guard let cg = image.cgImage else { return image.pngData() }
+        let width = cg.width, height = cg.height
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return image.pngData() }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixels = context.data?.bindMemory(to: UInt8.self, capacity: width * height * 4) else { return image.pngData() }
+        var minX = width, minY = height, maxX = -1, maxY = -1
+        for y in 0..<height {
+            for x in 0..<width where pixels[(y * width + x) * 4 + 3] > 0 {
+                minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+            }
+        }
+        guard maxX >= minX, let cropped = cg.cropping(to: CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)) else { return image.pngData() }
+        return UIImage(cgImage: cropped).pngData()
     }
 }
 
