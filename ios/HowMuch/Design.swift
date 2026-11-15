@@ -124,10 +124,11 @@ struct ScreenShell<Content: View>: View {
                     }.accessibilityLabel("Search shifts")
                     NavigationLink { ProfileSettingsView() } label: { ProfileAvatar(size: 38).frame(width: 46, height: 46).contentShape(Circle()).glassChrome(in: Circle()) }
                         .accessibilityLabel("Profile settings")
-                }.foregroundStyle(Palette.ink).padding(.top, 10)
+                }.foregroundStyle(Palette.ink).padding(.top, ReadableWidth.isPad ? 40 : 10)  // below iPad's window controls
                 content
             }.padding(.horizontal, 20).padding(.bottom, 24)
         }.scrollIndicators(.hidden)
+        .readableWidth()
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $search) { NavigationStack { ShiftsView().toolbar { Button("Done") { search = false } } } }
     }
@@ -179,6 +180,8 @@ struct PillPicker: View {
         }.scrollIndicators(.hidden)
             // Pills scroll out to the screen edge instead of being cut off at the card margin.
             .scrollClipDisabled()
+            // Not the page's iPad side margins: those are for vertical pages.
+            .contentMargins(.horizontal, 0, for: .scrollContent)
     }
 }
 
@@ -300,7 +303,8 @@ extension View {
     func rowAction() -> some View { self.buttonStyle(RowActionButtonStyle()) }
     func iconAction() -> some View { self.buttonStyle(IconActionButtonStyle()) }
     func detailStyle(_ title: String) -> some View {
-        self.navigationTitle(title).navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
+        self.readableWidth()
+            .navigationTitle(title).navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
             .scrollContentBackground(.hidden).background { AppBackdrop() }.foregroundStyle(Palette.ink)
             // Forms and cards share one text size and a compact row height, so no page looks oversized.
             .font(.appBody)
@@ -383,3 +387,28 @@ extension Shift {
         return "\(day) · \(Shift.clock(startMinute))–\(Shift.clock(endMinute))\(overnight)"
     }
 }
+
+/// On a wide iPad screen, pages keep a comfortable reading width in the middle, with the background
+/// filling the rest. Narrower screens (every iPhone, iPad windows and sheets) are left exactly as they are.
+struct ReadableWidth: ViewModifier {
+    static let maxWidth: CGFloat = 720
+    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    @State private var width: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        let margin = max(0, (width - Self.maxWidth) / 2)
+        Group {
+            if margin > 0 {
+                content.contentMargins(.horizontal, margin, for: .scrollContent)
+            } else {
+                content
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
+
+extension View {
+    func readableWidth() -> some View { modifier(ReadableWidth()) }
+}
+

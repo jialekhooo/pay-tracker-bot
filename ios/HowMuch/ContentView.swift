@@ -29,6 +29,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     navigationDock.padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8)
+                        .frame(maxWidth: ReadableWidth.maxWidth + 32)
                 }
             }
             .navigationDestination(for: WidgetLink.self) { route in
