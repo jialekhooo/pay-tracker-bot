@@ -122,11 +122,12 @@ def test_shifts_of_one_event_added_together_share_a_due_date(setup, monkeypatch)
     assert write(setup, me, document()).status_code == 200
     link(setup, me)
     sent = setup.client.post('/v1/bot/shifts', headers=BOT, json={'telegramUserId': 4242, 'shifts': [
-        {'event': 'Roadshow', 'day': day, 'startMinute': 540, 'endMinute': 1020}
+        {'event': 'Trade expo', 'day': day, 'startMinute': 540, 'endMinute': 1020}
         for day in ('2026-11-03', '2026-11-05', '2026-11-07')]})
     assert sent.status_code == 200, sent.text
     saved = setup.client.get('/v1/data', headers=headers(me)).json()['data']['shifts']
-    assert {s['paymentDue'] for s in saved if s['event'] == 'Roadshow'} == {'2026-11-27'}, 'the Friday after two weeks past the last day'
+    # An event the sample document doesn't have, so the answer doesn't move with today's date.
+    assert {s['paymentDue'] for s in saved if s['event'] == 'Trade expo'} == {'2026-11-27'}, 'the Friday after two weeks past the last day'
 
 
 def test_blank_event_names_and_odd_secrets_are_refused_cleanly(setup, monkeypatch):
