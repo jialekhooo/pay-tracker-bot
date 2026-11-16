@@ -92,9 +92,11 @@ async def register_start_token(payload: StartToken, request: Request, authorizat
 
 @router.delete('/live-start', status_code=204)
 async def unregister_start_token(request: Request, authorization: str | None = Header(default=None)):
-    account = authenticated_account(request, authorization)
-    with request.app.state.storage._conn as db:
-        db.execute('DELETE FROM live_start_tokens WHERE session_id=?', (account['session_id'],))
+    """Kept for older builds, which sent this whenever iOS hadn't handed them the start token yet, including
+    every time iOS woke the app in the background. That wiped the token, so the next shift's card never
+    started. The token now stays; the synced Lock Screen setting decides (see rebuild_plans), and signing
+    out removes the token with its session."""
+    authenticated_account(request, authorization)
     return Response(status_code=204)
 
 
@@ -129,8 +131,11 @@ def rebuild_plans(storage, account, data, timezone_name, now=None):
     prefs = (data.get('preferences') or {}).get('notifications') or {}
     # Names on the Lock Screen follow the same privacy choice as job notifications.
     details = NotificationPreferences.model_validate(prefs).showDetails
+    # Settings → Live shift → Show on Lock Screen, synced with the account: off means no cards at all.
+    live = (data.get('preferences') or {}).get('liveShift') or {}
+    shifts = [] if live.get('lockScreen') is False else data.get('shifts', [])
     rows = []
-    for shift in data.get('shifts', []):
+    for shift in shifts:
         day = datetime.fromisoformat(shift['day']).replace(tzinfo=zone)
         start = day + timedelta(minutes=shift['startMinute'])
         end = day + timedelta(minutes=shift['endMinute'], days=1 if shift['endMinute'] <= shift['startMinute'] else 0)

@@ -215,6 +215,7 @@ Build 74: Penny keeps you company during shifts. She shows in the Dynamic Island
 Build 75: HowMuch runs natively on iPad (after App Review guideline 4 on 1.1). Pages keep a readable centred column on wide iPad screens, the tab bar matches it, page headings sit below iPad's window controls, and iPad supports every orientation.
 Build 76: The shift Live Activity appears 30 minutes before a shift, showing when it starts and counting down to it, then switches to time left when the shift begins. With job details hidden, the card says "Your shift".
 Build 77: At a shift's booked end the Live Activity asks Finished or Staying late (replacing +30 min). Staying late counts overtime from the booked end with an orange timer and a Finished now button that saves the real finish time and pay. Stale cards are now treated as live, so their buttons and updates work and no duplicate card starts.
+Build 78: Shift cards start on their own again. The app no longer withdraws its push-to-start token when iOS hasn't handed it over yet (which happened every time iOS woke the app in the background), and the server keeps the token and follows the synced Show on Lock Screen setting instead.
 
 ### Review fixes — 10 November 2026
 

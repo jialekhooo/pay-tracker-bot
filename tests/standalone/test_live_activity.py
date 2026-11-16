@@ -199,3 +199,27 @@ def test_older_database_gains_the_went_live_column(tmp_path):
     live_activity.ensure_schema(db)
     assert 'went_live' in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}
 
+
+def test_a_stray_unregister_keeps_the_start_token(setup, monkeypatch):
+    """Older builds sent DELETE whenever iOS woke them before handing over the token; the card must still start."""
+    configure(monkeypatch)
+    session, _ = login(setup)
+    write(setup, session, document())
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    assert setup.client.delete('/v1/devices/live-start', headers=headers(session)).status_code == 204
+    row = plan(setup)
+    assert run(setup, row['start_at'] - 60)[0] == 1
+
+
+def test_lock_screen_setting_off_means_no_cards(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    data.setdefault('preferences', {})['liveShift'] = {'lockScreen': False}
+    write(setup, session, data)
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    assert plan(setup) is None
+    data['preferences']['liveShift'] = {'lockScreen': True}
+    write(setup, session, data, 1)
+    assert plan(setup) is not None
+

@@ -150,10 +150,12 @@ enum LiveShiftCenter {
         }
     }
 
-    /// Re-sends (or withdraws) the push-to-start token, e.g. after the Lock Screen setting changes.
+    /// Re-sends the push-to-start token, or withdraws it when the Lock Screen setting is off.
+    /// Until iOS hands the token over (it can take a moment, and may not happen at all when iOS wakes the app
+    /// in the background), say nothing: withdrawing then would leave the server unable to start the next card.
     static func reportStart() async {
         guard let reporter else { return }
-        if lockScreenEnabled, let startToken { await reporter(.start(startToken)) } else { await reporter(.noStart) }
+        if !lockScreenEnabled { await reporter(.noStart) } else if let startToken { await reporter(.start(startToken)) }
     }
 
     private static func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0) }.joined() }
