@@ -19,7 +19,7 @@ enum LiveShiftCenter {
     private static var automatedTest: Bool {
         #if DEBUG
         let arguments = CommandLine.arguments
-        return (arguments.contains("--preview") || arguments.contains("--ui-test-account")) && !arguments.contains("--ui-test-live-shift")
+        return (arguments.contains("--preview") || arguments.contains("--ui-test-account")) && !arguments.contains("--ui-test-live-shift") && !arguments.contains("--ui-test-upcoming-shift")
         #else
         return false
         #endif
@@ -56,13 +56,14 @@ enum LiveShiftCenter {
                 Task { await close(activity) }
                 continue
             }
-            let content = ActivityContent(state: state(for: shift, accountID: accountID, details: details), staleDate: shift.endDate)
+            let content = ActivityContent(state: state(for: shift, accountID: accountID, details: details), staleDate: staleDate(for: shift, now: now))
             if now >= shift.endDate {
                 // Leave the finished card up for a while so its tap can confirm the finish time.
                 if activity.activityState == .active {
                     Task { await activity.end(content, dismissalPolicy: .after(shift.endDate.addingTimeInterval(4 * 60 * 60))) }
                 }
-            } else if activity.content.state != content.state {
+            } else if activity.content.state != content.state || activity.content.staleDate != content.staleDate {
+                // A change to the shift, or its start passing: the card moves from "starts at" to time left.
                 Task { await activity.update(content) }
             }
         }
@@ -72,11 +73,15 @@ enum LiveShiftCenter {
               !dismissedShifts.contains(current.id),
               !activities.contains(where: { $0.attributes.shiftID == current.id && $0.activityState == .dismissed && !endedByApp.contains($0.id) })
         else { return }
-        let content = ActivityContent(state: state(for: current, accountID: accountID, details: details), staleDate: current.endDate)
+        let content = ActivityContent(state: state(for: current, accountID: accountID, details: details), staleDate: staleDate(for: current, now: now))
         if let activity = try? Activity.request(attributes: LiveShiftAttributes(shiftID: current.id, accountID: accountID), content: content, pushType: .token) {
             watch(activity)
         }
     }
+
+    /// iOS redraws a card at its stale date: at the start while it counts down to the shift, then at the end
+    /// (the card shows "Shift over" once it is stale and past the end).
+    private static func staleDate(for shift: Shift, now: Date) -> Date { now < shift.startDate ? shift.startDate : shift.endDate }
 
     // MARK: Server push tokens
     // The server starts the card at shift time without the app being opened (iOS 17.2+), and renews it
@@ -149,7 +154,7 @@ enum LiveShiftCenter {
     private static func state(for shift: Shift, accountID: String, details: Bool) -> LiveShiftAttributes.ContentState {
         // Names on the Lock Screen follow the job-notification privacy choice, as the server does.
         LiveShiftAttributes.ContentState(
-            event: details ? shift.event : "Shift in progress",
+            event: details ? shift.event : "Your shift",
             location: details ? (shift.location.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? "") : "",
             startTime: shift.startDate.timeIntervalSince1970, endTime: shift.endDate.timeIntervalSince1970,
             pay: NSDecimalNumber(decimal: shift.total).doubleValue, currency: shift.currency,

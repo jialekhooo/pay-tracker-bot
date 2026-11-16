@@ -6,17 +6,20 @@ import AppIntents
 private let teal = Color(red: 0.071, green: 0.42, blue: 0.369)
 private let mint = Color(red: 0.55, green: 0.86, blue: 0.74)
 
-/// Lock Screen and Dynamic Island card while a shift is on, with Penny keeping you company.
-/// The timer and progress bar run on their own, so the card stays current without the app open.
+/// Lock Screen and Dynamic Island card from 30 minutes before a shift until it's over, with Penny keeping you company.
+/// Before the shift it counts down to the start; then the timer and progress bar run on their own, so the card
+/// stays current without the app open.
 struct LiveShiftWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LiveShiftAttributes.self) { context in
-            LiveShiftLockScreen(state: context.state, attributes: context.attributes, ended: context.isStale)
-                .widgetURL(context.isStale ? context.state.finishURL : context.state.shiftURL)
+            let phase = ShiftPhase(context.state, stale: context.isStale)
+            LiveShiftLockScreen(state: context.state, attributes: context.attributes, phase: phase)
+                .widgetURL(phase == .ended ? context.state.finishURL : context.state.shiftURL)
                 .activityBackgroundTint(Color(red: 0.06, green: 0.2, blue: 0.18))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             let state = context.state
+            let phase = ShiftPhase(state, stale: context.isStale)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     PennyFace(size: 40).padding(.leading, 4)
@@ -29,34 +32,73 @@ struct LiveShiftWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 8) {
-                        if context.isStale {
-                            Text("Shift over. When did you finish?").font(.footnote).foregroundStyle(.secondary)
-                        } else {
+                        switch phase {
+                        case .upcoming:
+                            StartsRow(state: state).font(.subheadline)
+                        case .working:
                             ProgressView(timerInterval: state.start...state.end, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
                                 .tint(mint)
                             TimeRow(state: state).font(.caption2).foregroundStyle(.secondary)
+                        case .ended:
+                            Text("Shift over. When did you finish?").font(.footnote).foregroundStyle(.secondary)
                         }
-                        FinishButtons(attributes: context.attributes, ended: context.isStale)
+                        if phase != .upcoming { FinishButtons(attributes: context.attributes, ended: phase == .ended) }
                     }.padding(.horizontal, 4)
                 }
             } compactLeading: {
                 PennyFace(size: 26)
             } compactTrailing: {
-                if context.isStale { Image(systemName: "checkmark.circle").foregroundStyle(mint) }
-                else { Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit().multilineTextAlignment(.trailing).frame(width: 66).foregroundStyle(mint) }
+                switch phase {
+                case .upcoming:
+                    // Counting down to the start, in white so it reads differently from time left (mint).
+                    Text(timerInterval: Date()...max(Date(), state.start), countsDown: true).monospacedDigit()
+                        .multilineTextAlignment(.trailing).frame(width: 66).foregroundStyle(.white)
+                case .working:
+                    Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit().multilineTextAlignment(.trailing).frame(width: 66).foregroundStyle(mint)
+                case .ended:
+                    Image(systemName: "checkmark.circle").foregroundStyle(mint)
+                }
             } minimal: {
                 PennyFace(size: 24)
             }
-            .widgetURL(context.isStale ? state.finishURL : state.shiftURL)
+            .widgetURL(phase == .ended ? state.finishURL : state.shiftURL)
             .keylineTint(mint)
         }
+    }
+}
+
+/// Where the shift is, worked out when iOS draws the card. iOS redraws it at its stale date: the start time while
+/// counting down (the app and server then move the stale date to the end), and the end time while working.
+private enum ShiftPhase {
+    case upcoming, working, ended
+    init(_ state: LiveShiftAttributes.ContentState, stale: Bool) {
+        let now = Date()
+        if now < state.start { self = .upcoming }
+        else if stale && now >= state.end { self = .ended }
+        else { self = .working }
+    }
+}
+
+/// "Starts at 9:00 PM" and a countdown to it, before the shift begins.
+private struct StartsRow: View {
+    let state: LiveShiftAttributes.ContentState
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock").foregroundStyle(mint)
+            (Text("Starts at ") + Text(state.start, style: .time)).fontWeight(.semibold)
+            Spacer(minLength: 4)
+            // One piece of text, so "in" sits right beside the countdown rather than across a fixed-width gap.
+            (Text("in ") + Text(timerInterval: Date()...max(Date(), state.start), countsDown: true).fontWeight(.semibold))
+                .monospacedDigit().multilineTextAlignment(.trailing)
+        }.foregroundStyle(.white)
     }
 }
 
 private struct LiveShiftLockScreen: View {
     let state: LiveShiftAttributes.ContentState
     let attributes: LiveShiftAttributes
-    let ended: Bool
+    let phase: ShiftPhase
+    private var ended: Bool { phase == .ended }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
@@ -71,15 +113,18 @@ private struct LiveShiftLockScreen: View {
                     Text(ended ? "booked pay" : "when you finish").font(.caption2).foregroundStyle(.white.opacity(0.7))
                 }
             }
-            if ended {
-                Label("Shift over. When did you finish?", systemImage: "clock.badge.checkmark")
-                    .font(.subheadline).foregroundStyle(mint)
-            } else {
+            switch phase {
+            case .upcoming:
+                StartsRow(state: state).font(.subheadline)
+            case .working:
                 ProgressView(timerInterval: state.start...state.end, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
                     .tint(mint)
                 TimeRow(state: state).font(.caption).foregroundStyle(.white.opacity(0.75))
+            case .ended:
+                Label("Shift over. When did you finish?", systemImage: "clock.badge.checkmark")
+                    .font(.subheadline).foregroundStyle(mint)
             }
-            FinishButtons(attributes: attributes, ended: ended)
+            if phase != .upcoming { FinishButtons(attributes: attributes, ended: ended) }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 16).padding(.vertical, 14)

@@ -49,9 +49,11 @@ def test_card_starts_at_shift_start_and_is_not_repeated(setup, monkeypatch):
     aps = payload['aps']
     assert aps['event'] == 'start' and aps['attributes-type'] == 'LiveShiftAttributes'
     assert aps['attributes'] == {'shiftID': data['shifts'][0]['id'].upper(), 'accountID': session['account']['id'].lower()}
-    assert aps['content-state']['endTime'] == row['end_at'] and aps['stale-date'] == row['end_at']
+    # Started before the shift: it counts down to the start, and iOS redraws it then.
+    assert aps['content-state']['endTime'] == row['end_at'] and aps['stale-date'] == row['start_at']
+    assert aps['alert']['body'] == 'Starts in 1 min.'
     # Privacy default: no job name or venue on the Lock Screen.
-    assert aps['content-state']['event'] == 'Shift in progress' and aps['content-state']['location'] == ''
+    assert aps['content-state']['event'] == 'Your shift' and aps['content-state']['location'] == ''
     assert 'Roadshow' not in json.dumps(payload)
     assert run(setup, row['start_at'] + 600)[0] == 0                         # already running
 
@@ -163,3 +165,37 @@ def test_older_database_gains_the_pushed_state_column(tmp_path):
                      'token TEXT, environment TEXT, ended INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(session_id, shift_id, started));')
     live_activity.ensure_schema(db)
     assert 'pushed_state' in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}
+
+
+def test_card_appears_thirty_minutes_early_and_switches_to_time_left_at_start(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    row = plan(setup)
+    assert live_activity.LEAD == 30 * 60
+    assert run(setup, row['start_at'] - 31 * 60)[0] == 0
+    count, sent = run(setup, row['start_at'] - 30 * 60)
+    assert count == 1 and sent[0][2]['aps']['alert']['body'] == 'Starts in 30 min.'
+    assert sent[0][2]['aps']['stale-date'] == row['start_at']
+    # The app reports the started card's own push token.
+    monkeypatch.setattr(live_activity, 'time', SimpleNamespace(time=lambda: row['start_at'] - 29 * 60))
+    setup.client.put('/v1/devices/live-activity', json={'token': 'd' * 64, 'environment': 'production',
+                     'shiftID': data['shifts'][0]['id']}, headers=headers(session))
+    assert run(setup, row['start_at'] - 60)[1] == [], 'nothing new before the start'
+    # At the start: one update, which now redraws at the end ("Shift over").
+    sent = run(setup, row['start_at'] + 30)[1]
+    assert [(u.rsplit('/', 1)[1], p['aps']['event']) for u, _, p in sent] == [('d' * 64, 'update')]
+    assert sent[0][2]['aps']['stale-date'] == row['end_at']
+    assert run(setup, row['start_at'] + 90)[1] == [], 'only once'
+
+
+def test_older_database_gains_the_went_live_column(tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / 'old.db')
+    db.row_factory = sqlite3.Row
+    db.executescript(live_activity.SCHEMA.replace(',\n ended INTEGER NOT NULL DEFAULT 0', ',\n ended INTEGER NOT NULL DEFAULT 0'))
+    live_activity.ensure_schema(db)
+    assert 'went_live' in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}
+

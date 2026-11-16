@@ -20,7 +20,7 @@ from .documents import NotificationPreferences
 router = APIRouter(prefix='/devices')
 logger = logging.getLogger(__name__)
 
-LEAD = 15 * 60                    # start the card this long before the shift
+LEAD = 30 * 60                    # start the card this long before the shift (it counts down to the start)
 RENEW = 7 * 3600 + 45 * 60         # replace it before iOS ends it at 8 hours
 MIN_REMAINING = 10 * 60            # not worth starting a card for the last few minutes
 RETRY = 120
@@ -50,6 +50,10 @@ def ensure_schema(db):
     # Added after the first release: the card details last pushed to each running card.
     if 'pushed_state' not in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}:
         db.execute('ALTER TABLE live_segments ADD COLUMN pushed_state TEXT')
+        db.commit()
+    # Added with the countdown before a shift: whether a card started early has been told the shift began.
+    if 'went_live' not in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}:
+        db.execute('ALTER TABLE live_segments ADD COLUMN went_live INTEGER NOT NULL DEFAULT 0')
         db.commit()
 
 
@@ -137,7 +141,7 @@ def rebuild_plans(storage, account, data, timezone_name, now=None):
         account_id = account['account_id'].lower()
         link = f'howmuch://widget/{{}}?account={account_id}&id={shift_id}'
         state = {
-            'event': shift['event'] if details else 'Shift in progress',
+            'event': shift['event'] if details else 'Your shift',
             'location': (shift.get('location') or '').split(',')[0].strip() if details else '',
             'startTime': start.timestamp(), 'endTime': end.timestamp(),
             'pay': float(shift['pay'])+float(shift.get('extra') or 0), 'currency': shift['currency'],
@@ -150,15 +154,22 @@ def rebuild_plans(storage, account, data, timezone_name, now=None):
         db.executemany('INSERT INTO live_plans VALUES(?,?,?,?,?)', rows)
 
 
+def _stale_date(state, now):
+    """iOS redraws the card at its stale date: at the start while counting down to it, then at the end."""
+    return int(state['startTime']) if now < state['startTime'] else int(state['endTime'])
+
+
 def _payload(event, state, now, plan=None, account_id=None):
     aps = {'timestamp': now, 'event': event, 'content-state': state}
     if event == 'start':
+        minutes = max(1, round((state['startTime'] - now) / 60))
         aps.update({'attributes-type': 'LiveShiftAttributes',
                     'attributes': {'shiftID': plan['shift_id'], 'accountID': account_id},
-                    'stale-date': plan['end_at'],
-                    'alert': {'title': state['event'], 'body': 'Your shift is live on the Lock Screen.'}})
+                    'stale-date': _stale_date(state, now),
+                    'alert': {'title': state['event'],
+                              'body': f'Starts in {minutes} min.' if now < state['startTime'] else 'Your shift is live on the Lock Screen.'}})
     elif event == 'update':
-        aps['stale-date'] = int(state['endTime'])
+        aps['stale-date'] = _stale_date(state, now)
     else:
         aps['dismissal-date'] = now
     return {'aps': aps}
@@ -234,9 +245,12 @@ async def deliver(storage, client=None, now=None):
             if replaced or deleted:
                 await _end(db, client, segment, now)
                 continue
-            # The shift was edited (times, pay, name) while its card is showing: push the new details to the card.
+            # The shift was edited (times, pay, name) while its card is showing, or a card started early has
+            # reached the shift's start: push the details again so it switches from "starts at" to time left.
             state = _plan_state(db, segment['account_id'], segment['shift_id'])
-            if state and state != segment['pushed_state'] and _configured(segment['environment'] or 'production'):
+            start_at = int(json.loads(state)['startTime']) if state else 0
+            going_live = bool(state) and segment['started'] < start_at <= now and not segment['went_live']
+            if state and (state != segment['pushed_state'] or going_live) and _configured(segment['environment'] or 'production'):
                 try:
                     status = await _send(client, segment['token'], segment['environment'] or 'production',
                                          _payload('update', json.loads(state), now))
@@ -244,8 +258,8 @@ async def deliver(storage, client=None, now=None):
                     continue
                 with db:
                     if status == 'sent':
-                        db.execute('UPDATE live_segments SET pushed_state=? WHERE session_id=? AND shift_id=? AND started=?',
-                                   (state, segment['session_id'], segment['shift_id'], segment['started']))
+                        db.execute('UPDATE live_segments SET pushed_state=?, went_live=? WHERE session_id=? AND shift_id=? AND started=?',
+                                   (state, int(start_at <= now), segment['session_id'], segment['shift_id'], segment['started']))
                     elif status == 'invalid':
                         db.execute('UPDATE live_segments SET ended=1 WHERE session_id=? AND shift_id=? AND started=?',
                                    (segment['session_id'], segment['shift_id'], segment['started']))
