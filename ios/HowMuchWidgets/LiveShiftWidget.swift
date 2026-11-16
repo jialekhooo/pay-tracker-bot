@@ -14,7 +14,7 @@ struct LiveShiftWidget: Widget {
         ActivityConfiguration(for: LiveShiftAttributes.self) { context in
             let phase = ShiftPhase(context.state, stale: context.isStale)
             LiveShiftLockScreen(state: context.state, attributes: context.attributes, phase: phase)
-                .widgetURL(phase == .ended ? context.state.finishURL : context.state.shiftURL)
+                .widgetURL(phase.pastEnd ? context.state.finishURL : context.state.shiftURL)
                 .activityBackgroundTint(Color(red: 0.06, green: 0.2, blue: 0.18))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -40,9 +40,11 @@ struct LiveShiftWidget: Widget {
                                 .tint(mint)
                             TimeRow(state: state).font(.caption2).foregroundStyle(.secondary)
                         case .ended:
-                            Text("Shift over. When did you finish?").font(.footnote).foregroundStyle(.secondary)
+                            EndedRow(state: state).font(.subheadline)
+                        case .overtime:
+                            OvertimeRow(state: state).font(.subheadline)
                         }
-                        if phase != .upcoming { FinishButtons(attributes: context.attributes, ended: phase == .ended) }
+                        FinishButtons(attributes: context.attributes, phase: phase)
                     }.padding(.horizontal, 4)
                 }
             } compactLeading: {
@@ -56,12 +58,14 @@ struct LiveShiftWidget: Widget {
                 case .working:
                     Text(timerInterval: state.start...state.end, countsDown: true).monospacedDigit().multilineTextAlignment(.trailing).frame(width: 66).foregroundStyle(mint)
                 case .ended:
-                    Image(systemName: "checkmark.circle").foregroundStyle(mint)
+                    Image(systemName: "flag.checkered").foregroundStyle(mint)
+                case .overtime:
+                    OvertimeTimer(state: state).multilineTextAlignment(.trailing).frame(width: 66)
                 }
             } minimal: {
                 PennyFace(size: 24)
             }
-            .widgetURL(phase == .ended ? state.finishURL : state.shiftURL)
+            .widgetURL(phase.pastEnd ? state.finishURL : state.shiftURL)
             .keylineTint(mint)
         }
     }
@@ -70,12 +74,50 @@ struct LiveShiftWidget: Widget {
 /// Where the shift is, worked out when iOS draws the card. iOS redraws it at its stale date: the start time while
 /// counting down (the app and server then move the stale date to the end), and the end time while working.
 private enum ShiftPhase {
-    case upcoming, working, ended
+    /// Before the start; between start and booked end; past the booked end asking "Finished?"; counting overtime.
+    case upcoming, working, ended, overtime
     init(_ state: LiveShiftAttributes.ContentState, stale: Bool) {
         let now = Date()
         if now < state.start { self = .upcoming }
+        else if now >= state.end && state.overtime == true { self = .overtime }
         else if stale && now >= state.end { self = .ended }
         else { self = .working }
+    }
+    var pastEnd: Bool { self == .ended || self == .overtime }
+}
+
+/// At the booked end: has the person finished, or are they staying on?
+private struct EndedRow: View {
+    let state: LiveShiftAttributes.ContentState
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "flag.checkered").foregroundStyle(mint)
+            (Text("Booked until ") + Text(state.end, style: .time) + Text(". Finished?")).fontWeight(.semibold)
+        }.foregroundStyle(.white)
+    }
+}
+
+/// Overtime counting up from the booked end, in orange like the app's overtime.
+private struct OvertimeTimer: View {
+    let state: LiveShiftAttributes.ContentState
+    var body: some View {
+        (Text("+") + Text(timerInterval: state.end...state.end.addingTimeInterval(12 * 60 * 60), countsDown: false))
+            .monospacedDigit().fontWeight(.semibold).foregroundStyle(.orange)
+    }
+}
+
+/// "Staying late" with the overtime so far, since the booked end.
+private struct OvertimeRow: View {
+    let state: LiveShiftAttributes.ContentState
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.badge.exclamationmark").foregroundStyle(.orange)
+            (Text("Staying late since ") + Text(state.end, style: .time)).fontWeight(.semibold).foregroundStyle(.white)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            // A fixed slot on the right, so the growing timer never pushes the label onto two lines.
+            OvertimeTimer(state: state).multilineTextAlignment(.trailing).frame(width: 84, alignment: .trailing)
+        }
     }
 }
 
@@ -98,7 +140,7 @@ private struct LiveShiftLockScreen: View {
     let state: LiveShiftAttributes.ContentState
     let attributes: LiveShiftAttributes
     let phase: ShiftPhase
-    private var ended: Bool { phase == .ended }
+    private var ended: Bool { phase.pastEnd }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
@@ -121,10 +163,11 @@ private struct LiveShiftLockScreen: View {
                     .tint(mint)
                 TimeRow(state: state).font(.caption).foregroundStyle(.white.opacity(0.75))
             case .ended:
-                Label("Shift over. When did you finish?", systemImage: "clock.badge.checkmark")
-                    .font(.subheadline).foregroundStyle(mint)
+                EndedRow(state: state).font(.subheadline)
+            case .overtime:
+                OvertimeRow(state: state).font(.subheadline)
             }
-            if phase != .upcoming { FinishButtons(attributes: attributes, ended: ended) }
+            FinishButtons(attributes: attributes, phase: phase)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -167,21 +210,28 @@ private struct TimeRow: View {
     }
 }
 
-/// "+30 min" while the shift is on (staying late), plus "Finished on time" once it's over.
-/// Both run in HowMuch without opening it; staying later recalculates the shift's pay, overtime included.
+/// At the booked end: "Finished" (on time) or "Staying late" (count overtime). While counting: "Finished now".
+/// They run in HowMuch without opening it; finishing late recalculates the shift's pay, overtime included.
 private struct FinishButtons: View {
     let attributes: LiveShiftAttributes
-    let ended: Bool
+    let phase: ShiftPhase
     var body: some View {
         HStack(spacing: 8) {
-            if ended {
+            switch phase {
+            case .ended:
                 Button(intent: FinishShiftOnTimeIntent(shiftID: attributes.shiftID, accountID: attributes.accountID)) {
-                    Label("Finished on time", systemImage: "checkmark").frame(maxWidth: .infinity)
+                    Label("Finished", systemImage: "checkmark").frame(maxWidth: .infinity)
                 }.tint(mint)
+                Button(intent: StayingLateIntent(shiftID: attributes.shiftID, accountID: attributes.accountID)) {
+                    Label("Staying late", systemImage: "clock").frame(maxWidth: .infinity)
+                }.tint(.orange)
+            case .overtime:
+                Button(intent: FinishShiftNowIntent(shiftID: attributes.shiftID, accountID: attributes.accountID)) {
+                    Label("Finished now", systemImage: "checkmark").frame(maxWidth: .infinity)
+                }.tint(mint)
+            case .upcoming, .working:
+                EmptyView()
             }
-            Button(intent: ExtendShiftIntent(shiftID: attributes.shiftID, accountID: attributes.accountID)) {
-                Label(ended ? "+30 min" : "Staying late? +30 min", systemImage: "plus").frame(maxWidth: ended ? nil : .infinity)
-            }.tint(.white)
         }
         .font(.caption.weight(.semibold))
         .buttonStyle(.bordered).buttonBorderShape(.capsule)

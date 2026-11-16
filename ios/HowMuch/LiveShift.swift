@@ -19,7 +19,7 @@ enum LiveShiftCenter {
     private static var automatedTest: Bool {
         #if DEBUG
         let arguments = CommandLine.arguments
-        return (arguments.contains("--preview") || arguments.contains("--ui-test-account")) && !arguments.contains("--ui-test-live-shift") && !arguments.contains("--ui-test-upcoming-shift")
+        return (arguments.contains("--preview") || arguments.contains("--ui-test-account")) && !arguments.contains("--ui-test-live-shift") && !arguments.contains("--ui-test-upcoming-shift") && !arguments.contains("--ui-test-ending-shift")
         #else
         return false
         #endif
@@ -30,6 +30,11 @@ enum LiveShiftCenter {
     static var dismissedShifts: Set<UUID> = []
     /// Cards the app ended itself: an immediate end also reports `.dismissed`, which must not count as a swipe.
     private static var endedByApp: Set<String> = []
+    /// Showing and updatable. A card past its stale date (the shift's start while counting down to it, its end
+    /// after that) is "stale" rather than "active", but it is still the same live card.
+    static func isLive(_ activity: Activity<LiveShiftAttributes>) -> Bool {
+        activity.activityState == .active || activity.activityState == .stale
+    }
     static func close(_ activity: Activity<LiveShiftAttributes>) async {
         endedByApp.insert(activity.id)
         await activity.end(nil, dismissalPolicy: .immediate)
@@ -41,7 +46,7 @@ enum LiveShiftCenter {
         activities.forEach(watch)
         // Keep only the newest card per shift (the server may have renewed one the app started).
         var newest: [UUID: Activity<LiveShiftAttributes>] = [:]
-        for activity in activities where activity.activityState == .active {
+        for activity in activities where isLive(activity) {
             let id = activity.attributes.shiftID
             if let kept = newest[id], firstSeen[kept.id, default: .distantPast] >= firstSeen[activity.id, default: .distantPast] {
                 Task { await close(activity) }
@@ -58,9 +63,15 @@ enum LiveShiftCenter {
             }
             let content = ActivityContent(state: state(for: shift, accountID: accountID, details: details), staleDate: staleDate(for: shift, now: now))
             if now >= shift.endDate {
-                // Leave the finished card up for a while so its tap can confirm the finish time.
-                if activity.activityState == .active {
-                    Task { await activity.end(content, dismissalPolicy: .after(shift.endDate.addingTimeInterval(4 * 60 * 60))) }
+                // Past the booked end the card asks "Finished?", or counts overtime after "Staying late". It stays
+                // up (in the Dynamic Island too) until answered, or for a few hours (half a day while counting).
+                let confirmed = preferences.confirmed.contains(shift.id)
+                let limit: TimeInterval = isStayingLate(shift.id) ? 12 * 60 * 60 : 4 * 60 * 60
+                if confirmed || now >= shift.endDate.addingTimeInterval(limit) {
+                    if confirmed { clearOvertime(shift.id) }
+                    Task { await close(activity) }
+                } else if isLive(activity) && activity.content.state != content.state {
+                    Task { await activity.update(content) }
                 }
             } else if activity.content.state != content.state || activity.content.staleDate != content.staleDate {
                 // A change to the shift, or its start passing: the card moves from "starts at" to time left.
@@ -68,7 +79,7 @@ enum LiveShiftCenter {
             }
         }
         guard lockScreenEnabled, systemAllows, let current = LiveShiftPlanner.current(in: data.shifts, at: now),
-              !activities.contains(where: { $0.attributes.shiftID == current.id && $0.attributes.accountID == accountID && $0.activityState == .active }),
+              !activities.contains(where: { $0.attributes.shiftID == current.id && $0.attributes.accountID == accountID && isLive($0) }),
               // Swiped away by the person: don't bring this shift's card back every minute.
               !dismissedShifts.contains(current.id),
               !activities.contains(where: { $0.attributes.shiftID == current.id && $0.activityState == .dismissed && !endedByApp.contains($0.id) })
@@ -159,7 +170,28 @@ enum LiveShiftCenter {
             startTime: shift.startDate.timeIntervalSince1970, endTime: shift.endDate.timeIntervalSince1970,
             pay: NSDecimalNumber(decimal: shift.total).doubleValue, currency: shift.currency,
             shiftURL: WidgetLink.shift(shift.id).url(accountID: accountID),
-            finishURL: WidgetLink.finish(shift.id).url(accountID: accountID))
+            finishURL: WidgetLink.finish(shift.id).url(accountID: accountID),
+            overtime: isStayingLate(shift.id) ? true : nil)
+    }
+
+    // MARK: Staying late
+
+    /// Shifts where the person tapped "Staying late", and when. Kept on this iPhone: it only shapes its card.
+    private static let overtimeKey = "liveShift.stayingLate"
+    static func isStayingLate(_ id: UUID) -> Bool {
+        (UserDefaults.standard.dictionary(forKey: overtimeKey) as? [String: Double])?[id.uuidString] != nil
+    }
+    static func startOvertime(_ id: UUID) {
+        var started = UserDefaults.standard.dictionary(forKey: overtimeKey) as? [String: Double] ?? [:]
+        started[id.uuidString] = started[id.uuidString] ?? Date().timeIntervalSince1970
+        // Forget anything older than two days, so the list never grows.
+        started = started.filter { Date().timeIntervalSince1970 - $0.value < 2 * 86400 }
+        UserDefaults.standard.set(started, forKey: overtimeKey)
+    }
+    static func clearOvertime(_ id: UUID) {
+        var started = UserDefaults.standard.dictionary(forKey: overtimeKey) as? [String: Double] ?? [:]
+        started[id.uuidString] = nil
+        UserDefaults.standard.set(started, forKey: overtimeKey)
     }
 
     // MARK: Finish-time questions
@@ -196,7 +228,9 @@ struct FinishShiftSheet: View {
 
     init(shift: Shift) {
         self.shift = shift
-        _finish = State(initialValue: shift.endDate)
+        // After "Staying late" on the card, the likely finish is now rather than the booked end.
+        let stayed = LiveShiftCenter.isStayingLate(shift.id) && Date() > shift.endDate
+        _finish = State(initialValue: stayed ? Date() : shift.endDate)
     }
     private var latest: Shift { store.data.shifts.first { $0.id == shift.id } ?? shift }
     private var updated: Shift? {
@@ -249,7 +283,7 @@ struct FinishShiftSheet: View {
                            : "\(length) shorter than booked: \(difference) less."
     }
     private func finishOnTime() {
-        LiveShiftCenter.confirm(shift.id, in: store); dismiss()
+        LiveShiftCenter.confirm(shift.id, in: store); LiveShiftCenter.clearOvertime(shift.id); dismiss()
     }
     private func save() {
         do {
@@ -282,7 +316,7 @@ struct LiveShiftSettingsView: View {
         AppForm {
             Section {
                 Toggle("Show on Lock Screen", isOn: lockScreen).accessibilityIdentifier("live.lockScreen")
-                Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears on its own when the shift starts, even if HowMuch is closed, and stays live through long shifts. Tap +30 min if you're staying late, or Finished on time once it ends. Job names follow your Job notifications privacy setting.")
+                Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears 30 minutes before the shift with a countdown to the start, even if HowMuch is closed, and stays live through long shifts. When the booked time ends it asks if you've finished: tap Staying late to count your overtime, then Finished now when you leave. Job names follow your Job notifications privacy setting.")
                     .font(.caption).foregroundStyle(Palette.muted)
                 if !LiveShiftCenter.systemAllows {
                     Text("Live Activities are turned off for HowMuch in iPhone Settings.").font(.caption).foregroundStyle(.orange)

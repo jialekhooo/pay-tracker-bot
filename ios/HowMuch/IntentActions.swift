@@ -22,27 +22,42 @@ enum IntentActions {
             LiveShiftCenter.confirm(shiftID, in: store)
             await AppleAccountStore.shared.synchronize()
         }
+        LiveShiftCenter.clearOvertime(shiftID)
         for activity in Activity<LiveShiftAttributes>.activities where activity.attributes.shiftID == shiftID {
             await LiveShiftCenter.close(activity)
         }
     }
 
-    static func extend(shiftID: UUID, accountID: String, minutes: Int) async throws {
+    /// "Staying late": the card switches to counting overtime from the booked end. Needs no records, so no unlock.
+    static func stayLate(shiftID: UUID) async {
+        LiveShiftCenter.startOvertime(shiftID)
+        for activity in Activity<LiveShiftAttributes>.activities where activity.attributes.shiftID == shiftID && LiveShiftCenter.isLive(activity) {
+            var state = activity.content.state
+            state.overtime = true
+            await activity.update(ActivityContent(state: state, staleDate: nil))
+        }
+    }
+
+    /// "Finished now" after staying late: the shift ends at this minute (pay and overtime recalculated), and the card closes.
+    static func finishNow(shiftID: UUID, accountID: String, at finish: Date) async throws {
         guard let store = await tracker(), store.accountID == accountID.lowercased() else {
             throw TrackerError.invalid("Open HowMuch and sign in to change this shift.")
         }
         guard let shift = store.data.shifts.first(where: { $0.id == shiftID }) else {
             throw TrackerError.invalid("This shift was removed.")
         }
-        let longer = try shift.extended(byMinutes: minutes)
-        // A finished card can't come back to life, so close it; the update below starts a fresh one if the shift is on again.
-        for activity in Activity<LiveShiftAttributes>.activities where activity.attributes.shiftID == shiftID && activity.activityState != .active {
+        let minute = try LiveShiftPlanner.endMinute(for: finish, of: shift)
+        if minute != shift.endMinute {
+            let finished = try shift.finishing(atMinute: minute)
+            guard store.update({ try $0.editShift(original: shift, replacement: finished) }) else {
+                throw TrackerError.invalid(store.error ?? "The shift couldn't be saved.")
+            }
+        }
+        LiveShiftCenter.confirm(shiftID, in: store)
+        LiveShiftCenter.clearOvertime(shiftID)
+        for activity in Activity<LiveShiftAttributes>.activities where activity.attributes.shiftID == shiftID {
             await LiveShiftCenter.close(activity)
         }
-        guard store.update({ try $0.editShift(original: shift, replacement: longer) }) else {
-            throw TrackerError.invalid(store.error ?? "The shift couldn't be saved.")
-        }
-        LiveShiftCenter.sync(store.data, accountID: store.accountID)
         // Save to the account now: the app may be suspended again as soon as this returns.
         await AppleAccountStore.shared.synchronize()
     }

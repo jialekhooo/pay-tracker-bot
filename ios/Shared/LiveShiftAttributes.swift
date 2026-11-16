@@ -15,6 +15,9 @@ struct LiveShiftAttributes: ActivityAttributes {
         /// The app link that opens this shift (or its finish-time question once it has ended).
         var shiftURL: URL
         var finishURL: URL
+        /// Set once the person taps "Staying late" after the booked end: the card counts overtime from then on.
+        /// Missing from the server's pushes and older builds, which read as not staying late.
+        var overtime: Bool?
     }
     var shiftID: UUID
     var accountID: String

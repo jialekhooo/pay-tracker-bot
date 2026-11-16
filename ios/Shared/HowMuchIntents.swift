@@ -22,10 +22,26 @@ struct FinishShiftOnTimeIntent: LiveActivityIntent {
     }
 }
 
-/// "+30 min" on the live shift card: moves the shift's finish 30 minutes later and recalculates its pay.
-struct ExtendShiftIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Add 30 minutes"
-    static var description = IntentDescription("Moves a shift's finish time 30 minutes later, with pay and overtime recalculated.")
+/// "Staying late" on the live shift card once the booked end arrives: the card starts counting overtime.
+/// Nothing is saved to the shift yet, so it works from the Lock Screen without unlocking.
+struct StayingLateIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Staying late"
+    static var description = IntentDescription("Starts counting overtime on a shift's live card.")
+    static var isDiscoverable = false
+    @Parameter(title: "Shift") var shiftID: String
+    @Parameter(title: "Account") var accountID: String
+    init() {}
+    init(shiftID: UUID, accountID: String) { self.shiftID = shiftID.uuidString; self.accountID = accountID }
+    func perform() async throws -> some IntentResult {
+        if let id = UUID(uuidString: shiftID) { await IntentActions.stayLate(shiftID: id) }
+        return .result()
+    }
+}
+
+/// "Finished now" while counting overtime: the shift ends at this minute, with pay and overtime recalculated.
+struct FinishShiftNowIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Finished now"
+    static var description = IntentDescription("Records that a shift finished now, with pay and overtime recalculated.")
     static var isDiscoverable = false
     // Shift records are only readable once the iPhone is unlocked.
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
@@ -34,7 +50,7 @@ struct ExtendShiftIntent: LiveActivityIntent {
     init() {}
     init(shiftID: UUID, accountID: String) { self.shiftID = shiftID.uuidString; self.accountID = accountID }
     func perform() async throws -> some IntentResult {
-        if let id = UUID(uuidString: shiftID) { try await IntentActions.extend(shiftID: id, accountID: accountID, minutes: 30) }
+        if let id = UUID(uuidString: shiftID) { try await IntentActions.finishNow(shiftID: id, accountID: accountID, at: Date()) }
         return .result()
     }
 }

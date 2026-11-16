@@ -4,6 +4,7 @@ import Foundation
 /// so these are never called here.
 enum IntentActions {
     static func finishOnTime(shiftID: UUID, accountID: String) async {}
-    static func extend(shiftID: UUID, accountID: String, minutes: Int) async throws {}
+    static func stayLate(shiftID: UUID) async {}
+    static func finishNow(shiftID: UUID, accountID: String, at finish: Date) async throws {}
     @MainActor static func addJob() {}
 }

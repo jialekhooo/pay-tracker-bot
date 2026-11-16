@@ -338,6 +338,13 @@ final class TrackerStore: ObservableObject {
             data.shifts.removeAll { $0.day == Shift.dayString(begin) }  // nothing else on today, so this card is the one shown
             data.shifts.append(try Shift(event: "Product launch", location: "Marina Bay Sands", day: Shift.dayString(begin), startMinute: start, endMinute: (start + 180) % 1440, rate: 20))
         }
+        if CommandLine.arguments.contains("--ui-test-ending-shift") {
+            // A shift that started an hour ago and ends two minutes after launch, so its card asks "Finished?".
+            let begin = Date().addingTimeInterval(-3600 + 120)
+            let start = calendar.component(.hour, from: begin) * 60 + calendar.component(.minute, from: begin)
+            data.shifts.removeAll { $0.day == Shift.dayString(Date()) || $0.day == Shift.dayString(begin) }
+            data.shifts.append(try Shift(event: "Product launch", location: "Marina Bay Sands", day: Shift.dayString(begin), startMinute: start, endMinute: (start + 60) % 1440, rate: 20))
+        }
         if CommandLine.arguments.contains("--ui-test-quiet-days") {
             // Nothing today or tomorrow, so Overview points to the next booked day.
             let soon = [0, 1].map { Shift.dayString(calendar.date(byAdding: .day, value: $0, to: Date())!) }
