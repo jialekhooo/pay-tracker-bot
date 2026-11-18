@@ -21,8 +21,8 @@ extension Font {
 enum Palette {
     /// Main text.
     static let ink = adaptive((0.094, 0.231, 0.216), dark: (0.90, 0.96, 0.93))
-    /// Secondary text.
-    static let muted = adaptive((0.392, 0.471, 0.451), dark: (0.62, 0.71, 0.68))
+    /// Secondary text. Dark enough for 4.5:1 contrast on the canvas and cards.
+    static let muted = adaptive((0.345, 0.42, 0.40), dark: (0.62, 0.71, 0.68))
     /// Teal text, icons and outlines. Brighter in Dark Mode so it reads on dark backgrounds.
     static let teal = adaptive((0.071, 0.42, 0.369), dark: (0.45, 0.85, 0.71))
     /// Teal fills behind white text (buttons, chips, selected days). Stays deep in Dark Mode.
@@ -33,8 +33,8 @@ enum Palette {
     static let line = adaptive((0.86, 0.90, 0.88), dark: (0.18, 0.27, 0.25))
     /// Cards and grouped rows.
     static let surface = adaptive((1, 1, 1), dark: (0.075, 0.135, 0.125), lightAlpha: 0.88)
-    /// Money waiting to be paid.
-    static let warning = adaptive((0.8, 0.42, 0.12), dark: (0.98, 0.62, 0.32))
+    /// Money waiting to be paid. A deep orange so amounts in it stay readable (4.5:1) on white.
+    static let warning = adaptive((0.68, 0.34, 0.06), dark: (0.98, 0.62, 0.32))
     /// Paid.
     static let success = adaptive((0.15, 0.42, 0.27), dark: (0.45, 0.85, 0.55))
 
@@ -142,8 +142,10 @@ struct ProfileAvatar: View {
             if let data = store.data.settings.avatar, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill().accessibilityLabel("Profile photo")
             } else {
-                Text(String(store.data.settings.displayName.first ?? "H")).font(.system(size: size * 0.4, weight: .bold))
+                Text(String(store.data.settings.displayName.first ?? "H")).font(.system(.title, weight: .bold)).minimumScaleFactor(0.1).lineLimit(1)
+                    .padding(size * 0.28)
                     .foregroundStyle(Palette.ink).frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.mint)
+                    .accessibilityHidden(true)
             }
         }.frame(width: size, height: size).clipShape(Circle())
     }
@@ -206,6 +208,7 @@ struct StatusPill: View {
     var body: some View {
         Label(title, systemImage: paid ? "checkmark.circle.fill" : title == "Working now" ? "clock.fill" : "circle.fill")
             .font(.caption2.weight(.semibold)).foregroundStyle(paid ? Palette.success : Palette.teal)
+            .lineLimit(1).fixedSize()
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background((paid ? Color.green : Palette.teal).opacity(0.08), in: Capsule())
     }
@@ -214,22 +217,36 @@ struct StatusPill: View {
 struct ShiftRow: View {
     @EnvironmentObject private var store: TrackerStore
     let shift: Shift
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
+        // With accessibility text sizes the pay goes under the name, and the status above the hours,
+        // so the name and date are never cut down to a letter or two.
+        let stacked = typeSize.isAccessibilitySize
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(shift.event).font(.appHeadline).foregroundStyle(Palette.ink).lineLimit(2)
-                Spacer(minLength: 4)
-                Text(money(shift.total, shift.currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).fixedSize()
+            let amount = Text(money(shift.total, shift.currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
+            if stacked {
+                Text(shift.event).font(.appHeadline).foregroundStyle(Palette.ink)
+                amount.lineLimit(1).minimumScaleFactor(0.6)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(shift.event).font(.appHeadline).foregroundStyle(Palette.ink).lineLimit(2)
+                    Spacer(minLength: 4)
+                    amount.fixedSize()
+                }
             }
             VStack(alignment: .leading, spacing: 7) {
                 Label(shift.whenLabel, systemImage: "calendar")
-                if !shift.location.isEmpty { Label(shift.location, systemImage: "mappin.and.ellipse").lineLimit(2) }
-            }.font(.caption).foregroundStyle(Palette.muted)
-            HStack {
-                StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date())
-                Spacer()
+                if !shift.location.isEmpty { Label(shift.location, systemImage: "mappin.and.ellipse").lineLimit(stacked ? nil : 2) }
+            }.font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            let hours = HStack {
                 Text(hoursText(shift.hours) + " paid time").font(.caption).foregroundStyle(Palette.muted)
-                Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
+                if !stacked { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
+            }
+            let pill = StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date())
+            if stacked {
+                VStack(alignment: .leading, spacing: 8) { pill; hours }
+            } else {
+                HStack { pill; Spacer(); hours }
             }
             if store.data.shifts.contains(where: { shift.overlaps($0) }) {
                 Label("Overlapping shift", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)

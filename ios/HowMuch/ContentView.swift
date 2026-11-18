@@ -244,12 +244,20 @@ struct EarningsHero: View {
                 .accessibilityIdentifier(split.booked > 0 ? "earnings.earned" : "earnings.total")
             Text(workedLine(split)).font(.caption).foregroundStyle(Palette.muted)
             Divider().overlay(Palette.line)
-            HStack(alignment: .top) {
-                figure("Paid", split.paid, color: Palette.teal, alignment: .leading)
-                Spacer(minLength: 8)
-                figure("Pending payment", split.owed, color: split.owed > 0 ? Palette.warning : Palette.ink, alignment: .center)
-                Spacer(minLength: 8)
-                figure("Booked", split.booked, color: Palette.ink, alignment: .trailing)
+            // Side by side while they fit at full size; with larger text, one per row rather than cutting amounts off.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top) {
+                    figure("Paid", split.paid, color: Palette.teal, alignment: .leading)
+                    Spacer(minLength: 8)
+                    figure("Pending payment", split.owed, color: owedColor(split), alignment: .center)
+                    Spacer(minLength: 8)
+                    figure("Booked", split.booked, color: Palette.ink, alignment: .trailing)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    figure("Paid", split.paid, color: Palette.teal, alignment: .leading)
+                    figure("Pending payment", split.owed, color: owedColor(split), alignment: .leading)
+                    figure("Booked", split.booked, color: Palette.ink, alignment: .leading)
+                }
             }
             if split.booked > 0 {
                 Text("\(money(split.total, currency)) including booked shifts").font(.caption2).foregroundStyle(Palette.muted)
@@ -262,11 +270,12 @@ struct EarningsHero: View {
         if split.shiftsBooked > 0 { parts.append("\(split.shiftsBooked) booked") }
         return parts.joined(separator: " · ")
     }
+    private func owedColor(_ split: EarningsBreakdown) -> Color { split.owed > 0 ? Palette.warning : Palette.ink }
     private func figure(_ title: String, _ value: Decimal, color: Color, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 5) {
-            Text(title).font(.caption2).foregroundStyle(Palette.muted)
+            Text(title).font(.caption2).foregroundStyle(Palette.muted).fixedSize()
             Text(money(value, currency)).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(color)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .fixedSize()
         }.accessibilityElement(children: .combine).accessibilityIdentifier("earnings." + title.lowercased().replacingOccurrences(of: " ", with: "-"))
     }
 }

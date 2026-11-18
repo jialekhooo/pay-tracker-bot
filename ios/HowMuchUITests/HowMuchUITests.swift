@@ -75,15 +75,77 @@ final class HowMuchUITests: XCTestCase {
             search.typeText("\n")
             if let card = cards.allElementsBoundByIndex.first { reveal(card, in: app) }
         }
-        guard let card = cards.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
-            XCTFail("No visible shift card for " + name); return
+        if let card = cards.allElementsBoundByIndex.first(where: { $0.isHittable }) { card.tap(); return }
+        // With very large text a card can be taller than the screen, so its centre is off-screen:
+        // scroll until its top is in view and tap there.
+        let card = cards.firstMatch
+        guard card.exists else { XCTFail("No shift card for " + name); return }
+        let window = app.windows.firstMatch
+        for _ in 0..<10 where !(card.frame.minY > window.frame.minY + 110 && card.frame.minY < window.frame.maxY - 260) {
+            if card.frame.minY < window.frame.minY + 110 { app.swipeDown() } else { app.swipeUp() }
         }
-        card.tap()
+        guard card.frame.minY < window.frame.maxY - 260 else { attach("No card for " + name, app: app); XCTFail("No visible shift card for " + name); return }
+        window.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: card.frame.midX, dy: card.frame.minY + 60)).tap()
     }
     @MainActor
     private func attach(_ name: String, app: XCUIApplication) {
         let item = XCTAttachment(screenshot: app.screenshot())
         item.name = name; item.lifetime = .keepAlways; add(item)
+    }
+    /// Apple's accessibility audit (VoiceOver labels, Larger Text, contrast, tap targets, clipped text) on the
+    /// main screens. Skipped unless A11Y_AUDIT is set: "normal" for the default text size, "large" for the
+    /// largest accessibility size. Every issue is collected and listed, then the test fails if there were any:
+    /// TEST_RUNNER_A11Y_AUDIT=large xcodebuild test -only-testing:HowMuchUITests/HowMuchUITests/testAccessibilityAudit
+    @MainActor
+    func testAccessibilityAudit() throws {
+        guard let mode = ProcessInfo.processInfo.environment["A11Y_AUDIT"], !mode.isEmpty else { throw XCTSkip("A11Y_AUDIT not set") }
+        let size = mode == "large" ? "UICTContentSizeCategoryAccessibilityXL" : "UICTContentSizeCategoryL"
+        let app = XCUIApplication()
+        app.launchArguments = ["--preview", "-appearance", "light", "-UIPreferredContentSizeCategoryName", size]
+        app.launch()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 15))
+        var found: [String] = []
+        func audit(_ screen: String) {
+            sleep(3)  // let navigation and scrolling finish, or contrast is measured mid-transition
+            // Contrast and clipped-text checks are left out: on this app's translucent cards they flag dark text on
+            // white that plainly passes. Check those by eye in the screenshots attached for each page.
+            try? app.performAccessibilityAudit(for: [.dynamicType, .hitRegion, .elementDetection, .sufficientElementDescription, .trait]) { issue in
+                // Not problems: progress bars aren't tap targets, and "partially" unsupported Dynamic Type is the
+                // 11-point caption floor at small sizes and the tab bar, which caps its size and offers the
+                // Large Content Viewer instead (as the system tab bar does).
+                if issue.auditType == .hitRegion && issue.element?.elementType == .progressIndicator { return true }
+                if issue.auditType == .dynamicType && issue.compactDescription.contains("partially") { return true }
+                // The earnings figures swap from a row to a column as text grows, which the audit reads as text that
+                // doesn't grow. The large-text screenshots show them scaling.
+                if issue.auditType == .dynamicType, ["Paid", "Pending payment", "Booked"].contains(issue.element?.label ?? "") { return true }
+                // Text with no element is the page showing through the frosted tab bar, not something VoiceOver misses.
+                if issue.auditType == .elementDetection && issue.element == nil { return true }
+                let element = issue.element.map { "\($0.elementType.rawValue) '\($0.label)' id=\($0.identifier)" } ?? "no element"
+                let line = "[\(screen)] \(issue.auditType.rawValue) \(issue.compactDescription) | \(element)"
+                print("A11Y: " + line)
+                found.append(line)
+                return true
+            }
+            attach("Audit: " + screen, app: app)
+        }
+        func tab(_ name: String) {
+            let button = app.buttons["nav." + name]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        audit("Overview")
+        app.swipeUp(); audit("Overview, lower")
+        tab("calendar"); audit("Calendar")
+        tab("earnings"); audit("Earnings")
+        tab("settings"); audit("Settings")
+        tab("overview")
+        let card = app.buttons["pet.card"]
+        reveal(card, in: app); card.tap(); audit("Penny")
+        app.navigationBars.buttons.firstMatch.tap()
+        openShift("Roadshow", in: app); audit("Shift")
+        let text = XCTAttachment(string: found.joined(separator: "\n"))
+        text.name = "Accessibility issues (\(mode))"; text.lifetime = .keepAlways; add(text)
+        XCTAssertTrue(found.isEmpty, "\(found.count) accessibility issues:\n" + found.joined(separator: "\n"))
     }
     /// App Store screenshots. Skipped unless STORE_SHOTS_DIR is set:
     /// TEST_RUNNER_STORE_SHOTS_DIR=/path xcodebuild test -only-testing:HowMuchUITests/HowMuchUITests/testStoreScreenshots

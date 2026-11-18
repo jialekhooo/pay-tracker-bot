@@ -746,6 +746,7 @@ struct PetCard: View {
     let now: Date
     @State private var celebrate: PetProgress.Stage?
     @State private var gained = 0
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let pet = store.petProgress(now: now)
@@ -772,15 +773,16 @@ struct PetCard: View {
                 }
                 .frame(height: 170).clipped()
                 VStack(alignment: .leading, spacing: 9) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(name).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
-                            Text(pet.stage == .egg ? "Work shifts to hatch me" : "\(pet.stage.title) · Lv \(pet.level) · \(pet.mood.label)")
-                                .font(.caption).foregroundStyle(Palette.muted)
-                        }
-                        Spacer()
-                        CoinLabel(amount: balance)
-                        Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
+                    let titles = VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
+                        Text(pet.stage == .egg ? "Work shifts to hatch me" : "\(pet.stage.title) · Lv \(pet.level) · \(pet.mood.label)")
+                            .font(.caption).foregroundStyle(Palette.muted)
+                    }
+                    let coins = HStack { CoinLabel(amount: balance); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
+                    if typeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 8) { titles; coins }
+                    } else {
+                        HStack { titles; Spacer(); coins }
                     }
                     ProgressView(value: pet.progress).tint(PetPalette.leaf)
                     if let line = nextStageLine(pet) { Text(line).font(.caption2).foregroundStyle(Palette.muted) }
@@ -858,6 +860,7 @@ struct EvolutionSheet: View {
 struct PetDetailView: View {
     @EnvironmentObject private var store: TrackerStore
     @EnvironmentObject private var auth: AppleAccountStore
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var redeeming = false
     @State private var giftCode = ""
     @State private var checkingCode = false
@@ -963,6 +966,8 @@ struct PetDetailView: View {
             }
             Text(visits?.away.map { "\(displayName) is visiting \($0.card.owner)!" } ?? pet.message(name: displayName, currency: store.data.rules.currency))
                 .font(.footnote.weight(.semibold)).foregroundStyle(PetPalette.outline).multilineTextAlignment(.center)
+                // The stage has a fixed height, so the bubble stops growing before it covers the pet.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .padding(.horizontal, 14).padding(.vertical, 8).background(.white.opacity(0.92), in: Capsule())
                 .padding(.horizontal, 14).padding(.bottom, 12).allowsHitTesting(false)
         }
@@ -980,8 +985,10 @@ struct PetDetailView: View {
                         .onChange(of: naming) { _, focused in if !focused { saveName() } }
                 }
             if !naming {
-                Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted)
-                    .onTapGesture { naming = true }.accessibilityLabel("Rename")
+                Button { naming = true } label: {
+                    Image(systemName: "pencil").font(.callout.weight(.semibold)).foregroundStyle(Palette.muted)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).padding(.vertical, -10).accessibilityLabel("Rename")
             }
         }.foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
     }
@@ -1006,7 +1013,8 @@ struct PetDetailView: View {
             }
             ProgressView(value: pet.progress).tint(PetPalette.leaf)
             if let line = nextStageLine(pet) { Text(line).font(.caption).foregroundStyle(Palette.muted) }
-            HStack(spacing: 8) {
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+            layout {
                 tile("Streak", "\(pet.streakWeeks) wk", "flame.fill", .orange)
                 tile("Best", "\(pet.bestStreakWeeks) wk", "trophy.fill", PetPalette.goldDark)
                 tile("Days worked", "\(pet.daysWorked)", "calendar", Palette.teal)
@@ -1017,8 +1025,8 @@ struct PetDetailView: View {
     private func tile(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
         VStack(spacing: 4) {
             Image(systemName: symbol).font(.callout).foregroundStyle(tint)
-            Text(value).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
-            Text(title).font(.caption2).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1)
+            Text(title).font(.caption2).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 10)
         .background(Palette.mint.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))

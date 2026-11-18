@@ -71,9 +71,17 @@ struct SettingsView: View {
         NavigationLink(destination: destination) {
             HStack(spacing: 12) {
                 Image(systemName: icon).font(.rowIcon).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
-                Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold))
-                Spacer(minLength: 8)
-                if let value { Text(value).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1) }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        Spacer(minLength: 8)
+                        if let value { Text(value).font(.subheadline).foregroundStyle(Palette.muted).fixedSize() }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        if let value { Text(value).font(.subheadline).foregroundStyle(Palette.muted) }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
                 Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted.opacity(0.7))
             }.foregroundStyle(Palette.ink)
                 .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)

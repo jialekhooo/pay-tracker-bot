@@ -20,12 +20,16 @@ struct WorkCalendarView: View {
     var body: some View {
         ScreenShell(title: "Calendar", subtitle: "A clearer view of your working days.") {
             Card {
-                HStack {
-                    Text(month.formatted(.dateTime.month(.wide).year())).font(.system(.title3, design: .rounded, weight: .bold)).lineLimit(1).minimumScaleFactor(0.75)
-                    Spacer()
-                    Button { month = Date(); selected = Date() } label: { Text("Today").font(.caption.bold()).padding(.horizontal, 10).frame(minHeight: 44).background(Palette.mint, in: Capsule()).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.today")
+                // The month and its buttons share a line while they fit; with large text the buttons go underneath.
+                let title = Text(month.formatted(.dateTime.month(.wide).year())).font(.system(.title3, design: .rounded, weight: .bold))
+                let buttons = HStack {
+                    Button { month = Date(); selected = Date() } label: { Text("Today").font(.caption.bold()).lineLimit(1).fixedSize().padding(.horizontal, 10).frame(minHeight: 44).background(Palette.mint, in: Capsule()).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.today")
                     Button { move(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Previous month")
                     Button { move(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Next month")
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack { title.lineLimit(1).fixedSize(); Spacer(); buttons }
+                    VStack(alignment: .leading, spacing: 4) { title; buttons }
                 }
                 LazyVGrid(columns: columns, spacing: 7) {
                     ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, label in Text(label).font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.bottom, 4) }
@@ -55,9 +59,10 @@ struct WorkCalendarView: View {
             HStack {
                 Text("\(counted(monthShifts.count, "shift")) this month").font(.caption).foregroundStyle(Palette.muted)
                 Spacer()
-                Button { sharingAvailability = true } label: { Label("Share availability", systemImage: "person.badge.clock").font(.caption.bold()) }
+                // 44-point tall targets, though the labels are small.
+                Button { sharingAvailability = true } label: { Label("Share availability", systemImage: "person.badge.clock").font(.caption.bold()).frame(minHeight: 44).contentShape(Rectangle()) }
                     .accessibilityIdentifier("calendar.availability")
-                NavigationLink { CalendarSettingsView() } label: { Label("Export", systemImage: "square.and.arrow.up").font(.caption.bold()) }.accessibilityIdentifier("calendar.export")
+                NavigationLink { CalendarSettingsView() } label: { Label("Export", systemImage: "square.and.arrow.up").font(.caption.bold()).frame(minHeight: 44).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.export")
             }
             SectionHeading(title: selected.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)), detail: counted(selectedShifts.count, "shift"))
             if selectedShifts.isEmpty { EmptyCard(title: "A day with possibilities", message: "No shifts booked for this date.") }
