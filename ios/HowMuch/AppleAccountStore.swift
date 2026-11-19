@@ -180,8 +180,8 @@ final class AppleAccountStore: ObservableObject {
             _ = try? await api.request("/v1/devices/live-start", method: "PUT", body: body)
         case .noStart:
             _ = try? await api.request("/v1/devices/live-start", method: "DELETE")
-        case .activity(let shift, let value):
-            guard let body = try? JSONEncoder().encode(["token": value, "environment": environment, "shiftID": shift.uuidString]) else { return }
+        case .activity(let shift, let value, let card):
+            guard let body = try? JSONEncoder().encode(["token": value, "environment": environment, "shiftID": shift.uuidString, "activityID": card]) else { return }
             _ = try? await api.request("/v1/devices/live-activity", method: "PUT", body: body)
         }
     }

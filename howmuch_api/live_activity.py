@@ -55,6 +55,11 @@ def ensure_schema(db):
     if 'went_live' not in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}:
         db.execute('ALTER TABLE live_segments ADD COLUMN went_live INTEGER NOT NULL DEFAULT 0')
         db.commit()
+    # Added for token rotation: the card's own id (sent by build 81 and later), so a new token for a card
+    # that's already showing updates it instead of looking like a new card.
+    if 'activity_id' not in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}:
+        db.execute('ALTER TABLE live_segments ADD COLUMN activity_id TEXT')
+        db.commit()
 
 
 def _plan_state(db, account_id, shift_id):
@@ -69,6 +74,8 @@ class StartToken(BaseModel):
 
 class ActivityToken(StartToken):
     shiftID: str = Field(pattern=r'^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$')
+    # The Live Activity's id. Older builds don't send it.
+    activityID: str | None = Field(default=None, max_length=100, pattern=r'^[0-9A-Za-z-]+$')
 
 
 def _configured(environment):
@@ -111,16 +118,24 @@ async def register_activity_token(payload: ActivityToken, request: Request, auth
         if db.execute('SELECT 1 FROM live_segments WHERE session_id=? AND shift_id=? AND token=?',
                       (account['session_id'], shift_id, payload.token.lower())).fetchone():
             return {'registered': True}
+        same_card = payload.activityID and db.execute(
+            'SELECT started FROM live_segments WHERE session_id=? AND shift_id=? AND activity_id=? ORDER BY started DESC LIMIT 1',
+            (account['session_id'], shift_id, payload.activityID)).fetchone()
         latest = db.execute('SELECT * FROM live_segments WHERE session_id=? AND shift_id=? ORDER BY started DESC LIMIT 1',
                             (account['session_id'], shift_id)).fetchone()
-        if latest and latest['token'] is None and now - latest['started'] < RENEW:
+        if same_card:
+            # iOS gave a card that's already showing a new token: keep the card (its renewal clock included) and
+            # just send updates to the new token. Recording it as a new card would make the server end it.
             db.execute('UPDATE live_segments SET token=?,environment=? WHERE session_id=? AND shift_id=? AND started=?',
-                       (payload.token.lower(), payload.environment, account['session_id'], shift_id, latest['started']))
+                       (payload.token.lower(), payload.environment, account['session_id'], shift_id, same_card['started']))
+        elif latest and latest['token'] is None and now - latest['started'] < RENEW:
+            db.execute('UPDATE live_segments SET token=?,environment=?,activity_id=? WHERE session_id=? AND shift_id=? AND started=?',
+                       (payload.token.lower(), payload.environment, payload.activityID, account['session_id'], shift_id, latest['started']))
         else:
             # A card the app started shows the shift as the app last saw it, which the server's plan reflects.
-            db.execute('INSERT OR IGNORE INTO live_segments(session_id,account_id,shift_id,started,token,environment,pushed_state) VALUES(?,?,?,?,?,?,?)',
+            db.execute('INSERT OR IGNORE INTO live_segments(session_id,account_id,shift_id,started,token,environment,pushed_state,activity_id) VALUES(?,?,?,?,?,?,?,?)',
                        (account['session_id'], account['account_id'], shift_id, now, payload.token.lower(), payload.environment,
-                        _plan_state(db, account['account_id'], shift_id)))
+                        _plan_state(db, account['account_id'], shift_id), payload.activityID))
     return {'registered': True}
 
 

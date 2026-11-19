@@ -266,3 +266,36 @@ def test_a_friend_deleting_their_account_keeps_your_coins_and_cancels_their_noti
     pending = db.execute("SELECT COUNT(*) FROM notification_jobs WHERE account_id=? AND status='pending' "
                          "AND (kind LIKE 'friend_%' OR kind='hello')", (a['account']['id'],)).fetchone()[0]
     assert pending == 0
+
+
+def test_changing_time_zone_never_gives_a_second_hello_or_visit_the_same_day(setup):
+    a, b = prepare(setup)
+    code_a, code_b = make_friends(setup, a, b)
+    data = setup.client.get('/v1/data', headers=headers(a)).json()
+    revision = data['revision']
+
+    def move_to(zone):
+        nonlocal revision
+        saved = setup.client.put('/v1/data', headers=headers(a), json={'baseRevision': revision, 'timezone': zone, 'data': data['data']})
+        assert saved.status_code == 200, saved.text
+        revision = saved.json()['revision']
+
+    # Start as far west as possible, then walk east: every later zone is on the same or a later date.
+    move_to('Etc/GMT+12')
+    assert setup.client.post(f'/v1/friends/{code_b}/hello', headers=headers(a)).status_code == 200
+    assert visit(setup, a, code_b).status_code == 200
+    setup.client.post('/v1/friends/visit/home', headers=headers(a))
+    for zone in ('Asia/Singapore', 'Pacific/Kiritimati', 'Etc/GMT-14', 'Etc/GMT+12'):
+        move_to(zone)
+        assert setup.client.post(f'/v1/friends/{code_b}/hello', headers=headers(a)).status_code == 409, zone
+        assert visit(setup, a, code_b).status_code == 409, zone
+    mine = overview(setup, a)
+    assert mine['helloCoins'] == friends.HELLO_COINS
+    friend = setup.client.get('/v1/friends', headers=headers(a)).json()['friends'][0]
+    assert friend['saidHiToday'] is True and friend['visitedToday'] is True
+    # A real new day (the last hello and visit were yesterday everywhere) is allowed again.
+    db = setup.storage._conn
+    with db:
+        db.execute("UPDATE pet_hellos SET day='2000-01-01'")
+        db.execute("UPDATE pet_visits SET day='2000-01-01'")
+    assert setup.client.post(f'/v1/friends/{code_b}/hello', headers=headers(a)).status_code == 200

@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS pet_visits (
  UNIQUE(from_account, to_account, day)
 );
 CREATE INDEX IF NOT EXISTS pet_visits_to ON pet_visits(to_account, ends);
+CREATE TABLE IF NOT EXISTS pet_zones (
+ account_id TEXT NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE, zone TEXT NOT NULL, used INTEGER NOT NULL,
+ PRIMARY KEY(account_id, zone)
+);
 CREATE TABLE IF NOT EXISTS pet_kept_coins (
  account_id TEXT PRIMARY KEY REFERENCES accounts(account_id) ON DELETE CASCADE, coins INTEGER NOT NULL DEFAULT 0
 );
@@ -129,7 +133,11 @@ def notify_friend(db, kind, sender, recipient, now):
     queue_friend_push(db, kind, sender, recipient, now, title, body)
 
 
-def today_for(db, account_id) -> str:
+ZONE_MEMORY = 7 * 86400
+
+
+def zone_of(db, account_id) -> str:
+    """The time zone the account's app last synced with."""
     row = db.execute('SELECT body FROM documents WHERE account_id=?', (account_id,)).fetchone()
     zone = 'Asia/Singapore'
     if row:
@@ -137,10 +145,32 @@ def today_for(db, account_id) -> str:
             zone = json.loads(row['body']).get('timezone') or zone
         except ValueError:
             pass
+    return zone
+
+
+def date_in(zone, now) -> str:
     try:
-        return datetime.now(ZoneInfo(zone)).date().isoformat()
+        return datetime.fromtimestamp(now, ZoneInfo(zone)).date().isoformat()
     except Exception:
-        return datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat()
+        return datetime.fromtimestamp(now, ZoneInfo('Asia/Singapore')).date().isoformat()
+
+
+def today_for(db, account_id, now=None) -> str:
+    """The day for once-a-day hellos and visits: the earliest local date across the account's time zone now and
+    every zone it used for hellos or visits in the past week. Moving the time zone east can't bring tomorrow
+    forward, and moving it west only reaches days already used, so it's once a day whatever the setting.
+    (Someone who really travels east waits for their old zone's midnight, for up to a week.)"""
+    now = time.time() if now is None else now
+    zones = {zone_of(db, account_id)}
+    zones.update(row[0] for row in db.execute('SELECT zone FROM pet_zones WHERE account_id=? AND used>?',
+                                              (account_id, int(now) - ZONE_MEMORY)).fetchall())
+    return min(date_in(zone, now) for zone in zones)
+
+
+def used_zone(db, account_id, now):
+    """Remember the zone a hello or visit was made in (inside its transaction)."""
+    db.execute('INSERT INTO pet_zones(account_id, zone, used) VALUES(?,?,?) ON CONFLICT(account_id, zone) DO UPDATE SET used=excluded.used',
+               (account_id, zone_of(db, account_id), now))
 
 
 def bonus_coins(db, account_id) -> int:
@@ -225,9 +255,9 @@ def person(db, me, other):
     """What one person sees of another: their code, Penny's card and today's hellos. Nothing about work."""
     today = today_for(db, me)
     return {'code': 'PENNY-' + code_for(db, other), 'card': card_of(db, other),
-            'saidHiToday': bool(db.execute('SELECT 1 FROM pet_hellos WHERE from_account=? AND to_account=? AND day=?', (me, other, today)).fetchone()),
-            'theySaidHiToday': bool(db.execute('SELECT 1 FROM pet_hellos WHERE from_account=? AND to_account=? AND day=?', (other, me, today_for(db, other))).fetchone()),
-            'visitedToday': bool(db.execute('SELECT 1 FROM pet_visits WHERE from_account=? AND to_account=? AND day=?', (me, other, today)).fetchone())}
+            'saidHiToday': bool(db.execute('SELECT 1 FROM pet_hellos WHERE from_account=? AND to_account=? AND day>=?', (me, other, today)).fetchone()),
+            'theySaidHiToday': bool(db.execute('SELECT 1 FROM pet_hellos WHERE from_account=? AND to_account=? AND day>=?', (other, me, today_for(db, other))).fetchone()),
+            'visitedToday': bool(db.execute('SELECT 1 FROM pet_visits WHERE from_account=? AND to_account=? AND day>=?', (me, other, today)).fetchone())}
 
 
 def visit_seen_by(db, row, other):
@@ -339,9 +369,13 @@ async def say_hello(code: str, request: Request, authorization: str | None = Hea
     me, other = account['account_id'], account_for_code(db, code)
     if not other or not are_friends(db, me, other):
         raise HTTPException(404, "You can only say hi to friends.")
-    today, now = today_for(db, me), int(time.time())
+    now = int(time.time()); today = today_for(db, me, now)
     with db:
-        added = db.execute('INSERT OR IGNORE INTO pet_hellos VALUES(?,?,?,?)', (me, other, today, now)).rowcount
+        # A later day than the last hello to this friend (see today_for), so a time zone change can't repeat it.
+        last = db.execute('SELECT MAX(day) FROM pet_hellos WHERE from_account=? AND to_account=?', (me, other)).fetchone()[0]
+        added = 0 if last and today <= last else db.execute('INSERT OR IGNORE INTO pet_hellos VALUES(?,?,?,?)', (me, other, today, now)).rowcount
+        if added:
+            used_zone(db, me, now)
     if not added:
         raise HTTPException(409, "You've already said hi today. Come back tomorrow!")
     mine, theirs = card_of(db, me), card_of(db, other)
@@ -376,14 +410,18 @@ async def send_pet(code: str, request: Request, authorization: str | None = Head
     me, other = account['account_id'], account_for_code(db, code)
     if not other or not are_friends(db, me, other):
         raise HTTPException(404, "Your pet can only visit friends.")
-    today, now = today_for(db, me), int(time.time())
+    now = int(time.time()); today = today_for(db, me, now)
     mine, theirs = card_of(db, me), card_of(db, other)
     pet = mine.get('petName') or 'Penny'
     with db:
         if active_visit(db, me, now):
             raise HTTPException(409, f"{pet} is already out visiting. Bring {pet} home first.")
-        added = db.execute('INSERT OR IGNORE INTO pet_visits(visit_id,from_account,to_account,day,created,ends) VALUES(?,?,?,?,?,?)',
+        # As with hellos: a later day than the last visit to this friend, whatever time zone is set.
+        last = db.execute('SELECT MAX(day) FROM pet_visits WHERE from_account=? AND to_account=?', (me, other)).fetchone()[0]
+        added = 0 if last and today <= last else db.execute('INSERT OR IGNORE INTO pet_visits(visit_id,from_account,to_account,day,created,ends) VALUES(?,?,?,?,?,?)',
                            (secrets.token_hex(12), me, other, today, now, now + VISIT_SECONDS)).rowcount
+        if added:
+            used_zone(db, me, now)
         if not added:
             raise HTTPException(409, f"{pet} has already visited {theirs.get('ownerName') or 'this friend'} today. Come back tomorrow!")
         who = mine.get('ownerName') or 'A friend'

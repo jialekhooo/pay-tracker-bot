@@ -223,3 +223,24 @@ def test_lock_screen_setting_off_means_no_cards(setup, monkeypatch):
     write(setup, session, data, 1)
     assert plan(setup) is not None
 
+
+
+def test_a_new_token_for_a_card_already_showing_updates_it_instead_of_ending_it(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    shift = data['shifts'][0]['id']
+    for token in ('d' * 64, 'e' * 64):
+        assert setup.client.put('/v1/devices/live-activity', headers=headers(session), json={
+            'token': token, 'environment': 'production', 'shiftID': shift, 'activityID': 'A1B2C3D4-card'}).status_code == 200
+    rows = setup.storage._conn.execute('SELECT token, activity_id FROM live_segments').fetchall()
+    assert [(r['token'], r['activity_id']) for r in rows] == [('e' * 64, 'A1B2C3D4-card')]
+    count, sent = run(setup, int(live_activity.time.time()) + 60)
+    assert all(payload['aps']['event'] != 'end' for _, _, payload in sent)
+    # A different card for the same shift (a few seconds later) is still a new card, and the old one is ended.
+    later = live_activity.time.time() + 5
+    monkeypatch.setattr(live_activity.time, 'time', lambda: later)
+    setup.client.put('/v1/devices/live-activity', headers=headers(session), json={
+        'token': 'f' * 64, 'environment': 'production', 'shiftID': shift, 'activityID': 'OTHER-card'})
+    assert setup.storage._conn.execute('SELECT count(*) FROM live_segments').fetchone()[0] == 2

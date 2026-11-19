@@ -98,10 +98,11 @@ enum LiveShiftCenter {
     // The server starts the card at shift time without the app being opened (iOS 17.2+), and renews it
     // before iOS's 8-hour limit. It needs this phone's push-to-start token and each running card's token.
 
-    enum Token { case start(String), activity(shift: UUID, token: String), noStart }
+    /// `card` is the Live Activity's own id, so the server can tell a new token for the same card from a new card.
+    enum Token { case start(String), activity(shift: UUID, token: String, card: String), noStart }
     private static var reporter: ((Token) async -> Void)?
     private static var startToken: String?
-    private static var cardTokens: [String: (shift: UUID, token: String)] = [:]
+    private static var cardTokens: [String: (shift: UUID, token: String)] = [:]  // keyed by the card's id
     private static var watching = Set<String>()
     private static var firstSeen: [String: Date] = [:]
     private static var observing = false
@@ -135,7 +136,7 @@ enum LiveShiftCenter {
             for await data in activity.pushTokenUpdates {
                 let token = hex(data)
                 cardTokens[activity.id] = (activity.attributes.shiftID, token)
-                await reporter?(.activity(shift: activity.attributes.shiftID, token: token))
+                await reporter?(.activity(shift: activity.attributes.shiftID, token: token, card: activity.id))
             }
         }
     }
@@ -146,7 +147,7 @@ enum LiveShiftCenter {
         guard send != nil else { return }
         Task { @MainActor in
             await reportStart()
-            for card in cardTokens.values { await reporter?(.activity(shift: card.shift, token: card.token)) }
+            for (id, card) in cardTokens { await reporter?(.activity(shift: card.shift, token: card.token, card: id)) }
         }
     }
 
