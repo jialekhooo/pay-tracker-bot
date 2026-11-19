@@ -141,7 +141,9 @@ final class AccountAPI {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            throw AccountHTTPError(status: status, message: object?["detail"] as? String ?? "HowMuch could not complete that request. Please try again.")
+            // FastAPI sends a string, or for invalid input a list of problems: show the first one's message.
+            let listed = (object?["detail"] as? [[String: Any]])?.first?["msg"] as? String
+            throw AccountHTTPError(status: status, message: object?["detail"] as? String ?? listed ?? "HowMuch could not complete that request. Please try again.")
         }
         return data
     }

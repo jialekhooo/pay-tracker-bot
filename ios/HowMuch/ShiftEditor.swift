@@ -166,7 +166,7 @@ struct ShiftEditor: View {
             if existing == nil && !store.data.shifts.isEmpty {
                 Menu {
                     ForEach(Array(Set(store.data.shifts.map(\.event))).sorted(), id: \.self) { name in
-                        Button(name) { event = name; if let rate = store.data.settings.eventRates[name.lowercased()] { amount = "\(rate)" } }
+                        Button(name) { event = name; if let rate = store.data.settings.eventRates[name.lowercased()] { amount = "\(rate)"; fixed = false } }
                     }
                 } label: {
                     Label("Choose a previous event", systemImage: "clock.arrow.circlepath")
@@ -410,6 +410,8 @@ struct ShiftEditor: View {
     private func makeBatch() throws -> [Shift] {
         let primary = try makeShift()
         var batch = (existing == nil || duplicating) && repeatDays > 0 ? try ShiftSeries.make(from: primary, every: repeatDays, count: repeatCount) : [primary]
+        // Repeats are built from a template, which doesn't carry the due date: give them the one chosen here.
+        if hasDue { for index in batch.indices { batch[index].paymentDue = primary.paymentDue } }
         // A pasted lump sum split across the dates: the last date takes the leftover cents so the total is exact.
         var lastPay = primary.fixedPay
         if let total = pasted?.lumpSum, let share = primary.fixedPay, share == pasted?.fixedPay, !extraDates.isEmpty, extraDates.count + 1 == pasted?.dates.count, repeatDays == 0 {
@@ -478,7 +480,8 @@ struct ShiftEditor: View {
             overtime = shift.overtimeAfter != nil; threshold = "\(shift.overtimeAfter ?? 8)"; multiplier = "\(shift.overtimeMultiplier)"
             extra = shift.extra.map { "\($0)" } ?? ""; extraNote = shift.extraNote ?? ""
             loadBrief(shift)
-            hasDue = shift.paymentDue != nil
+            // A duplicate is new work: its due date is worked out again from its own date unless one is chosen.
+            hasDue = shift.paymentDue != nil && !duplicating
             if let date = shift.paymentDue, let parsed = TrackerCalendar.localDate(date) { due = parsed }
         } else {
             amount = "\(store.data.rules.rate)"; currency = store.data.rules.currency

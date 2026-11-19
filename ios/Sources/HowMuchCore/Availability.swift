@@ -34,13 +34,17 @@ public enum Availability {
         // at the first and last shift hides a free afternoon between two jobs.
         var end = dayStart
         var middle: (start: Int, end: Int)?
+        var first = true
         for (from, to) in taken.sorted(by: { $0.0 < $1.0 }) {
             let start = max(dayStart, end), finish = min(dayEnd, from)
-            if end > dayStart, finish - start >= usefulGap,
+            // The time before the first booking is `before`, not a gap between jobs. Skip only that one:
+            // a first booking ending by the start of the day (an early bump-in, last night's overnight
+            // shift) still leaves a real gap before the next one.
+            if !first, finish - start >= usefulGap,
                finish - start > (middle.map { $0.end - $0.start } ?? 0) {
                 middle = (start, finish)
             }
-            end = max(end, to)
+            end = max(end, to); first = false
         }
         if let middle, middle.end - middle.start >= max(before, after) {
             return .partly("from " + clock(middle.start) + " to " + clock(middle.end))

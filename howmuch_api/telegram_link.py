@@ -152,6 +152,14 @@ class BotShift(BaseModel):
     dressCode: str | None = Field(default=None, max_length=120)
     contact: str | None = Field(default=None, max_length=120)
 
+    @field_validator('day')
+    @classmethod
+    def day_in_range(cls, value: date) -> date:
+        # The app stores years before 9999, and the default due date is worked out weeks past the shift.
+        if value.year >= 9999:
+            raise ValueError('Date is outside the supported calendar range')
+        return value
+
     @field_validator('event')
     @classmethod
     def event_has_text(cls, value: str) -> str:
@@ -232,7 +240,7 @@ async def bot_add_shifts(payload: BotShifts, request: Request, x_howmuch_bot: st
 
 def add_shifts(request, account, items: list[BotShift]) -> dict:
     """Adds shifts to the account as the app would, and lists any they overlap. Shared with the schedule bot."""
-    from .documents import Document, read_document, commit_document
+    from .documents import validated_document, read_document, commit_document
     storage = request.app.state.storage
     current = read_document(storage, account)
     data = json.loads(json.dumps(current['data'], use_decimal=True), use_decimal=True)
@@ -251,7 +259,7 @@ def add_shifts(request, account, items: list[BotShift]) -> dict:
                 clashes.append({'event': shift['event'], 'with': other['event'], 'day': other['day'],
                                 'startMinute': other['startMinute'], 'endMinute': other['endMinute']})
     data['shifts'] = data.get('shifts', []) + added
-    model = Document.model_validate(data)
+    model = validated_document(data)
     commit_document(storage, account, model, current['timezone'], current)
     return {'added': [{k: s[k] for k in ('id', 'event', 'location', 'day', 'startMinute', 'endMinute', 'breakMinutes', 'pay', 'currency')}
                       for s in added], 'clashes': clashes}
@@ -270,7 +278,7 @@ def change_shifts(request, payload: BotShiftIds, change):
 
 def change_account_shifts(request, account, ids, change):
     """`change` on the account's listed shifts; shared with the schedule bot."""
-    from .documents import Document, read_document, commit_document
+    from .documents import validated_document, read_document, commit_document
     storage = request.app.state.storage
     current = read_document(storage, account)
     data = json.loads(json.dumps(current['data'], use_decimal=True), use_decimal=True)
@@ -287,7 +295,7 @@ def change_account_shifts(request, account, ids, change):
         raise HTTPException(404, 'Those shifts are no longer in HowMuch.')
     data['shifts'] = kept
     data['claims'] = [c for c in data.get('claims', []) if c['shiftID'] in {s['id'] for s in kept}]
-    commit_document(storage, account, Document.model_validate(data), current['timezone'], current)
+    commit_document(storage, account, validated_document(data), current['timezone'], current)
     return {'changed': changed}
 
 

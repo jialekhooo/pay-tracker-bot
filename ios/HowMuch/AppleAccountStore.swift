@@ -294,7 +294,13 @@ final class AppleAccountStore: ObservableObject {
     /// Ends every session for this account (e.g. a lost phone), then signs out here.
     func signOutEverywhere() async {
         await synchronize()
-        _ = try? await api.request("/v1/auth/logout-all", method: "POST", body: Data("{}".utf8))
+        do {
+            _ = try await api.request("/v1/auth/logout-all", method: "POST", body: Data("{}".utf8))
+        } catch {
+            // Signing out only here would leave the lost phone signed in while looking done.
+            self.error = "Couldn't sign out your other devices: \(error.localizedDescription) You're still signed in here, so try again when you're online."
+            return
+        }
         await clearSession(revoke: false)
     }
     func credentialsRevoked() async { await clearSession(revoke: true) }
@@ -350,15 +356,13 @@ final class AppleAccountStore: ObservableObject {
         guard !isDemo, account != nil else { return }
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional else { tracker?.usesRemotePush = false; tracker?.refreshReminders(); return }
-        guard (tracker?.data.settings.jobNotifications.enabled == true || tracker?.data.settings.travel?.enabled == true) else {
-            _ = try? await api.request("/v1/devices/push", method: "DELETE")
-            tracker?.usesRemotePush = false; tracker?.refreshReminders(); return
-        }
+        // Registered whenever notifications are allowed: friend requests, visits and treats come by push even with
+        // job notifications and travel reminders off (the server only queues those when they're switched on).
         UIApplication.shared.registerForRemoteNotifications()
         if let token = PushCenter.shared.deviceToken { await registerDeviceToken(token) }
     }
     func registerDeviceToken(_ token: String) async {
-        guard !isDemo, let owner = account?.id, (tracker?.data.settings.jobNotifications.enabled == true || tracker?.data.settings.travel?.enabled == true) else { return }
+        guard !isDemo, let owner = account?.id else { return }
         do {
             let environment = Bundle.main.object(forInfoDictionaryKey: "HowMuchAPNSEnvironment") as? String ?? "sandbox"
             let body = try JSONEncoder().encode(["token": token, "environment": environment])

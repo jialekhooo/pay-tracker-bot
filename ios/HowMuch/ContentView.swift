@@ -69,9 +69,11 @@ struct ContentView: View {
         .task(id: push.addJobRequest) {
             // Siri or Control Center: open Add shift, filled in when a job message is on the clipboard.
             guard push.addJobRequest != nil else { return }
-            push.addJobRequest = nil
             finishing = nil; shared = nil; adding = false
+            // Let any open sheet finish closing first. The request is cleared afterwards: clearing it changes this
+            // task's id, which would cancel the task and cut the wait short.
             try? await Task.sleep(for: .milliseconds(400))
+            push.addJobRequest = nil
             if UIPasteboard.general.hasStrings, let text = UIPasteboard.general.string,
                !JobMessageParser.parse(text).dates.isEmpty { shared = SharedMessage(text: text) }
             else { adding = true }
@@ -146,7 +148,10 @@ struct DashboardView: View {
     @EnvironmentObject private var store: TrackerStore
     @State private var period = "All time"
     @State private var month = Date()
-    @State private var currency = "SGD"
+    /// The currency picked here. Stays when you come back from a pushed page; the default currency until one is picked.
+    @State private var pickedCurrency: String?
+    private var currency: String { pickedCurrency.flatMap { store.data.currencies.contains($0) ? $0 : nil } ?? store.data.rules.currency }
+    private var currencyChoice: Binding<String> { Binding(get: { currency }, set: { pickedCurrency = $0 }) }
     private var shifts: [Shift] {
         store.data.shifts.filter {
             $0.currency == currency && (period == "All time" || $0.day.hasPrefix(String(Shift.dayString(month).prefix(7))))
@@ -161,7 +166,7 @@ struct DashboardView: View {
                     PeriodNavigator(label: month.formatted(.dateTime.month(.wide).year()), dark: false,
                                     previous: { moveMonth(-1) }, next: { moveMonth(1) })
                 }
-                if store.data.currencies.count > 1 { PillPicker(values: store.data.currencies, selection: $currency, onDark: false) }
+                if store.data.currencies.count > 1 { PillPicker(values: store.data.currencies, selection: currencyChoice, onDark: false) }
                 EarningsHero(shifts: shifts, currency: currency, label: period == "All time" ? "ALL-TIME EARNINGS" : month.formatted(.dateTime.month(.wide)).uppercased() + " EARNINGS", now: clock.date)
                 MonthRecapCard(now: clock.date)
                 if period == "All time" {
@@ -212,7 +217,7 @@ struct DashboardView: View {
                     ShiftCards(shifts: Array(unpaid.sorted { ($0.paymentDue ?? $0.day) < ($1.paymentDue ?? $1.day) }.prefix(3)))
                 }
             }
-        }.onAppear { currency = store.data.rules.currency }
+        }
     }
     private func moveMonth(_ value: Int) { month = TrackerCalendar.calendar.date(byAdding: .month, value: value, to: month)! }
     private func workedHours(_ now: Date) -> Decimal {

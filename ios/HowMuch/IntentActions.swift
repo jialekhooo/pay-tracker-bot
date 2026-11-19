@@ -177,7 +177,9 @@ extension IntentActions {
         let content = UNMutableNotificationContent()
         content.title = result.status == "auto_paid" ? "Pay received" : "Pay received · check it"
         content.body = result.message
-        content.userInfo = ["kind": "pay_in"]
+        // Notifications only show for the signed-in account, so name it (from the saved sign-in while locked).
+        let owner = account.account?.id ?? AccountVault.read("session", as: AccountSession.self)?.account.id
+        content.userInfo = owner.map { ["kind": "pay_in", "account_id": $0] } ?? ["kind": "pay_in"]
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "howmuch.pay-in.\(UUID().uuidString)", content: content, trigger: nil))
         return result.message
     }

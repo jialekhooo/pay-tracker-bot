@@ -47,16 +47,28 @@ public enum ShiftCSV {
                 throw TrackerError.invalid("CSV row \(index + 2) has an invalid paid status.")
             }
             let due = value("payment_due").trimmingCharacters(in: .whitespacesAndNewlines)
+            // Files from HowMuch carry the extra separately; "Pay" includes it.
+            let extraText = value("extra").trimmingCharacters(in: .whitespacesAndNewlines)
+            var extra: Decimal?
+            if !extraText.isEmpty {
+                guard let amount = decimal(extraText), amount <= pay else { throw TrackerError.invalid("CSV row \(index + 2) has an invalid extra amount.") }
+                extra = amount > 0 ? amount : nil
+            }
             var rules = PayRules()
             rules.currency = value("currency").uppercased()
             // Preserve the exported payout exactly: source files don't contain rate/overtime rules.
-            return try Shift(sourceID: values["shift_id"] ?? values["id"], event: value("event"),
+            var shift = try Shift(sourceID: values["shift_id"] ?? values["id"], event: value("event"),
                              location: value("location"), day: value("date"),
                              startMinute: minute("start"), endMinute: minute("end"),
                              breakMinutes: Int(wholeMinutes),
                              paidBreak: ["yes", "paid", "true", "1"].contains(breakFlag.lowercased()),
-                             rate: 0, fixedPay: pay, rules: rules,
+                             rate: 0, fixedPay: pay - (extra ?? 0), rules: rules,
                              paid: ["yes", "paid", "true", "1"].contains(paidFlag), paymentDue: due.isEmpty ? nil : due)
+            if let extra {
+                let note = value("extra_note").trimmingCharacters(in: .whitespacesAndNewlines)
+                shift.extra = extra; shift.extraNote = note.isEmpty ? nil : String(note.prefix(Shift.maxExtraNote))
+            }
+            return shift
         }
     }
 
@@ -67,12 +79,15 @@ public enum ShiftCSV {
     }
 
     public static func encode(_ shifts: [Shift]) -> String {
-        let header = ["Shift ID", "Date", "Start", "End", "Event", "Location", "Hours", "Break hours", "Break minutes", "Paid break", "Pay", "Currency", "Paid", "Payment due"]
+        // "Pay" is everything the shift pays (pay plus extra) so spreadsheet totals are right; "Extra" says how much
+        // of it is the extra, so importing the file restores the pay and extra separately.
+        let header = ["Shift ID", "Date", "Start", "End", "Event", "Location", "Hours", "Break hours", "Break minutes", "Paid break", "Pay", "Currency", "Paid", "Payment due", "Extra", "Extra note"]
         var rows = [header]
         for shift in shifts {
             rows.append([shift.sourceID ?? shift.id.uuidString, shift.day, Shift.clock(shift.startMinute),
                          Shift.clock(shift.endMinute), shift.event, shift.location, "\(PayEngine.rounded(shift.hours))",
-                         "\(PayEngine.rounded(Decimal(shift.breakMinutes) / 60))", "\(shift.breakMinutes)", shift.paidBreak ? "Yes" : "No", "\(shift.total)", shift.currency, shift.paid ? "Yes" : "No", shift.paymentDue ?? ""])
+                         "\(PayEngine.rounded(Decimal(shift.breakMinutes) / 60))", "\(shift.breakMinutes)", shift.paidBreak ? "Yes" : "No", "\(shift.total)", shift.currency, shift.paid ? "Yes" : "No", shift.paymentDue ?? "",
+                         shift.extra.map { "\($0)" } ?? "", shift.extraNote ?? ""])
         }
         return rows.map { $0.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: ",") }.joined(separator: "\r\n") + "\r\n"
     }

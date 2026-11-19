@@ -274,8 +274,9 @@ def imap_messages(connection, password, since, before, host):
         # Read only INBOX, bounded to 100 matching recent alerts, no attachments retained.
         result, data = client.uid("search", None, "FROM", '"' + DBS_SENDER + '"', "SINCE", start)
         if result != "OK": raise ValueError("Search failed")
-        ids = (data[0] or b"").split()
-        if len(ids) > 100: raise ValueError("Too many alerts")
+        # UIDs ascend, so the last 100 are the newest. Failing instead would never advance the scan window,
+        # and every later scan would fail the same way.
+        ids = (data[0] or b"").split()[-100:]
         messages = []
         for uid in ids:
             if time.monotonic() > deadline: raise ValueError("Scan timed out")

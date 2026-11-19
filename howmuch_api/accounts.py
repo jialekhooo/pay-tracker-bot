@@ -45,6 +45,8 @@ async def delete_account(payload:AppleSignIn,request:Request,authorization:str|N
         await revoke_google(dict(connection) if connection else None)
     except Exception:
         pass
+    from . import friends
+    db.executescript(friends.SCHEMA)  # commits, so before the transaction below
     with db:
         deleted=db.execute('DELETE FROM auth_challenges WHERE challenge_hash=? AND expires>?',(digest(payload.challenge),int(time.time())))
         if deleted.rowcount!=1:raise HTTPException(401,'This Apple authorization has expired or was already used.')
@@ -53,6 +55,7 @@ async def delete_account(payload:AppleSignIn,request:Request,authorization:str|N
         # The work/payment projection has numeric IDs owned by this account, not Telegram IDs.
         for table in ('pay_in_settings','payment_audit','payment_allocations','payment_receipts','payment_rules','payment_oauth','payment_connections','avatars','reminders','feeds','cab_claims','event_rates','shifts','settings'):
             db.execute(f'DELETE FROM {table} WHERE user_id=?',(account['id'],))
+        friends.forget_account(db,account['account_id'])
         db.execute('DELETE FROM accounts WHERE account_id=?',(account['account_id'],))
     return {'deleted':True,'appleRevocationPending':pending}
 

@@ -215,6 +215,8 @@ async def record_notification(payload: Notification, request: Request, authoriza
         amount = Decimal(payload.amount.replace(",", "")) if payload.amount else parsed_amount
     except InvalidOperation:
         amount = parsed_amount
+    if amount is not None and (not amount.is_finite() or amount >= Decimal("1e9")):
+        amount = parsed_amount
     payer_text = (payload.payer or parsed_payer).strip()
     if amount is None or amount <= 0:
         return {"status": "ignored", "message": "That notification doesn't look like money received."}

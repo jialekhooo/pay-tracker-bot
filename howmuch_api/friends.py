@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS pet_visits (
  UNIQUE(from_account, to_account, day)
 );
 CREATE INDEX IF NOT EXISTS pet_visits_to ON pet_visits(to_account, ends);
+CREATE TABLE IF NOT EXISTS pet_kept_coins (
+ account_id TEXT PRIMARY KEY REFERENCES accounts(account_id) ON DELETE CASCADE, coins INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -148,7 +151,35 @@ def bonus_coins(db, account_id) -> int:
     sent = db.execute('SELECT COUNT(*) FROM pet_hellos WHERE from_account=?', (account_id,)).fetchone()[0]
     got = db.execute('SELECT COUNT(*) FROM pet_hellos WHERE to_account=?', (account_id,)).fetchone()[0]
     treats = db.execute('SELECT COUNT(*) FROM pet_visits WHERE treat IS NOT NULL AND (from_account=? OR to_account=?)', (account_id, account_id)).fetchone()[0]
-    return HELLO_COINS * (sent + got) + TREAT_COINS * treats + gift_coins(db, account_id)
+    kept = db.execute('SELECT COALESCE(SUM(coins),0) FROM pet_kept_coins WHERE account_id=?', (account_id,)).fetchone()[0]
+    return HELLO_COINS * (sent + got) + TREAT_COINS * treats + gift_coins(db, account_id) + kept
+
+
+def forget_account(db, leaving):
+    """Run inside the transaction that deletes an account, before the delete (the account's hellos and visits
+    go with it). Its friends keep the coins they earned with it, and notifications from it are cancelled.
+    Call db.executescript(SCHEMA) beforehand: executescript commits, so it can't run inside the transaction."""
+    earned = {}
+    for (other,) in db.execute('SELECT to_account FROM pet_hellos WHERE from_account=? UNION ALL '
+                               'SELECT from_account FROM pet_hellos WHERE to_account=?', (leaving, leaving)).fetchall():
+        earned[other] = earned.get(other, 0) + HELLO_COINS
+    for (other,) in db.execute('SELECT to_account FROM pet_visits WHERE treat IS NOT NULL AND from_account=? UNION ALL '
+                               'SELECT from_account FROM pet_visits WHERE treat IS NOT NULL AND to_account=?', (leaving, leaving)).fetchall():
+        earned[other] = earned.get(other, 0) + TREAT_COINS
+    for other, coins in earned.items():
+        if other != leaving:
+            db.execute('INSERT INTO pet_kept_coins(account_id, coins) VALUES(?,?) '
+                       'ON CONFLICT(account_id) DO UPDATE SET coins=coins+excluded.coins', (other, coins))
+    others = {row[0] for row in db.execute(
+        'SELECT friend_id FROM friendships WHERE account_id=? UNION SELECT to_account FROM friend_requests WHERE from_account=? '
+        'UNION SELECT to_account FROM pet_visits WHERE from_account=? UNION SELECT to_account FROM pet_hellos WHERE from_account=?',
+        (leaving, leaving, leaving, leaving)).fetchall()}
+    for other in others:
+        for kind in ('friend_request', 'friend_accepted', 'friend_visit', 'friend_treat'):
+            cancel_friend_push(db, kind, leaving, other)
+    for other, day in db.execute('SELECT to_account, day FROM pet_hellos WHERE from_account=?', (leaving,)).fetchall():
+        job = hashlib.sha256(f'hello|{leaving}|{other}|{day}'.encode()).hexdigest()
+        db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id=? AND status='pending'", (job,))
 
 
 def card_of(db, account_id) -> dict:

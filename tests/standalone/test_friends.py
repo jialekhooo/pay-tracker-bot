@@ -243,3 +243,26 @@ def test_removing_a_friend_ends_visits_and_keeps_earned_coins(setup):
     assert mine['helloCoins'] == friends.TREAT_COINS
     db = setup.storage._conn
     assert db.execute("SELECT COUNT(*) FROM notification_jobs WHERE kind IN ('friend_visit','friend_treat') AND status='pending'").fetchone()[0] == 0
+
+
+def test_a_friend_deleting_their_account_keeps_your_coins_and_cancels_their_notifications(setup):
+    from .test_accounts import signed
+    import uuid
+    a, b = prepare(setup)
+    code_a, code_b = make_friends(setup, a, b)
+    assert setup.client.post(f'/v1/friends/{code_b}/hello', headers=headers(a)).status_code == 200
+    visit(setup, b, code_a)
+    treat(setup, a, overview(setup, a)['guests'][0]['id'])
+    before = overview(setup, a)['helloCoins']
+    assert before == friends.HELLO_COINS + friends.TREAT_COINS
+    # B's visit notification to A is still pending when B leaves.
+    challenge = setup.client.post('/v1/auth/challenge').json()
+    payload = {'challenge': challenge['challenge'], 'identityToken': signed(setup, challenge, 'apple-user-B'),
+               'authorizationCode': 'test-code', 'deviceID': str(uuid.uuid4())}
+    assert setup.client.post('/v1/account/delete', json=payload, headers=headers(b)).status_code == 200
+    mine = overview(setup, a)
+    assert mine['helloCoins'] == before and mine['friends'] == []
+    db = setup.storage._conn
+    pending = db.execute("SELECT COUNT(*) FROM notification_jobs WHERE account_id=? AND status='pending' "
+                         "AND (kind LIKE 'friend_%' OR kind='hello')", (a['account']['id'],)).fetchone()[0]
+    assert pending == 0

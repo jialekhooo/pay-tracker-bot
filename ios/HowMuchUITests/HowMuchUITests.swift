@@ -338,7 +338,7 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "claim.actions.")).count, 3)
         attach("Cab food and miscellaneous reimbursements", app: app)
         reveal(editedMenu, in: app); editedMenu.tap(); app.buttons["Delete claim"].tap(); app.sheets.buttons["Delete claim"].tap()
-        XCTAssertFalse(app.staticTexts["Food QA"].exists)
+        XCTAssertTrue(app.staticTexts["Food QA"].waitForNonExistence(timeout: 5))  // the list updates after the sheet closes
         tapTrailingArea(app.buttons["Undo last change"], in: app)
         XCTAssertTrue(app.buttons["Miscellaneous claim actions: Food QA"].waitForExistence(timeout: 5))
     }

@@ -151,3 +151,13 @@ def test_a_job_brief_from_the_bot_reaches_the_app(setup, monkeypatch):
     assert sent.status_code == 200, sent.text
     gala = next(s for s in setup.client.get('/v1/data', headers=headers(me)).json()['data']['shifts'] if s['event'] == 'Gala')
     assert (gala['callMinute'], gala['dressCode'], gala['contact']) == (1050, 'All black', 'Sarah')
+
+
+def test_bot_shifts_the_app_cannot_store_are_refused_with_a_reason(setup, monkeypatch):
+    me = prepare(setup, monkeypatch)
+    assert write(setup, me, document()).status_code == 200
+    assert link(setup, me).json()['linked'] is True
+    sent = setup.client.post('/v1/bot/shifts', headers=BOT, json={'telegramUserId': 4242, 'shifts': [
+        {'event': 'Far future', 'day': '9999-12-31', 'startMinute': 9 * 60, 'endMinute': 17 * 60}]})
+    assert sent.status_code == 422, sent.text
+    assert len(setup.client.get('/v1/data', headers=headers(me)).json()['data']['shifts']) == len(document()['shifts'])

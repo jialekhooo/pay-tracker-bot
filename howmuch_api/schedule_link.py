@@ -168,7 +168,7 @@ async def edit_shift(shift_id: uuid.UUID, edit: ShiftEdit, request: Request, aut
     """Move or rename a shift. Hours and pay are worked out again with the account's rates; its id, paid
     status, break and any extras stay."""
     account = key_account(request, authorization, 'schedule-write', 60)
-    from .documents import Document, commit_document
+    from .documents import validated_document, commit_document
     current, data, zone = _document(request, account)
     shifts = data.get('shifts', [])
     old = next((s for s in shifts if s['id'] == str(shift_id)), None)
@@ -190,7 +190,7 @@ async def edit_shift(shift_id: uuid.UUID, edit: ShiftEdit, request: Request, aut
     if 'overtimeAfter' not in made:
         new.pop('overtimeAfter', None)
     data['shifts'] = [new if s['id'] == old['id'] else s for s in shifts]
-    commit_document(request.app.state.storage, account, Document.model_validate(data), current['timezone'], current)
+    commit_document(request.app.state.storage, account, validated_document(data), current['timezone'], current)
     start, end = span(new, zone)
     clashes = [{'event': s['event'], 'day': s['day'], 'startMinute': s['startMinute'], 'endMinute': s['endMinute']}
                for s in others['shifts'] if span(s, zone)[0] < end and start < span(s, zone)[1]]

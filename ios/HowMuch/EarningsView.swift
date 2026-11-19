@@ -7,7 +7,10 @@ struct EarningsView: View {
     @State private var grouping = "Events"
     @State private var filter = "All events"
     @State private var date = Date()
-    @State private var currency = "SGD"
+    /// The currency picked here. Stays when you come back from a pushed page; the default currency until one is picked.
+    @State private var pickedCurrency: String?
+    private var currency: String { pickedCurrency.flatMap { store.data.currencies.contains($0) ? $0 : nil } ?? store.data.rules.currency }
+    private var currencyChoice: Binding<String> { Binding(get: { currency }, set: { pickedCurrency = $0 }) }
     @State private var newest = true
     @State private var upcomingAscending = true
     private var shifts: [Shift] {
@@ -32,7 +35,7 @@ struct EarningsView: View {
             switch filter {
             case "Ongoing": return !done && !upcoming
             case "Upcoming": return items.contains { $0.endDate > Date() }
-            case "Unpaid": return done && items.contains { !$0.paid }
+            case "Unpaid": return items.contains { $0.endDate <= Date() && !$0.paid }
             case "Paid out": return done && items.allSatisfy(\.paid)
             default: return true
             }
@@ -47,7 +50,7 @@ struct EarningsView: View {
             ScreenShell(title: "Earnings", subtitle: "Every shift, every dollar.") {
                 PillPicker(values: ["Day", "Week", "Month", "All time"], selection: $scope, onDark: false)
                 if scope != "All time" { PeriodNavigator(label: periodLabel, dark: false, previous: { move(-1) }, next: { move(1) }) }
-                if store.data.currencies.count > 1 { PillPicker(values: store.data.currencies, selection: $currency, onDark: false) }
+                if store.data.currencies.count > 1 { PillPicker(values: store.data.currencies, selection: currencyChoice, onDark: false) }
                 EarningsHero(shifts: shifts, currency: currency, label: scope == "All time" ? "ALL-TIME EARNINGS" : "\(scope.uppercased()) EARNINGS", now: clock.date)
                 if scope == "All time" {
                     PillPicker(values: ["Events", "Months"], selection: $grouping)
@@ -90,7 +93,7 @@ struct EarningsView: View {
                 } else if shifts.isEmpty { EmptyCard(title: "No shifts for this period", message: "Use the arrows to browse another \(scope.lowercased()).") }
                 else { ShiftCards(shifts: shifts.sorted { $0.startDate < $1.startDate }) }
             }
-        }.onAppear { currency = store.data.rules.currency }
+        }
     }
     private var periodLabel: String {
         if scope == "Day" { return date.formatted(.dateTime.weekday(.abbreviated).day().month(.wide)) }
@@ -254,7 +257,7 @@ struct EventDetailsEditor: View {
                     ToolbarItem(placement: .confirmationAction) { Button("Save") {
                         if store.update({ data in
                             try data.updateEventDetails(event: event, name: name, location: clearLocation || location != initialLocation ? location : nil)
-                        }) { dismiss() } else { error = store.error }
+                        }) { dismiss() } else { error = store.error; store.error = nil }
                     } }
                 }
                 .sheet(isPresented: $findingLocation) { JobLocationPicker(initial: location) { location = $0 } }

@@ -13,7 +13,10 @@ public enum AccountMerge {
         }
         var result = TrackerData()
         result.rules = try select(base.rules, local.rules, remote.rules)
-        result.preferences = try select(base.preferences, local.preferences, remote.preferences)
+        // No settings when last synced (a new account) but both devices have some now: compare each with the
+        // defaults, so different settings changed on each device combine instead of clashing.
+        let settingsBase = base.preferences ?? (local.preferences != nil && remote.preferences != nil ? AppPreferences() : nil)
+        result.preferences = try select(settingsBase, local.preferences, remote.preferences)
         // Merging additions from both sides can exceed a rolling cap; keep the newest rather than refuse the sync.
         if let finishes = result.preferences?.liveShift?.confirmedFinishes, finishes.count > 300 {
             result.preferences?.liveShift?.confirmedFinishes = Array(finishes.suffix(300))
@@ -67,6 +70,13 @@ public enum AccountMerge {
             switch x { case .object(let value)?: base = value; case nil, .null?: base = [:]; default: return nil }
             var result: [String: JSONValue] = [:]
             for key in Set(base.keys).union(local.keys).union(remote.keys) {
+                // Penny's spent coins are a running total: purchases on two devices both count, even when
+                // they happen to cost the same and leave the two totals equal.
+                if key == "spent", local["bought"] != nil, case .number(let mine)? = local[key], case .number(let theirs)? = remote[key] {
+                    var before: Decimal = 0
+                    if case .number(let value)? = base[key] { before = value }
+                    result[key] = .number(mine + theirs - before); continue
+                }
                 guard case .some(let value) = mergeValue(base[key], local[key], remote[key]) else { return nil }
                 if let value { result[key] = value }
             }

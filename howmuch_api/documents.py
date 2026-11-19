@@ -433,6 +433,16 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
     return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id']),'helloCoins':bonus_coins(storage._conn,account['account_id'])})
 
 
+def validated_document(data) -> Document:
+    """The account data as a Document, or a 422 naming the first problem (e.g. a shift the bot sent with a
+    date or pay HowMuch can't store) rather than a server error."""
+    try:
+        return Document.model_validate(data)
+    except ValidationError as exc:
+        first = exc.errors()[0] if exc.errors() else {}
+        raise HTTPException(422, str(first.get('msg') or 'Those shift details are not valid.')) from None
+
+
 def commit_document(storage, account, model: Document, timezone_name, current):
     """Save a validated document as the next revision: mirror it for payment matching, then refresh
     reminders and unused receipts. Used by app saves and by shifts added from Telegram."""

@@ -208,3 +208,12 @@ def test_a_short_payment_shows_what_is_missing(setup):
     setup.client.post(f"/v1/payment-detection/receipts/{receipt['id']}/confirm", json={'event': 'Roadshow'}, headers=headers(session))
     assert all(shifts_paid(setup, session))
     assert '20.00 less' in latest_receipt(setup, session)['reason']
+
+
+def test_odd_amounts_fall_back_to_the_alert_text_instead_of_failing(setup):
+    session = finished_roadshow(setup)
+    for amount in ('NaN', 'Infinity', '-Infinity', '1e40'):
+        result = setup.client.post('/v1/payment-detection/notification', json={'amount': amount, 'text': 'Card purchase'},
+                                   headers=headers(session))
+        assert result.status_code == 200, (amount, result.text)
+        assert result.json()['status'] == 'ignored' and not paid(setup, session)

@@ -543,7 +543,7 @@ public enum JobMessageParser {
            name[hiring.upperBound...].filter(\.isLetter).count >= 3 {
             name = String(name[hiring.upperBound...])
         }
-        let filler = #"(?i)\b(from|on|hrs?|h|daily|each day|shift|shifts|and|available|anyone|need|needed|looking|pax|for|hi|hello|hey|free)\b|[()\[\]?!,&:]"#
+        let filler = #"(?i)\b(from|on|hrs?|h|daily|each day|shift|shifts|and|available|anyone|need|needed|looking|pax|for|hi|hello|hey|free|pay|paid|rate|salary|wage|wages|allowance)\b|[()\[\]?!,&:]"#
         let words = name.replacingOccurrences(of: filler, with: " ", options: .regularExpression)
             .split(whereSeparator: \.isWhitespace).joined(separator: " ")
         let letters = words.filter(\.isLetter).count
