@@ -1,0 +1,4 @@
+id,date,start,end,event,location,break_hours,break_paid,hours,pay,currency
+1,2026-11-01,09:00,18:00,Roadshow,Marina Bay,1,unpaid,8,160.00,SGD
+2,2026-11-02,22:00,02:00,Night event,City Hall,0.5,unpaid,3.5,87.50,SGD
+3,2026-11-05,10:00,17:00,Private sale,Orchard,0.5,paid,7,200.00,SGD

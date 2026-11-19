@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from .bot import earned_by, worked_by
 from .feed import issue_token
 from .parsing import ParseError, parse_time
-from .pay import calculate_pay, round_money
+from .pay import base_rate, calculate_pay, round_money
 from .reminders import (
     DEFAULT_SEND_AT,
     DEFAULT_UTC_OFFSET_MINUTES,
@@ -837,7 +837,11 @@ async def update_shift(
         if pay_is_fixed:
             fields["pay"] = str(record.pay)
         else:
-            old_rate = record.pay / record.hours if record.hours else config.rate_for(record.event)
+            old_rate = (
+                base_rate(record.pay, record.hours, config)
+                if record.hours
+                else config.rate_for(record.event)
+            )
             fields["pay"] = str(calculate_pay(float(hours), event, config, round_money(old_rate)))
     elif pay_is_fixed != record.pay_is_fixed and not pay_is_fixed:
         raise HTTPException(
