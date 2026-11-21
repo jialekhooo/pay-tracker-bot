@@ -991,6 +991,32 @@ final class HowMuchUITests: XCTestCase {
         attach("Developer made a coin code", app: dev)
     }
     @MainActor
+    func testStarterShopIsOpenBeforePennyHatches() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-new-pet", "-appearance", "light"]; app.launch()
+        let card = app.buttons["pet.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        attach("Egg on Overview", app: app)
+        card.tap()
+        let note = app.staticTexts["pet.shop.starter"]
+        reveal(note, in: app)
+        XCTAssertTrue(note.exists)
+        // Starter items are for sale; the rest says when it unlocks.
+        for id in ["party-hat", "straw-hat"] {
+            let item = app.buttons["pet.item." + id]
+            XCTAssertTrue(item.waitForExistence(timeout: 5), id)
+            XCTAssertFalse(item.staticTexts["Unlocks at Hatchling"].exists, id)
+        }
+        XCTAssertTrue(app.buttons["pet.item.beanie"].staticTexts["Unlocks at Hatchling"].exists)
+        let partyHat = app.buttons["pet.item.party-hat"]
+        reveal(partyHat, in: app); partyHat.tap()
+        let buy = app.buttons["Buy Party hat"]
+        XCTAssertTrue(buy.waitForExistence(timeout: 5)); buy.tap()
+        XCTAssertTrue(partyHat.staticTexts["Wearing"].waitForExistence(timeout: 5))
+        attach("Starter shop with the party hat on", app: app)
+        app.swipeDown(); app.swipeDown(); app.swipeDown()
+        attach("Egg wearing the party hat", app: app)
+    }
+    @MainActor
     func testPetCardOpensItsPage() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         let card = app.buttons["pet.card"]

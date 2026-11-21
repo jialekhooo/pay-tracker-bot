@@ -226,6 +226,7 @@ public struct PetAchievement: Identifiable, Equatable, Sendable {
 }
 
 /// Things Penny can wear. Most are bought with coins once Penny has grown enough; a few come with a badge.
+/// A starter set (one per slot except skins) is for sale from the egg, so a first shift's coins buy something.
 public enum PetSlot: String, CaseIterable, Codable, Sendable {
     case hat, face, neck, background, skin
     public var title: String { ["Hats", "Glasses", "Neckwear", "Scenes", "Skins"][Self.allCases.firstIndex(of: self)!] }
@@ -246,7 +247,7 @@ public struct PetItem: Identifiable, Equatable, Sendable {
 
     public static let catalog: [PetItem] = [
         .init(id: "party-hat", name: "Party hat", slot: .hat, unlock: .coins(40)),
-        .init(id: "straw-hat", name: "Straw sun hat", slot: .hat, unlock: .coins(50), stage: .hatchling),
+        .init(id: "straw-hat", name: "Straw sun hat", slot: .hat, unlock: .coins(50)),
         .init(id: "beanie", name: "Cosy beanie", slot: .hat, unlock: .coins(60), stage: .hatchling),
         .init(id: "cap", name: "Jade cap", slot: .hat, unlock: .coins(80), stage: .coinling),
         .init(id: "beret", name: "Artist's beret", slot: .hat, unlock: .coins(90), stage: .coinling),
@@ -257,7 +258,7 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "flower", name: "Flower", slot: .hat, unlock: .achievement("on-a-roll")),
         .init(id: "hard-hat", name: "Hard hat", slot: .hat, unlock: .achievement("veteran")),
         .init(id: "royal-crown", name: "Royal crown", slot: .hat, unlock: .coins(400), stage: .treasure),
-        .init(id: "round-glasses", name: "Round glasses", slot: .face, unlock: .coins(50), stage: .hatchling),
+        .init(id: "round-glasses", name: "Round glasses", slot: .face, unlock: .coins(50)),
         .init(id: "square-specs", name: "Square specs", slot: .face, unlock: .coins(60), stage: .hatchling),
         .init(id: "sunglasses", name: "Cool shades", slot: .face, unlock: .coins(90), stage: .coinling),
         .init(id: "monocle", name: "Monocle", slot: .face, unlock: .coins(120), stage: .coinling),
@@ -273,7 +274,7 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "lanyard", name: "Crew lanyard", slot: .neck, unlock: .achievement("first-shift")),
         .init(id: "medal", name: "Gold medal", slot: .neck, unlock: .achievement("collector")),
         .init(id: "mint", name: "Mint room", slot: .background, unlock: .free),
-        .init(id: "sunset", name: "Sunset", slot: .background, unlock: .coins(60), stage: .hatchling),
+        .init(id: "sunset", name: "Sunset", slot: .background, unlock: .coins(60)),
         .init(id: "rainy-day", name: "Rainy day", slot: .background, unlock: .coins(80), stage: .hatchling),
         .init(id: "night-sky", name: "Starry night", slot: .background, unlock: .coins(100), stage: .coinling),
         .init(id: "snowfall", name: "Snowfall", slot: .background, unlock: .coins(140), stage: .coinling),
@@ -315,6 +316,8 @@ public struct PetItem: Identifiable, Equatable, Sendable {
     public var exclusive: Bool { unlock == .achievement("pioneer") || unlock == .achievement("developer") || unlock == .code }
     public static func named(_ id: String?) -> PetItem? { catalog.first { $0.id == id } }
     public var price: Int? { if case .coins(let price) = unlock { return price }; return nil }
+    /// For sale while Penny is still an egg: the party hat, straw hat, round glasses, bow tie and Sunset.
+    public var starter: Bool { price != nil && stage == .egg }
 
     /// How to get it, e.g. "40 coins", "Badge: On a roll".
     public var requirement: String {

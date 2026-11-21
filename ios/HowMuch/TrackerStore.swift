@@ -350,6 +350,14 @@ final class TrackerStore: ObservableObject {
             let soon = [0, 1].map { Shift.dayString(calendar.date(byAdding: .day, value: $0, to: Date())!) }
             data.shifts.removeAll { soon.contains($0.day) }
         }
+        if CommandLine.arguments.contains("--ui-test-new-pet") {
+            // A first week: one shift worked and paid, so Penny is still an egg with a first purchase's worth of coins.
+            let day = calendar.date(byAdding: .day, value: -3, to: Date())!
+            data.shifts = [try Shift(event: "Roadshow", location: "Suntec City", day: Shift.dayString(day), startMinute: 9 * 60, endMinute: 18 * 60,
+                                     breakMinutes: 60, rate: 20, rules: data.rules, paid: true)]
+            data.claims = []; data.expenses = nil
+            data.preferences?.pet = nil
+        }
         if CommandLine.arguments.contains("--ui-test-travel-error") {
             var options = TravelReminderOptions(); options.enabled = true; options.origin = "Singapore Botanic Gardens, Singapore"
             data.preferences?.travel = options

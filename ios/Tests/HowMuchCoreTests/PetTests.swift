@@ -126,7 +126,7 @@ final class PetTests: XCTestCase {
             XCTAssertEqual(error as? PetCloset.ClosetError, .notEnoughCoins(needed: 80))
         }
         var egg = PetCloset()
-        XCTAssertThrowsError(try egg.buy(PetItem.named("straw-hat")!, PetProgress(shifts: [], now: now, calendar: calendar))) { XCTAssertEqual($0 as? PetCloset.ClosetError, .locked) }
+        XCTAssertThrowsError(try egg.buy(PetItem.named("beanie")!, PetProgress(shifts: [], now: now, calendar: calendar))) { XCTAssertEqual($0 as? PetCloset.ClosetError, .locked) }
         let saved = try JSONDecoder().decode(PetCloset.self, from: JSONEncoder().encode(closet))
         XCTAssertEqual(saved, closet)
     }
@@ -135,9 +135,16 @@ final class PetTests: XCTestCase {
         let pet = PetProgress(shifts: [try shift("2026-11-02", paid: true)], now: now, calendar: calendar)
         XCTAssertEqual(pet.stage, .egg)
         var closet = PetCloset()
-        for id in ["party-hat", "bow-tie"] { XCTAssertFalse(closet.locked(PetItem.named(id)!, pet), id) }
+        // A starter set, one per slot except skins, is for sale before Penny hatches.
+        let starters = ["party-hat", "straw-hat", "round-glasses", "bow-tie", "sunset"]
+        XCTAssertEqual(PetItem.catalog.filter(\.starter).map(\.id).sorted(), starters.sorted())
+        for id in starters { XCTAssertFalse(closet.locked(PetItem.named(id)!, pet), id) }
+        XCTAssertEqual(Set(PetItem.catalog.filter(\.starter).map(\.slot)), [.hat, .face, .neck, .background])
+        // A first shift, worked and paid, earns enough for one of them.
+        XCTAssertGreaterThanOrEqual(pet.coinsEarned, PetItem.catalog.filter(\.starter).compactMap(\.price).min()!)
         try closet.buy(PetItem.named("party-hat")!, pet)
         XCTAssertEqual(closet.wearing(.hat, pet)?.id, "party-hat")
+        XCTAssertTrue(closet.locked(PetItem.named("beanie")!, pet))
     }
 
     func testCoinsTakenBackShowAsANegativeBalance() throws {
@@ -243,7 +250,7 @@ final class PetTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(items.filter { $0.unlock == .code }.count, 2, slot.rawValue)
             for item in items {
                 if case .achievement(let id) = item.unlock { XCTAssertTrue(badges.contains(id), item.id) }
-                if let price = item.price { XCTAssertTrue((40...400).contains(price), item.id); XCTAssertTrue(item.stage > .egg || ["party-hat", "bow-tie"].contains(item.id), item.id) }
+                if let price = item.price { XCTAssertTrue((40...400).contains(price), item.id); XCTAssertTrue(item.stage > .egg || item.starter, item.id) }
             }
         }
         // Badge items come with the badge: the hard hat with Veteran, the sleep mask with Night owl.

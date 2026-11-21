@@ -208,10 +208,17 @@ enum PetPixels {
                 if d < 0.45 && x < 11 && y < 11 { return PetPalette.white }
                 return y > 17 ? PetPalette.shellShade : PetPalette.shell
             }
-            // The two items an egg can buy, so a first purchase shows straight away.
-            let colors: [Character: Color] = ["o": PetPalette.outline, "y": PetPalette.gold, "r": PetPalette.red]
+            // The starter items an egg can buy, so a first purchase shows straight away. The same stamps as a
+            // hatched Penny, placed on the shell: its top is at y 6, its middle at x 12.
+            let colors: [Character: Color] = ["o": PetPalette.outline, "y": PetPalette.gold, "r": PetPalette.red,
+                                              "s": PetPalette.straw, "S": PetPalette.strawDark]
             if outfit[.neck]?.id == "bow-tie" { stamp(["ro.or", "rrorr", "ro.or"], x: 10, y: 17, colors) }
-            if outfit[.hat]?.id == "party-hat" { stamp(["...y...", "..oro..", "..oyo..", ".oryro.", ".oyryo.", ".ooooo."], x: 9, y: 2, colors) }
+            if outfit[.face]?.id == "round-glasses" { stamp(["ooo.ooo", "o.ooo.o", "ooo.ooo"], x: 9, y: 10, colors) }
+            switch outfit[.hat]?.id {
+            case "party-hat": stamp(["...y...", "..oro..", "..oyo..", ".oryro.", ".oyryo.", ".ooooo."], x: 9, y: 2, colors)
+            case "straw-hat": stamp(["...ooooo...", "..osssSso..", "..orrrrro..", "osssssssSso", ".ooooooooo."], x: 7, y: 2, colors)
+            default: break
+            }
             return flatten(canvas)
         }
 
@@ -1058,9 +1065,15 @@ struct PetDetailView: View {
     private func shop(_ pet: PetProgress, _ closet: PetCloset) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeading(title: "Shop & wardrobe", detail: "Tap to buy or wear")
+            if pet.stage == .egg {
+                Label("Starter items are for sale now. The rest of the shop opens when \(displayName) hatches.", systemImage: "sparkles")
+                    .font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("pet.shop.starter")
+            }
             PillPicker(values: PetSlot.allCases.map(\.title), selection: Binding(get: { slot.title }, set: { title in slot = PetSlot.allCases.first { $0.title == title } ?? .hat }))
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(PetItem.catalog.filter { $0.slot == slot && (!$0.exclusive || closet.owns($0, pet)) }) { item in itemTile(item, pet, closet) }
+                // What can be worn or bought now first, then what unlocks later; catalogue order within each.
+                let items = PetItem.catalog.filter { $0.slot == slot && (!$0.exclusive || closet.owns($0, pet)) }
+                ForEach(items.filter { !closet.locked($0, pet) } + items.filter { closet.locked($0, pet) }) { item in itemTile(item, pet, closet) }
             }
         }
     }
