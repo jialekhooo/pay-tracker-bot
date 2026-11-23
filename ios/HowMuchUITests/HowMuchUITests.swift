@@ -552,27 +552,19 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["WELCOME TO HOWMUCH"].exists)
     }
     @MainActor
-    func testTelegramLinkingHelpGuideAndUnlink() {
+    /// The bot's server is off (TelegramBot.available is false), so nothing in Settings sends people to it.
+    func testTelegramIsHiddenWhileTheBotIsOff() {
         let app = XCUIApplication(); app.launchArguments = ["--ui-test-account", "--ui-test-telegram"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
-        let row = app.staticTexts["Telegram"]; reveal(row, in: app); row.tap()
-        func showing(_ text: String) -> XCUIElement { app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch }
-        XCTAssertTrue(showing("Not linked").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["What you can do in Telegram"].exists || app.staticTexts["WHAT YOU CAN DO IN TELEGRAM"].exists)
-        attach("Telegram screen before linking", app: app)
-        app.buttons["telegram.link"].tap()
-        // Telegram (Safari in the simulator) opens; come back as the person would after tapping Start.
-        _ = app.wait(for: .runningBackground, timeout: 10)
-        app.activate()
-        XCTAssertTrue(showing("Linked to @howmuch_tester").waitForExistence(timeout: 10))
-        attach("Telegram linked", app: app)
-        app.buttons["telegram.unlink"].tap()
-        let confirm = app.buttons["Unlink"]; XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
-        XCTAssertTrue(showing("Not linked").waitForExistence(timeout: 5))
-        app.navigationBars.buttons.firstMatch.tap()
+        let pay = app.staticTexts["Pay-in tracking"]; reveal(pay, in: app)
+        XCTAssertTrue(pay.exists)
+        XCTAssertFalse(app.staticTexts["Telegram"].exists)
         let data = app.staticTexts["Data & backups"]; reveal(data, in: app); data.tap()
-        let export = app.descendants(matching: .any).matching(identifier: "data.telegramBot").firstMatch
-        reveal(export, in: app); XCTAssertTrue(export.waitForExistence(timeout: 5))
+        let importCSV = app.buttons["Import shifts from CSV"]; reveal(importCSV, in: app)
+        XCTAssertTrue(importCSV.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "data.telegramBot").firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "paytracker1_bot")).firstMatch.exists)
+        attach("Data & backups without Telegram", app: app)
     }
     @MainActor
     func testAppearanceCaptionDescribesTheChosenOption() {
@@ -1477,7 +1469,7 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
         XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 5)); app.buttons["nav.settings"].tap()
         tapTrailingArea(app.staticTexts["Data & backups"], in: app)
-        for name in ["Export shifts as CSV", "Export full archive", "Import Telegram CSV", "Restore full archive"] {
+        for name in ["Export shifts as CSV", "Export full archive", "Import shifts from CSV", "Restore full archive"] {
             tapTrailingArea(app.buttons[name], in: app)
             let cancel = app.buttons["Cancel"].firstMatch
             XCTAssertTrue(cancel.waitForExistence(timeout: 5), "File picker must open: " + name)

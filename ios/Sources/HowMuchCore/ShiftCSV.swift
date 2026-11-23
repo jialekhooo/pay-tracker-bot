@@ -8,7 +8,7 @@ public enum ShiftCSV {
         let keys = header.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: " ", with: "_") }
         guard Set(["date", "start", "end", "event", "pay", "currency"]).isSubset(of: Set(keys)),
               Set(keys).count == keys.count else {
-            throw TrackerError.invalid("Choose a shift CSV exported by the Telegram bot or Mini App.")
+            throw TrackerError.invalid("Choose a shift CSV exported from HowMuch or the Telegram bot.")
         }
         return try rows.dropFirst().enumerated().compactMap { index, row in
             if row.allSatisfy({ $0.isEmpty }) { return nil }

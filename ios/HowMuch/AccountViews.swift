@@ -507,7 +507,7 @@ struct IntroPagesView: View {
              points: []),
         Page(symbol: "doc.on.clipboard", eyebrow: "ADD JOBS FAST", title: "Paste a job post.\nWe fill it in.",
              body: "Copy a job message from WhatsApp or Telegram. HowMuch reads the dates, times, pay and venue for you.",
-             points: [("clock", "Hourly or lump-sum pay, overtime and breaks"), ("plus.circle", "Bonuses, allowances and tips"), ("repeat", "Several dates or a repeating shift at once"), ("paperplane", "Or send shifts from Telegram with @paytracker1_bot")]),
+             points: [("clock", "Hourly or lump-sum pay, overtime and breaks"), ("plus.circle", "Bonuses, allowances and tips"), ("repeat", "Several dates or a repeating shift at once")] + (TelegramBot.available ? [("paperplane", "Or send shifts from Telegram with \(TelegramBot.handle)")] : [])),
         Page(symbol: "banknote", eyebrow: "GET PAID ON TIME", title: "See who owes you,\nand how much.",
              body: "Every finished shift waits for payment until you mark it paid, so nothing slips through.",
              points: [("calendar.badge.clock", "Reminders when payment is due"), ("creditcard", "Spot pay-ins from your bank emails"), ("car", "Track cab, food and other claims")]),

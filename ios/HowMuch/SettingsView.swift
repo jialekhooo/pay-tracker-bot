@@ -38,8 +38,10 @@ struct SettingsView: View {
             }
             group("Getting paid") {
                 settingsRow("Pay-in tracking", "creditcard") { PaymentDetectionView() }
-                Divider().padding(.leading, 44)
-                settingsRow("Telegram", "paperplane") { TelegramSettingsView() }
+                if TelegramBot.available {
+                    Divider().padding(.leading, 44)
+                    settingsRow("Telegram", "paperplane") { TelegramSettingsView() }
+                }
             }
             group("Widgets & calendar") {
                 settingsRow("Widgets", "rectangle.on.rectangle") { WidgetsSettingsView() }
@@ -342,12 +344,14 @@ struct DataToolsView: View {
     var body: some View {
         AppForm {
             Section(styled: "Import & export") {
-                Button("Import Telegram CSV", systemImage: "square.and.arrow.down") { archiveImport = false; importing = true }.rowAction()
-                Link(destination: TelegramBot.url) { Label("Open \(TelegramBot.handle) to export with /export", systemImage: "paperplane") }
-                    .rowAction().accessibilityIdentifier("data.telegramBot")
+                Button("Import shifts from CSV", systemImage: "square.and.arrow.down") { archiveImport = false; importing = true }.rowAction()
+                if TelegramBot.available {
+                    Link(destination: TelegramBot.url) { Label("Open \(TelegramBot.handle) to export with /export", systemImage: "paperplane") }
+                        .rowAction().accessibilityIdentifier("data.telegramBot")
+                }
                 Button("Export shifts as CSV", systemImage: "tablecells") { document = BackupFile(Data(ShiftCSV.encode(store.data.shifts).utf8)); exportType = .commaSeparatedText; exporting = true }.rowAction()
                 NavigationLink("Export calendar (.ics)") { CalendarSettingsView() }
-                Text("Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.caption).foregroundStyle(Palette.muted)
+                Text(TelegramBot.available ? "Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules." : "Imports a CSV exported from HowMuch or the Telegram bot. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.caption).foregroundStyle(Palette.muted)
             }
             if store.hasLegacyImport {
                 Section(styled: "Earlier iPhone records") {
@@ -628,6 +632,9 @@ struct ProfileStats {
 
 /// The HowMuch Telegram bot.
 enum TelegramBot {
+    /// The bot's server (Fly app pay-tracker-bot) is scaled to zero, so the app hides everything that sends people to it.
+    /// Linked accounts and the API's /v1/telegram routes are left as they are; set this back to true if the bot returns.
+    static let available = false
     static let handle = "@paytracker1_bot"
     static let url = URL(string: "https://t.me/paytracker1_bot")!
 }
