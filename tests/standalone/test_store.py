@@ -127,9 +127,12 @@ def test_pro_comes_from_a_live_subscription_or_lifetime(setup, monkeypatch, chai
 
 def test_early_supporters_and_developers_have_pro_without_buying(setup, monkeypatch, chain):
     me, other = prepare(setup, monkeypatch)
-    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2999-01-01')
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2999-01-01')  # not launched yet: everyone has Pro
     data = setup.client.get('/v1/data', headers=headers(me)).json()
     assert data['pro'] is True and data['proReason'] == 'pioneer'
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2000-01-01')
+    setup.storage._conn.execute('UPDATE accounts SET tester=1 WHERE account_id=?', (me['account']['id'],)); setup.storage._conn.commit()
+    assert setup.client.get('/v1/data', headers=headers(me)).json()['proReason'] == 'pioneer'  # a TestFlight tester
     monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2000-01-01')
     monkeypatch.setenv('HOWMUCH_DEVELOPERS', other['account']['id'])
     assert setup.client.get('/v1/data', headers=headers(other)).json()['proReason'] == 'developer'
@@ -212,5 +215,27 @@ def test_bot_added_shifts_respect_the_event_limit(setup, monkeypatch, chain):
     with pytest.raises(HTTPException) as refused:
         check_event_limit(db, account, shifts('A', 'B', 'C', 'D', 'E'), shifts('A', 'B', 'C', 'D', 'E', 'F'))
     assert refused.value.status_code == 402
-    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2999-01-01')  # early supporters have Pro, so no limit
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2999-01-01')  # before launch everyone has Pro, so no limit
     check_event_limit(db, account, shifts('A', 'B', 'C', 'D', 'E'), shifts('A', 'B', 'C', 'D', 'E', 'F'))
+
+
+def app_transaction(environment):
+    return {'bundleId': BUNDLE, 'environment': environment, 'appAppleId': 1, 'applicationVersion': '86',
+            'originalApplicationVersion': '86', 'receiptType': environment, 'originalPurchaseDate': int(time.time() * 1000)}
+
+
+def test_testflight_builds_mark_early_supporters_until_launch(setup, monkeypatch, chain):
+    me, other = prepare(setup, monkeypatch)
+    sent = lambda session, jws: setup.client.post('/v1/store/app-transaction', headers=headers(session), json={'jws': jws})
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2999-01-01')  # before launch
+    assert sent(me, chain.sign(app_transaction('Sandbox'))).status_code == 200  # TestFlight
+    assert sent(other, chain.sign(app_transaction('Production'))).status_code == 200  # the App Store
+    assert sent(other, Chain().sign(app_transaction('Sandbox'))).status_code == 422  # not signed by Apple
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2000-01-01')  # launched
+    mine = setup.client.get('/v1/data', headers=headers(me)).json()
+    assert mine['pioneer'] is True and mine['proReason'] == 'pioneer'
+    theirs = setup.client.get('/v1/data', headers=headers(other)).json()
+    assert theirs['pioneer'] is False and theirs['pro'] is False
+    # After launch a Sandbox install (App Review, or a new tester) doesn't make an early supporter.
+    late = sent(other, chain.sign(app_transaction('Sandbox'))).json()
+    assert late['pioneer'] is False and late['pro'] is False

@@ -152,7 +152,7 @@ struct ProfileSettingsView: View {
                         Label("Pioneer", systemImage: "star.circle.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(LinearGradient(colors: [Color(red: 0.16, green: 0.62, blue: 0.5), Palette.accent], startPoint: .leading, endPoint: .trailing), in: Capsule())
-                            .accessibilityLabel("Pioneer: joined HowMuch before launch").accessibilityIdentifier("profile.pioneer")
+                            .accessibilityLabel("Pioneer: tested HowMuch in the TestFlight beta").accessibilityIdentifier("profile.pioneer")
                     }
                     }
                     Text(stats.since.map { "Tracking pay since \($0)" } ?? "Add your first shift to start your story").font(.subheadline).foregroundStyle(Palette.muted)

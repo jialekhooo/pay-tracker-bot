@@ -178,6 +178,7 @@ final class AppleAccountStore: ObservableObject {
         PushCenter.shared.currentAccountID = value.id
         if !isDemo { LiveShiftCenter.connect { [weak self] token in await self?.sendLiveToken(token, owner: value.id) } }
         pro.recordPurchases = { [weak self] signed in await self?.recordPurchases(signed, owner: value.id) }
+        pro.recordAppTransaction = { [weak self] jws in await self?.recordAppTransaction(jws, owner: value.id) }
         // Pro starting or ending changes reminders, the Lock Screen card and widgets straight away.
         proWatch = pro.objectWillChange.receive(on: RunLoop.main).map { _ in ProStore.shared.hasPro }.prepend(pro.hasPro).removeDuplicates().dropFirst()
             .sink { [weak store] _ in
@@ -185,7 +186,18 @@ final class AppleAccountStore: ObservableObject {
                 store.refreshReminders(); store.refreshWidgets()
                 LiveShiftCenter.sync(store.data, accountID: store.accountID)
             }
-        Task { await pro.refreshEntitlements(); await pro.finishWaitingTransactions() }
+        Task { await pro.reportTestFlight(); await pro.refreshEntitlements(); await pro.finishWaitingTransactions() }
+    }
+    /// TestFlight builds: lets the server count this account as an early supporter (only before Pro launches).
+    func recordAppTransaction(_ jws: String, owner: String) async {
+        guard !isDemo, account?.id == owner else { return }
+        struct Body: Encodable { let jws: String }
+        struct Result: Decodable { let pioneer: Bool?; let pro: Bool?; let proReason: String? }
+        guard let body = try? JSONEncoder().encode(Body(jws: jws)),
+              let result = try? JSONDecoder().decode(Result.self, from: await api.request("/v1/store/app-transaction", method: "POST", body: body)),
+              account?.id == owner else { return }
+        tracker?.setPioneer(result.pioneer)
+        if let pro = result.pro { ProStore.shared.setServer(pro: pro, reason: result.proReason, accountID: owner) }
     }
     /// Sends App Store transactions to the account. Returns the transaction IDs the server accepted, or nil when it couldn't be reached.
     func recordPurchases(_ signed: [String], owner: String) async -> Set<String>? {
@@ -345,7 +357,7 @@ final class AppleAccountStore: ObservableObject {
         tracker?.deactivateWidgets(); SharedWidgetStorage.clear()
         let previousStore = tracker
         account = nil; tracker = nil; conflict = nil; notificationJob = nil
-        ProStore.shared.signedOut(); ProStore.shared.recordPurchases = nil
+        ProStore.shared.signedOut(); ProStore.shared.recordPurchases = nil; ProStore.shared.recordAppTransaction = nil
         api.setSession(nil); AccountVault.remove("session")
         PushCenter.shared.currentAccountID = nil
         UIApplication.shared.unregisterForRemoteNotifications()

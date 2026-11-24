@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .auth import authenticated_account, bundle_id, developer, pioneer
+from .auth import authenticated_account, bundle_id, developer, launched, pioneer
 from .database import limit
 
 router = APIRouter(prefix='/store')
@@ -248,3 +248,26 @@ async def record(payload: Transactions, request: Request, authorization: str | N
     from .pet_codes import unlocks
     return {'accepted': accepted, 'rejected': rejected, **pro_status(db, account),
             'petUnlocks': unlocks(db, account['account_id']), 'helloCoins': bonus_coins(db, account['account_id'])}
+
+
+class AppTransaction(BaseModel):
+    jws: str = Field(min_length=20, max_length=20000)
+
+
+@router.post('/app-transaction')
+async def app_transaction(payload: AppTransaction, request: Request, authorization: str | None = Header(default=None)):
+    """TestFlight builds send Apple's signed app transaction. Before launch, an account seen in one (Apple's Sandbox
+    environment) is marked as a TestFlight tester: an early supporter, with Pro free. After launch nobody new is
+    marked, so App Review (also Sandbox) sees HowMuch as a new person would."""
+    account = authenticated_account(request, authorization)
+    limit(request, 'store', maximum=60, key=account['account_id'])
+    try:
+        info = verify(payload.jws)
+    except Unverified as error:
+        raise HTTPException(422, str(error)) from None
+    db = request.app.state.storage._conn
+    if info.get('environment') == 'Sandbox' and not launched() and not account['tester']:
+        with db:
+            db.execute('UPDATE accounts SET tester=1 WHERE account_id=?', (account['account_id'],))
+        account = db.execute('SELECT * FROM accounts WHERE account_id=?', (account['account_id'],)).fetchone()
+    return {'pioneer': pioneer(account), **pro_status(db, account)}

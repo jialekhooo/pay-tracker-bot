@@ -553,21 +553,19 @@ def test_pet_live_shift_and_widget_settings_sync_and_survive_older_apps(setup):
     assert write(setup,session,bad,revision=kept and setup.client.get('/v1/data',headers=headers(session)).json()['revision']).status_code==422
 
 
-def test_accounts_made_before_launch_are_pioneers(setup,monkeypatch):
+def test_only_testflight_accounts_stay_pioneers_after_launch(setup,monkeypatch):
     monkeypatch.delenv('HOWMUCH_PIONEER_UNTIL',raising=False)
-    early,_=login(setup)
-    assert early['account']['pioneer'] is True
-    assert setup.client.get('/v1/data',headers=headers(early)).json()['pioneer'] is True
-    # After launch, only accounts made before the cut-off keep the badge.
-    setup.storage._conn.execute("UPDATE accounts SET created=? WHERE apple_sub='apple-user-A'",(int(time.time())-86400,))
-    setup.storage._conn.commit()
+    tester,_=login(setup); public,_=login(setup,'apple-user-B')
+    # Before launch everyone is a pioneer.
+    assert tester['account']['pioneer'] is True and public['account']['pioneer'] is True
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL','2999-01-01')
+    assert setup.client.get('/v1/data',headers=headers(public)).json()['pioneer'] is True
+    setup.storage._conn.execute("UPDATE accounts SET tester=1 WHERE apple_sub='apple-user-A'"); setup.storage._conn.commit()
+    # After launch only accounts seen in a TestFlight build keep the badge, however old the others are.
     monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL',str(int(time.time())-60))
-    late,_=login(setup,'apple-user-B')
-    assert late['account']['pioneer'] is False
-    again,_=login(setup)
-    assert again['account']['pioneer'] is True
-    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL','2020-01-01')
-    assert setup.client.get('/v1/data',headers=headers(again)).json()['pioneer'] is False
+    assert setup.client.get('/v1/data',headers=headers(tester)).json()['pioneer'] is True
+    assert setup.client.get('/v1/data',headers=headers(public)).json()['pioneer'] is False
+    assert login(setup,'apple-user-B')[0]['account']['pioneer'] is False
 
 
 def test_only_listed_accounts_are_developers(setup,monkeypatch):

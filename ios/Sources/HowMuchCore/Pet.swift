@@ -86,7 +86,7 @@ public struct PetProgress: Equatable, Sendable {
 
     public func hasAchievement(_ id: String) -> Bool { achievements.contains { $0.id == id && $0.earned } }
 
-    /// `pioneer`: the account was made before HowMuch's official launch.
+    /// `pioneer`: the account tested HowMuch in the TestFlight beta (the server decides).
     /// `currency`: the person's main currency; money badges only count pay in it. Defaults to the most used one.
     public init(shifts: [Shift], now: Date = Date(), calendar: Calendar = TrackerCalendar.calendar, pioneer: Bool = false, developer: Bool = false, unlocked: Set<String> = [], currency: String? = nil, bonusCoins: Int = 0) {
         self.developer = developer

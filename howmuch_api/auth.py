@@ -75,14 +75,25 @@ def authenticated_account(request: Request, authorization: str | None):
     return row
 
 
-def pioneer(account) -> bool:
-    """Accounts made before the official launch. Until HOWMUCH_PIONEER_UNTIL is set (a date
-    like 2026-12-01, or Unix seconds), every account is a pioneer."""
+def launch_time():
+    """When HowMuch Pro launched: HOWMUCH_PIONEER_UNTIL, a date like 2026-12-01 or Unix seconds. None until it's set;
+    a value that can't be read counts as already launched."""
     cutoff=os.environ.get('HOWMUCH_PIONEER_UNTIL','').strip()
-    if not cutoff: return True
-    try: until=int(cutoff) if cutoff.isdigit() else int(time.mktime(time.strptime(cutoff,'%Y-%m-%d')))
-    except ValueError: return False
-    return int(account['created'])<until
+    if not cutoff: return None
+    try: return int(cutoff) if cutoff.isdigit() else int(time.mktime(time.strptime(cutoff,'%Y-%m-%d')))
+    except ValueError: return 0
+
+
+def launched() -> bool:
+    until=launch_time()
+    return until is not None and time.time()>=until
+
+
+def pioneer(account) -> bool:
+    """Early supporters: accounts seen in a TestFlight build of the beta (accounts.tester). Until the launch time
+    (HOWMUCH_PIONEER_UNTIL) has passed every account counts, so nobody loses anything before Pro launches."""
+    if not launched(): return True
+    return 'tester' in account.keys() and bool(account['tester'])
 
 
 def developer(account) -> bool:

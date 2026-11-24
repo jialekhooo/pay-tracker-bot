@@ -54,6 +54,9 @@ final class ProStore: ObservableObject {
 
     /// Sends signed transactions to the account; returns the IDs the server accepted.
     var recordPurchases: (([String]) async -> Set<String>?)?
+    /// Sends Apple's signed app transaction from a TestFlight build, so the server can count the account as an early supporter.
+    var recordAppTransaction: ((String) async -> Void)?
+    private var testFlightTransaction: String?
     var accountToken: UUID?
     private var updates: Task<Void, Never>?
 
@@ -99,6 +102,7 @@ final class ProStore: ObservableObject {
         Task {
             if let shared = try? await AppTransaction.shared, case .verified(let app) = shared {
                 isTestBuild = app.environment != .production
+                if app.environment == .sandbox { testFlightTransaction = shared.jwsRepresentation; await reportTestFlight() }
             }
             await refreshEntitlements()
             await finishWaitingTransactions()
@@ -114,6 +118,12 @@ final class ProStore: ObservableObject {
         } else {
             serverPro = UserDefaults.standard.bool(forKey: key); serverReason = UserDefaults.standard.string(forKey: key + ".reason")
         }
+    }
+
+    /// TestFlight only: tells the server this account uses the beta (it only counts before Pro launches).
+    func reportTestFlight() async {
+        guard let testFlightTransaction, let recordAppTransaction else { return }
+        await recordAppTransaction(testFlightTransaction)
     }
 
     func signedOut() { serverPro = false; serverReason = nil; accountToken = nil }

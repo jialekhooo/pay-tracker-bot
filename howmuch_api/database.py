@@ -75,6 +75,9 @@ class AppStorage(Storage):
         self._conn.execute('PRAGMA journal_mode=WAL')
         self._conn.executescript(SCHEMA)
         # Refresh-token rotation history: a lost reply gets a short grace; an older token reused ends the session.
+        # Accounts seen in a TestFlight build before launch (set by /v1/store/app-transaction): the early supporters.
+        if 'tester' not in {r['name'] for r in self._conn.execute('PRAGMA table_info(accounts)')}:
+            self._conn.execute('ALTER TABLE accounts ADD COLUMN tester INTEGER NOT NULL DEFAULT 0')
         session_columns={r['name'] for r in self._conn.execute('PRAGMA table_info(auth_sessions)')}
         if 'prev_refresh_hash' not in session_columns:
             self._conn.execute('ALTER TABLE auth_sessions ADD COLUMN prev_refresh_hash TEXT')
