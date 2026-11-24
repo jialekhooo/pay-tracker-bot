@@ -2,12 +2,13 @@ import SwiftUI
 import StoreKit
 import HowMuchCore
 
-/// The parts of HowMuch that need Pro. Adding and tracking shifts, earnings, the calendar and Penny stay free.
+/// The parts of HowMuch that need Pro. Tracking shifts (in up to FreePlan.eventLimit events), earnings, the calendar and Penny stay free.
 enum ProFeature: String, CaseIterable, Identifiable {
-    case payIn, reminders, calendar, insights
+    case events, payIn, reminders, calendar, insights
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .events: "Unlimited events"
         case .payIn: "Pay-in tracking"
         case .reminders: "Reminders and live shift"
         case .calendar: "Calendar sync and exports"
@@ -16,6 +17,7 @@ enum ProFeature: String, CaseIterable, Identifiable {
     }
     var detail: String {
         switch self {
+        case .events: "Free accounts keep up to \(FreePlan.eventLimit) events. Pro keeps every job you work."
         case .payIn: "Bank alerts and forwarded emails mark your shifts paid."
         case .reminders: "Job reminders, time to leave, and your shift on the Lock Screen."
         case .calendar: "Your shifts in Apple or Google Calendar, plus CSV and calendar exports."
@@ -24,6 +26,7 @@ enum ProFeature: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .events: "square.stack.3d.up"
         case .payIn: "creditcard"
         case .reminders: "bell.badge"
         case .calendar: "calendar.badge.plus"
@@ -152,7 +155,7 @@ struct ProPaywall: View {
                     Text("HOWMUCH PRO").font(.caption.weight(.bold)).tracking(2.2).foregroundStyle(Palette.teal)
                     Text(feature.map { "\($0.title) is part of Pro" } ?? "Less admin, more paid shifts").font(.appTitle).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("pro.paywall.title")
-                    Text("Tracking shifts, earnings, the calendar and Penny stay free. Pro adds the tools that do the chasing for you.")
+                    Text("Tracking shifts in up to \(FreePlan.eventLimit) events, earnings, the calendar and Penny stay free. Pro adds unlimited events and the tools that do the chasing for you.")
                         .font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 Card {
@@ -231,7 +234,8 @@ struct ProPaywall: View {
         if plan == StoreCatalog.lifetime { return "One payment. No subscription." }
         let price = pro.price(plan) ?? "The price shown"
         let every = plan == StoreCatalog.yearly ? "year" : "month"
-        let start = pro.trial(plan).map { "Free for the \($0.replacingOccurrences(of: " free trial", with: "")), then " } ?? ""
+        // "1-week free trial" → "Free for 1 week, then "
+        let start = pro.trial(plan).map { "Free for \($0.replacingOccurrences(of: " free trial", with: "").replacingOccurrences(of: "-", with: " ")), then " } ?? ""
         return "\(start)\(price) a \(every). Renews automatically until you cancel, at least 24 hours before the period ends, in Settings → your name → Subscriptions."
     }
 }

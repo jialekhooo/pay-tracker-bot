@@ -1,6 +1,6 @@
 # Monetization
 
-HowMuch sells three things through the App Store. Tracking shifts, earnings, the calendar and Penny stay free.
+HowMuch sells three things through the App Store. Tracking shifts (in up to 5 events), earnings, the calendar and Penny stay free.
 
 ## Products
 
@@ -17,6 +17,7 @@ All are set up in App Store Connect (name, description, price in 175 countries, 
 
 ## What Pro unlocks
 
+- Unlimited events. Free accounts keep up to 5 events (jobs, told apart by name ignoring case). More shifts in an existing event are always free. An account above 5 (for example after Pro ends) keeps its events but can't add new ones until it's back under. The app refuses the save and shows the plans (`FreePlan`, `TrackerStore.update`); the server refuses any document save that would do it with 402 (`store.check_event_limit`, in `commit_document`, so bot-added shifts count too).
 - Pay-in tracking (bank notifications, forwarded emails, mailbox connection). The server ignores alerts, skips mailbox polling and refuses scans without Pro.
 - Reminders and live shift: job notifications, time to leave, the Lock Screen shift card. The server plans none of them without Pro, and plans them as soon as Pro is bought.
 - Calendar sync and exports: the calendar feed, CSV and .ics export. Full-archive backup and restore stay free.
@@ -51,3 +52,4 @@ The app sends each StoreKit transaction (Apple's signed JWS) to `POST /v1/store/
 - Simulator: run from Xcode; `HowMuch.storekit` supplies the products. Coin purchases made here are signed by Xcode, so the server refuses them (expected).
 - TestFlight: testers are pioneers, so they have Pro free. Settings → HowMuch Pro → Testing → "Test as a new user" ignores that on the iPhone so the paywall and sandbox purchases can be tried.
 - UI tests: `--ui-test-free` shows HowMuch without Pro; previews and other UI tests have Pro.
+- Review screenshots: set `TEST_RUNNER_STORE_SHOTS=<folder>` and run `testStoreReviewScreenshots`; it saves the plans and Penny's store with prices from `HowMuch.storekit`.

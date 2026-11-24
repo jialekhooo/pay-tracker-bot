@@ -170,3 +170,47 @@ def test_pay_in_alerts_are_ignored_without_pro(setup, monkeypatch, chain):
     send(setup, me, chain.sign(transaction('pro.lifetime', '2000000030', me)))
     result = setup.client.post('/v1/payment-detection/notification', headers=headers(me), json=alert).json()
     assert result['message'] != 'Pay-in tracking is part of HowMuch Pro.'
+
+
+def test_free_accounts_keep_up_to_five_events(setup, monkeypatch, chain):
+    import copy
+    import uuid
+    from .test_accounts import document, write
+    me, _ = prepare(setup, monkeypatch)
+
+    def with_events(*names):
+        data = document()
+        base = data['shifts'][0]
+        data['shifts'] = [{**copy.deepcopy(base), 'id': str(uuid.uuid4()), 'event': name} for name in names]
+        return data
+
+    five = with_events('A', 'B', 'C', 'D', 'E')
+    assert write(setup, me, five).status_code == 200
+    six = with_events('A', 'B', 'C', 'D', 'E', 'F')
+    refused = write(setup, me, six, revision=1)
+    assert refused.status_code == 402 and 'up to 5 events' in refused.json()['detail']
+    # More shifts in events it already has are fine, whatever the case or spacing.
+    assert write(setup, me, with_events('A', 'B', 'C', 'D', 'E', ' a ', 'b'), revision=1).status_code == 200
+    # With Pro there's no limit, and after Pro ends the events stay but no new ones can be added.
+    soon = int((time.time() + 3600) * 1000)
+    send(setup, me, chain.sign(transaction('pro.monthly', '2000000040', me, expiresDate=soon)))
+    assert write(setup, me, with_events('A', 'B', 'C', 'D', 'E', 'F', 'G'), revision=2).status_code == 200
+    send(setup, me, chain.sign(transaction('pro.monthly', '2000000040', me, expiresDate=int((time.time() - 60) * 1000))))
+    assert write(setup, me, with_events('A', 'B', 'C', 'D', 'E', 'F', 'G', 'G'), revision=3).status_code == 200
+    assert write(setup, me, with_events('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'), revision=4).status_code == 402
+    assert write(setup, me, with_events('A', 'B', 'C', 'D', 'E', 'F'), revision=4).status_code == 200  # deleting is fine
+
+
+def test_bot_added_shifts_respect_the_event_limit(setup, monkeypatch, chain):
+    from fastapi import HTTPException
+    from howmuch_api.store import check_event_limit
+    me, _ = prepare(setup, monkeypatch)
+    db = setup.storage._conn
+    account = db.execute('SELECT * FROM accounts WHERE account_id=?', (me['account']['id'],)).fetchone()
+    shifts = lambda *names: {'shifts': [{'event': n} for n in names]}
+    check_event_limit(db, account, shifts('A', 'B', 'C', 'D'), shifts('A', 'B', 'C', 'D', 'E'))
+    with pytest.raises(HTTPException) as refused:
+        check_event_limit(db, account, shifts('A', 'B', 'C', 'D', 'E'), shifts('A', 'B', 'C', 'D', 'E', 'F'))
+    assert refused.value.status_code == 402
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2999-01-01')  # early supporters have Pro, so no limit
+    check_event_limit(db, account, shifts('A', 'B', 'C', 'D', 'E'), shifts('A', 'B', 'C', 'D', 'E', 'F'))

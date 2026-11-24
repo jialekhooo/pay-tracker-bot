@@ -1,4 +1,5 @@
 import XCTest
+import StoreKitTest
 
 final class HowMuchUITests: XCTestCase {
     @MainActor
@@ -1071,6 +1072,58 @@ final class HowMuchUITests: XCTestCase {
         attach("Penny's store", app: app)
     }
 
+    /// Without Pro, an account keeps up to five events: a sixth is refused with the plans, while more shifts in an existing event save.
+    @MainActor
+    func testFreeAccountsKeepUpToFiveEvents() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-free"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.add"].waitForExistence(timeout: 15)); app.buttons["nav.add"].tap()
+        let name = app.textFields["Event name"]; XCTAssertTrue(name.waitForExistence(timeout: 5)); sleep(1)
+        name.tap(); name.typeText("Brand new pop-up")
+        // The preview account already has five events.
+        XCTAssertTrue(app.descendants(matching: .any)["shift.eventLimit"].waitForExistence(timeout: 3))
+        attach("Free event limit in the editor", app: app)
+        app.buttons["Save"].tap()
+        let title = app.staticTexts["pro.paywall.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, "Unlimited events is part of Pro")
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["shift.error"].waitForExistence(timeout: 3))
+        // An event the account already has stays free: the note goes away.
+        name.tap(); name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + "Brand launch")
+        XCTAssertFalse(app.descendants(matching: .any)["shift.eventLimit"].waitForExistence(timeout: 2))
+    }
+
+    /// App Review screenshots for the in-app purchases: the plans and Penny's store with prices from
+    /// HowMuch.storekit. Skipped unless STORE_SHOTS is set to a folder; the PNGs are written there.
+    @MainActor
+    func testStoreReviewScreenshots() throws {
+        guard let folder = ProcessInfo.processInfo.environment["STORE_SHOTS"], !folder.isEmpty else { throw XCTSkip("STORE_SHOTS not set") }
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("HowMuch.storekit")
+        let session = try SKTestSession(contentsOf: file)
+        session.disableDialogs = true; session.resetToDefaultState(); session.clearTransactions()
+        func save(_ name: String) throws {
+            try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent(name + ".png"))
+        }
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-free", "-appearance", "light"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        let row = app.staticTexts["HowMuch Pro"].firstMatch; XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        let yearly = app.buttons["pro.plan.yearly"]; XCTAssertTrue(yearly.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["pro.buy"].waitForEnabled(timeout: 20), "Prices didn't load from HowMuch.storekit")
+        let buy = app.buttons["pro.buy"]; reveal(buy, in: app); app.swipeUp(); sleep(1)
+        for plan in ["yearly", "monthly", "lifetime"] {
+            app.buttons["pro.plan." + plan].tap(); sleep(1); try save("pro-" + plan)
+        }
+        app.terminate()
+        app.launchArguments = ["--preview", "-appearance", "light"]; app.launch()
+        let card = app.buttons["pet.card"]; XCTAssertTrue(card.waitForExistence(timeout: 10)); reveal(card, in: app); card.tap()
+        let store = app.buttons["pet.store"]; XCTAssertTrue(store.waitForExistence(timeout: 5)); reveal(store, in: app); store.tap()
+        XCTAssertTrue(app.staticTexts["Celebration pack"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["store.buy.celebration"].waitForEnabled(timeout: 20), "Prices didn't load from HowMuch.storekit")
+        sleep(1); try save("penny-packs")
+        let coins = app.descendants(matching: .any).matching(identifier: "store.coins.1000").firstMatch; reveal(coins, in: app); sleep(1)
+        try save("penny-coins")
+    }
+
     @MainActor
     func testPetCardOpensItsPage() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
@@ -2060,5 +2113,9 @@ private extension XCUIElement {
     func waitForValue(_ value: String, timeout: TimeInterval) -> Bool {
         let matches = NSPredicate(format: "value == %@", value)
         return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: matches, object: self)], timeout: timeout) == .completed
+    }
+
+    func waitForEnabled(timeout: TimeInterval) -> Bool {
+        XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: self)], timeout: timeout) == .completed
     }
 }

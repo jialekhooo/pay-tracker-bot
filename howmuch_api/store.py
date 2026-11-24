@@ -166,6 +166,24 @@ def pro_status(db, account) -> dict:
     return {'pro': reason is not None, 'proReason': reason}
 
 
+FREE_EVENTS = 5
+FREE_EVENTS_MESSAGE = (f'Free accounts can keep up to {FREE_EVENTS} events. Add this to one of your events, delete an old event, '
+                       'or get HowMuch Pro for unlimited events.')
+
+
+def event_names(data) -> set[str]:
+    """Events are told apart by name, ignoring case and surrounding spaces (as in the app's FreePlan)."""
+    return {str(shift.get('event', '')).strip().lower() for shift in (data or {}).get('shifts', [])}
+
+
+def check_event_limit(db, account, before, after):
+    """Refuse a change that takes an account without Pro past FREE_EVENTS events. Accounts already above it (for
+    example, after Pro ends) keep their events but can't add more. More shifts in an existing event are always fine."""
+    count = len(event_names(after))
+    if count > FREE_EVENTS and count > len(event_names(before)) and not pro_status(db, account)['pro']:
+        raise HTTPException(402, FREE_EVENTS_MESSAGE)
+
+
 class Transactions(BaseModel):
     transactions: list[str] = Field(min_length=1, max_length=50)
 

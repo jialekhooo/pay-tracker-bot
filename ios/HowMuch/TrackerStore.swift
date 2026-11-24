@@ -7,6 +7,8 @@ import HowMuchCore
 final class TrackerStore: ObservableObject {
     @Published private(set) var data = TrackerData()
     @Published var error: String?
+    /// Set when a save was refused because it would add a sixth event without Pro; the screen that saved shows the plans.
+    @Published var eventLimitReached = false
     @Published private(set) var canUndo = false
     @Published private(set) var reminderMessage = ""
     let isPreview: Bool = {
@@ -108,11 +110,16 @@ final class TrackerStore: ObservableObject {
     @discardableResult
     func update(_ change: (inout TrackerData) throws -> Void) -> Bool {
         guard writable else { error = "Storage is unavailable. Restart the app after resolving the storage problem."; return false }
+        eventLimitReached = false
         do {
             var next = data
             try change(&next)
             next = next.reimbursementsOnly
             try next.validate()
+            if FreePlan.exceedsLimit(before: data, after: next) && !ProStore.shared.hasPro {
+                eventLimitReached = true
+                throw TrackerError.invalid(FreePlan.limitMessage)
+            }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             if !isPreview { try encoder.encode(next).write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen]) }

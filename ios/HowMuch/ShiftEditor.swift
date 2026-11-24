@@ -42,6 +42,8 @@ struct ShiftEditor: View {
     @State private var due = Date()
     @State private var error: String?
     @State private var findingLocation = false
+    @State private var showingPlans = false
+    @ObservedObject private var pro = ProStore.shared
     @State private var loaded = false
     @State private var extraDates: [ExtraShiftDate] = []
     @State private var repeatDays = 0
@@ -135,6 +137,7 @@ struct ShiftEditor: View {
             .sheet(isPresented: $choosingPayer) { PayerPickerView(selected: payerID) { payerID = $0 } }
             .onChange(of: event) { _, name in if existing == nil && !templateOnly { if let assigned = store.data.settings.payer(for: name)?.id { payerID = assigned } else if name != loadedTemplateEvent { payerID = nil } } }
             .sheet(isPresented: $findingLocation) { JobLocationPicker(initial: location) { location = $0 } }
+            .sheet(isPresented: $showingPlans) { NavigationStack { ProPaywall(feature: .events).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showingPlans = false } } } } }
             .onAppear {
                 guard !loaded else { return }
                 load(); loaded = true
@@ -144,6 +147,24 @@ struct ShiftEditor: View {
             .onChange(of: [event, location, amount, breakMinutes, currency, threshold, multiplier]) { _, _ in error = nil }
         }
     }
+    /// Without Pro, says when this name starts a new event, and how many of the free events are used.
+    @ViewBuilder private var freePlanNote: some View {
+        let name = event.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let events = FreePlan.events(in: store.data)
+        if !pro.hasPro, !templateOnly, existing == nil || duplicating, !name.isEmpty, !events.contains(name) {
+            if events.count >= FreePlan.eventLimit {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("You're using all \(FreePlan.eventLimit) free events. Choose a previous event, or get HowMuch Pro for unlimited events.")
+                        .font(.caption).foregroundStyle(Palette.warning).fixedSize(horizontal: false, vertical: true)
+                    Button("See HowMuch Pro") { showingPlans = true }.font(.caption.weight(.semibold)).frame(minHeight: 44)
+                }.accessibilityIdentifier("shift.eventLimit")
+            } else {
+                Text("New event · \(events.count + 1) of \(FreePlan.eventLimit) on the free plan").font(.caption).foregroundStyle(Palette.muted)
+                    .accessibilityIdentifier("shift.eventCount")
+            }
+        }
+    }
+
     private var workCard: some View {
         Card {
             editorHeading("WORK DETAILS", symbol: "briefcase")
@@ -153,6 +174,7 @@ struct ShiftEditor: View {
             }
             TextField("Event name", text: $event)
                 .font(.system(.title3, design: .rounded, weight: .semibold)).frame(minHeight: 48)
+            freePlanNote
             Divider()
             HStack(spacing: 12) {
                 Image(systemName: "mappin.and.ellipse").foregroundStyle(Palette.teal).frame(width: 20)
@@ -438,7 +460,10 @@ struct ShiftEditor: View {
         do {
             let batch = try makeBatch()
             if store.update({ data in try apply(batch, to: &data) }) { dismiss() }
-            else { error = store.error; store.error = nil }  // shown here only, not again as a global alert
+            else {
+                error = store.error; store.error = nil  // shown here only, not again as a global alert
+                if store.eventLimitReached { store.eventLimitReached = false; showingPlans = true }
+            }
         } catch { self.error = error.localizedDescription }
     }
 

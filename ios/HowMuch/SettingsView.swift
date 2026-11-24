@@ -343,6 +343,7 @@ struct DataToolsView: View {
     @State private var exportType = UTType.commaSeparatedText
     @ObservedObject private var pro = ProStore.shared
     @State private var showingPlans = false
+    @State private var plansFeature = ProFeature.calendar
     @State private var legacyImport = false
     @State private var pending: TrackerData?
     @State private var pendingReceipts: [UUID: Data] = [:]
@@ -414,9 +415,12 @@ struct DataToolsView: View {
                         }
                     }
                     else { let report = try store.importCSV(url); message = "Imported \(counted(report.added, "shift")); skipped \(counted(report.skipped, "repeat"))." }
-                } catch { if (error as NSError).code != NSUserCancelledError { store.error = error.localizedDescription } }
+                } catch {
+                    if store.eventLimitReached { store.eventLimitReached = false; store.error = nil; plansFeature = .events; showingPlans = true }
+                    else if (error as NSError).code != NSUserCancelledError { store.error = error.localizedDescription }
+                }
             }
-            .sheet(isPresented: $showingPlans) { NavigationStack { ProPaywall(feature: .calendar).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showingPlans = false } } } } }
+            .sheet(isPresented: $showingPlans, onDismiss: { plansFeature = .calendar }) { NavigationStack { ProPaywall(feature: plansFeature).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showingPlans = false } } } } }
             .fileExporter(isPresented: $exporting, document: document, contentType: exportType, defaultFilename: exportType == .zip ? "howmuch-backup" : "howmuch-shifts") { result in
                 if case .failure(let error) = result { store.error = error.localizedDescription } else if let exportNote { message = exportNote }
                 exportNote = nil

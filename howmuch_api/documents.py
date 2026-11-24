@@ -452,6 +452,8 @@ def commit_document(storage, account, model: Document, timezone_name, current):
     data=normalize(model.model_dump(mode='python',exclude_none=True))
     envelope={'data':data,'timezone':timezone_name}
     db=storage._conn
+    from .store import check_event_limit
+    check_event_limit(db,account,current['data'],data)
     revision=current['revision']+1
     with db:
         # PaymentStore schema initialization occurs before this transaction, not during record writes.
