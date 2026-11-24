@@ -1,6 +1,6 @@
 """The public privacy policy at /privacy. Self-contained: no scripts, fonts or images from anywhere else."""
 
-UPDATED = '11 November 2026'
+UPDATED = '24 November 2026'
 CONTACT = 'jialexkhoo@gmail.com'
 
 STYLE = """
@@ -135,6 +135,9 @@ BODY = f"""
  <p>Your friend code connects you with people you choose, and both sides must agree. Friends see your display name, your pet's name, look, level, mood, streak and badges, whether you said hi today, and when your pet visits them or they give it a treat. Anyone who has your invite link can see your display name. We store your pet's card, friend list, requests, hellos and pet visits, and use your display name in notifications to friends. Friends never see your shifts, pay, payers or places.</p>
  <p>If you redeem a gift code, we store that you used it and the coins or items it gave you.</p>
 
+ <h3>Purchases</h3>
+ <p>HowMuch Pro, Penny's item packs and coins are bought through Apple, which handles payment. We never see your card or Apple Account details. When you buy, the app sends us Apple's signed record of the purchase: the product, its transaction ID, purchase and renewal dates, and whether it was refunded. We keep it with your HowMuch account so your purchases follow you to your other devices, and coins are added once. Deleting your account deletes these records, except a one-way hash of each coin purchase's transaction ID, kept so the same coins can't be added twice. To cancel a subscription or ask for a refund, use your Apple Account settings or Apple's support.</p>
+
  <h3>Telegram bot</h3>
  <p>If you use @paytracker1_bot, your messages pass through Telegram, and the bot stores your Telegram ID and the shifts you send it. If you link it to HowMuch, we also store your Telegram user ID and username, and the bot can add shifts to your account and read what is owed and what is coming up. A schedule key created in the bot can only reach shifts in that account, and you can revoke it.</p>
  <p>You can unlink in Settings. The bot keeps its own records, so deleting your HowMuch account does not delete them. Use /clear in the bot, or email us.</p>
@@ -157,7 +160,7 @@ BODY = f"""
   <thead><tr><th scope="col">Service</th><th scope="col">What for</th></tr></thead>
   <tbody>
    <tr><td>Fly.io</td><td>Hosts the HowMuch service and database in Singapore</td></tr>
-   <tr><td>Apple</td><td>Sign in with Apple, push notifications and Apple Maps routes</td></tr>
+   <tr><td>Apple</td><td>Sign in with Apple, push notifications, Apple Maps routes and App Store purchases</td></tr>
    <tr><td>Google, Microsoft, Apple iCloud</td><td>Only if you connect that mailbox</td></tr>
    <tr><td>Cloudflare</td><td>Email Routing delivers emails you forward to your private HowMuch address</td></tr>
    <tr><td>Telegram</td><td>Only if you use the bot</td></tr>

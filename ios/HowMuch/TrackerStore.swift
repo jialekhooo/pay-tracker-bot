@@ -55,7 +55,11 @@ final class TrackerStore: ObservableObject {
         petUnlocks = Set(value)
         UserDefaults.standard.set(value, forKey: "petUnlocks.\(accountID)")
     }
-    func petProgress(now: Date = Date()) -> PetProgress { PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, developer: developer, unlocked: petUnlocks, currency: data.rules.currency, bonusCoins: helloCoins) }
+    func petProgress(now: Date = Date()) -> PetProgress {
+        // Packs come from the server (bought on any Apple Account) and from this Apple Account's own purchases.
+        let packs = ProStore.shared.ownedPacks.flatMap { StoreCatalog.packs[$0] ?? [] }
+        return PetProgress(shifts: data.shifts, now: now, pioneer: pioneer, developer: developer, unlocked: petUnlocks.union(packs), currency: data.rules.currency, bonusCoins: helloCoins)
+    }
     /// Coins kept on the server: saying hi to friends, being said hi to, and gift codes.
     @Published private(set) var helloCoins = 0
     func setHelloCoins(_ value: Int?) {
@@ -142,6 +146,12 @@ final class TrackerStore: ObservableObject {
     func deactivateWidgets() { publishesWidgets = false; SharedWidgetStorage.clear(); LiveShiftCenter.endAll() }
     func refreshWidgets() {
         guard publishesWidgets else { return }
+        guard ProStore.shared.hasPro else {
+            SharedWidgetStorage.clear(); WidgetLock.set(true)
+            widgetMessage = "Widgets are part of HowMuch Pro."
+            return
+        }
+        WidgetLock.set(false)
         do {
             try SharedWidgetStorage.publish(WidgetSnapshot(data: data, accountID: accountID))
             publishPennyWidget()
@@ -153,7 +163,8 @@ final class TrackerStore: ObservableObject {
         guard !suppressNotifications else { return }
         let previousTask = reminderTask
         previousTask?.cancel()
-        let snapshot = data
+        var snapshot = data
+        if !ProStore.shared.hasPro { snapshot.shifts = [] }  // job reminders are part of HowMuch Pro: schedule none (clearing any)
         reminderTask = Task {
             await previousTask?.value
             if Task.isCancelled { return }

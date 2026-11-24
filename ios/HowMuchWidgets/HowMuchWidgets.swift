@@ -50,8 +50,12 @@ struct WidgetEntryView: View {
     let entry: HowMuchEntry
     let kind: HowMuchWidgetKind
     var body: some View {
-        HowMuchWidgetContents(snapshot: entry.snapshot, date: entry.date, kind: kind, family: family,
-            currency: entry.configuration.currency?.id, showPay: entry.configuration.showPay, showLocation: entry.configuration.showLocation)
+        Group {
+            if WidgetLock.isLocked { ProLockedWidget(family: family) } else {
+                HowMuchWidgetContents(snapshot: entry.snapshot, date: entry.date, kind: kind, family: family,
+                    currency: entry.configuration.currency?.id, showPay: entry.configuration.showPay, showLocation: entry.configuration.showLocation)
+            }
+        }
             .containerBackground(for: .widget) { Rectangle().fill((colorScheme == .dark ? Color(red: 0.04, green: 0.15, blue: 0.13) : Color(red: 0.92, green: 0.97, blue: 0.95)).gradient) }
     }
 }
@@ -122,7 +126,9 @@ struct PennyWidgetView: View {
     }
     var body: some View {
         Group {
-            if let info = entry.info {
+            if WidgetLock.isLocked {
+                ProLockedWidget(family: family)
+            } else if let info = entry.info {
                 if family == .systemMedium { medium(info) } else { small(info) }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
@@ -217,5 +223,25 @@ private struct PennyWidgetBackground: View {
     var body: some Widget {
         NextShiftWidget(); UpcomingEventsWidget(); ThisMonthWidget(); WorkCalendarWidget(); LiveShiftWidget(); PennyWidget()
         if #available(iOSApplicationExtension 18.0, *) { AddJobControl() }
+    }
+}
+
+/// Shown by every HowMuch widget while HowMuch Pro is off.
+struct ProLockedWidget: View {
+    let family: WidgetFamily
+    var body: some View {
+        switch family {
+        case .accessoryInline: Text("HowMuch Pro")
+        case .accessoryRectangular:
+            VStack(alignment: .leading) { Text("HowMuch Pro").font(.headline); Text("Widgets are part of Pro").font(.caption) }
+        default:
+            VStack(alignment: .leading, spacing: 8) {
+                Image("BrandLogo").resizable().scaledToFit().frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 9))
+                Text("Widgets are part of HowMuch Pro").font(.headline).fixedSize(horizontal: false, vertical: true)
+                Text("Open HowMuch to see the plans.").font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .widgetURL(URL(string: "howmuch://widget/open"))
+        }
     }
 }

@@ -354,10 +354,11 @@ async def get_data(request: Request, authorization: str | None=Header(default=No
     result=read_document(request.app.state.storage,account)
     from .push import configured
     from .auth import developer, pioneer
+    from .store import pro_status
     from .pet_codes import unlocks
     from .friends import bonus_coins
     db=request.app.state.storage._conn
-    return json_response({**result,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(db,account['account_id']),'helloCoins':bonus_coins(db,account['account_id'])})
+    return json_response({**result,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(db,account['account_id']),'helloCoins':bonus_coins(db,account['account_id']),**pro_status(db,account)})
 
 
 @router.put('/data')
@@ -428,9 +429,10 @@ async def put_data(request: Request, authorization: str | None=Header(default=No
     revision,envelope=commit_document(storage,account,payload.data,payload.timezone,current)
     from .push import configured
     from .auth import developer, pioneer
+    from .store import pro_status
     from .pet_codes import unlocks
     from .friends import bonus_coins
-    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id']),'helloCoins':bonus_coins(storage._conn,account['account_id'])})
+    return json_response({'revision':revision,**envelope,'pushReady':configured(),'pioneer':pioneer(account),'developer':developer(account),'petUnlocks':unlocks(storage._conn,account['account_id']),'helloCoins':bonus_coins(storage._conn,account['account_id']),**pro_status(storage._conn,account)})
 
 
 def validated_document(data) -> Document:

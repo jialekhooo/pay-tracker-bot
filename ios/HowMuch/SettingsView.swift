@@ -8,6 +8,7 @@ import HowMuchCore
 struct SettingsView: View {
     @EnvironmentObject private var store: TrackerStore
     @EnvironmentObject private var auth: AppleAccountStore
+    @ObservedObject private var pro = ProStore.shared
     var body: some View {
         ScreenShell(title: "Settings", subtitle: "Make HowMuch work for you.") {
             NavigationLink { ProfileSettingsView() } label: {
@@ -22,6 +23,9 @@ struct SettingsView: View {
                     }.foregroundStyle(Palette.ink)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
+            group("Plan") {
+                settingsRow("HowMuch Pro", "sparkles", value: pro.hasPro ? "On" : "Try it") { ProSettingsView() }
+            }
             group("Work") {
                 settingsRow("Pay & breaks", "wallet.bifold", value: money(store.data.rules.rate, store.data.rules.currency) + "/h") { PaySettingsView() }
                 Divider().padding(.leading, 44)
@@ -30,23 +34,23 @@ struct SettingsView: View {
                 settingsRow("Job templates", "square.stack.3d.up") { JobTemplatesView() }
             }
             group("Reminders") {
-                settingsRow("Job notifications", "bell.badge") { JobNotificationSettingsView() }
+                settingsRow("Job notifications", "bell.badge", pro: true) { ProGate(feature: .reminders) { JobNotificationSettingsView() } }
                 Divider().padding(.leading, 44)
-                settingsRow("Time to leave", "car.side") { TravelReminderSettingsView() }
+                settingsRow("Time to leave", "car.side", pro: true) { ProGate(feature: .reminders) { TravelReminderSettingsView() } }
                 Divider().padding(.leading, 44)
-                settingsRow("Live shift", "timer") { LiveShiftSettingsView() }
+                settingsRow("Live shift", "timer", pro: true) { ProGate(feature: .reminders) { LiveShiftSettingsView() } }
             }
             group("Getting paid") {
-                settingsRow("Pay-in tracking", "creditcard") { PaymentDetectionView() }
+                settingsRow("Pay-in tracking", "creditcard", pro: true) { ProGate(feature: .payIn) { PaymentDetectionView() } }
                 if TelegramBot.available {
                     Divider().padding(.leading, 44)
                     settingsRow("Telegram", "paperplane") { TelegramSettingsView() }
                 }
             }
             group("Widgets & calendar") {
-                settingsRow("Widgets", "rectangle.on.rectangle") { WidgetsSettingsView() }
+                settingsRow("Widgets", "rectangle.on.rectangle", pro: true) { ProGate(feature: .insights) { WidgetsSettingsView() } }
                 Divider().padding(.leading, 44)
-                settingsRow("Calendar sync", "calendar") { CalendarSettingsView() }
+                settingsRow("Calendar sync", "calendar", pro: true) { ProGate(feature: .calendar) { CalendarSettingsView() } }
             }
             group("Appearance") { AppearancePicker() }
             group("Privacy") { AppLockToggleRow() }
@@ -69,18 +73,22 @@ struct SettingsView: View {
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Palette.line.opacity(0.7), lineWidth: 0.6).allowsHitTesting(false))
         }
     }
-    private func settingsRow<Destination: View>(_ title: String, _ icon: String, value: String? = nil, @ViewBuilder destination: () -> Destination) -> some View {
-        NavigationLink(destination: destination) {
+    /// `pro`: the screen needs HowMuch Pro; without it the row shows a PRO tag and opens the plans.
+    private func settingsRow<Destination: View>(_ title: String, _ icon: String, value: String? = nil, pro needsPro: Bool = false, @ViewBuilder destination: () -> Destination) -> some View {
+        let locked = needsPro && !pro.hasPro
+        return NavigationLink(destination: destination) {
             HStack(spacing: 12) {
                 Image(systemName: icon).font(.rowIcon).frame(width: 32, height: 32).foregroundStyle(Palette.teal).background(Palette.mint, in: RoundedRectangle(cornerRadius: 9))
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold))
                         Spacer(minLength: 8)
+                        if locked { ProBadge() }
                         if let value { Text(value).font(.subheadline).foregroundStyle(Palette.muted).fixedSize() }
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title).font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        if locked { ProBadge() }
                         if let value { Text(value).font(.subheadline).foregroundStyle(Palette.muted) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -333,6 +341,8 @@ struct DataToolsView: View {
     @State private var restore = false
     @State private var document = BackupFile()
     @State private var exportType = UTType.commaSeparatedText
+    @ObservedObject private var pro = ProStore.shared
+    @State private var showingPlans = false
     @State private var legacyImport = false
     @State private var pending: TrackerData?
     @State private var pendingReceipts: [UUID: Data] = [:]
@@ -349,8 +359,12 @@ struct DataToolsView: View {
                     Link(destination: TelegramBot.url) { Label("Open \(TelegramBot.handle) to export with /export", systemImage: "paperplane") }
                         .rowAction().accessibilityIdentifier("data.telegramBot")
                 }
-                Button("Export shifts as CSV", systemImage: "tablecells") { document = BackupFile(Data(ShiftCSV.encode(store.data.shifts).utf8)); exportType = .commaSeparatedText; exporting = true }.rowAction()
-                NavigationLink("Export calendar (.ics)") { CalendarSettingsView() }
+                Button { if pro.hasPro { document = BackupFile(Data(ShiftCSV.encode(store.data.shifts).utf8)); exportType = .commaSeparatedText; exporting = true } else { showingPlans = true } } label: {
+                    HStack { Label("Export shifts as CSV", systemImage: "tablecells"); if !pro.hasPro { Spacer(); ProBadge() } }
+                }.rowAction()
+                NavigationLink { ProGate(feature: .calendar) { CalendarSettingsView() } } label: {
+                    HStack { Text("Export calendar (.ics)"); if !pro.hasPro { Spacer(); ProBadge() } }
+                }
                 Text(TelegramBot.available ? "Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules." : "Imports a CSV exported from HowMuch or the Telegram bot. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.caption).foregroundStyle(Palette.muted)
             }
             if store.hasLegacyImport {
@@ -402,6 +416,7 @@ struct DataToolsView: View {
                     else { let report = try store.importCSV(url); message = "Imported \(counted(report.added, "shift")); skipped \(counted(report.skipped, "repeat"))." }
                 } catch { if (error as NSError).code != NSUserCancelledError { store.error = error.localizedDescription } }
             }
+            .sheet(isPresented: $showingPlans) { NavigationStack { ProPaywall(feature: .calendar).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showingPlans = false } } } } }
             .fileExporter(isPresented: $exporting, document: document, contentType: exportType, defaultFilename: exportType == .zip ? "howmuch-backup" : "howmuch-shifts") { result in
                 if case .failure(let error) = result { store.error = error.localizedDescription } else if let exportNote { message = exportNote }
                 exportNote = nil

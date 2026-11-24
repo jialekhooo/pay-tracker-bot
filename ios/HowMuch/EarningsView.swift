@@ -5,6 +5,7 @@ struct EarningsView: View {
     @EnvironmentObject private var store: TrackerStore
     @State private var scope = "All time"
     @State private var grouping = "Events"
+    @ObservedObject private var pro = ProStore.shared
     @State private var filter = "All events"
     @State private var date = Date()
     /// The currency picked here. Stays when you come back from a pushed page; the default currency until one is picked.
@@ -70,6 +71,8 @@ struct EarningsView: View {
                             }
                             if eventNames.isEmpty { EmptyCard(title: "Nothing in this view", message: "Your events will appear here as you add shifts.", symbol: "chart.bar") }
                         }
+                    } else if !pro.hasPro {
+                        ProLockedCard(feature: .insights, title: "Earnings by month", message: "See every month's shifts, hours and pay side by side with HowMuch Pro.")
                     } else {
                         ForEach(Array(Set(shifts.map { String($0.day.prefix(7)) })).sorted(by: >), id: \.self) { month in
                             let records = shifts.filter { $0.day.hasPrefix(month) }

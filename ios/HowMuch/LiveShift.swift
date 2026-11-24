@@ -13,7 +13,8 @@ enum LiveShiftCenter {
     static func legacyConfirmedKey(_ accountID: String) -> String { "liveShift.confirmed.\(accountID)" }
     /// The signed-in account's live shift choices (synced), as of the last time its records were seen.
     private static var preferences = LiveShiftPreferences()
-    static var lockScreenEnabled: Bool { !automatedTest && preferences.showsOnLockScreen }
+    /// The Lock Screen shift card is part of HowMuch Pro.
+    static var lockScreenEnabled: Bool { !automatedTest && preferences.showsOnLockScreen && ProStore.shared.hasPro }
     static var askFinishEnabled: Bool { !automatedTest && preferences.asksFinishTime }
     /// UI tests use sample shifts that end around launch; a finish question would cover the screens they check.
     private static var automatedTest: Bool {

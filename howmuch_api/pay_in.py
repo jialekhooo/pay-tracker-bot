@@ -210,6 +210,9 @@ async def record_notification(payload: Notification, request: Request, authoriza
     """Pay received, as read from a bank app notification on the person's iPhone."""
     store, user_id = _store(request, authorization)
     limit(request, "notification", maximum=120, key=str(user_id))
+    from .store import has_pro_user
+    if not has_pro_user(request.app.state.storage._conn, user_id):
+        return {"status": "ignored", "message": "Pay-in tracking is part of HowMuch Pro."}
     parsed_amount, parsed_payer = parse_notification(payload.text)
     try:
         amount = Decimal(payload.amount.replace(",", "")) if payload.amount else parsed_amount
@@ -286,6 +289,9 @@ async def inbound_email(secret: str, request: Request) -> dict:
     row = store.db.execute("SELECT user_id FROM pay_in_settings WHERE forward_token=?", (token,)).fetchone() if token else None
     if not row:
         return {"status": "ignored"}
+    from .store import has_pro_user
+    if not has_pro_user(store.db, row["user_id"]):
+        return {"status": "ignored"}  # pay-in tracking is part of HowMuch Pro
     confirmation = gmail_forwarding_confirmation(raw)
     if confirmation:
         # Keep it so Pay-in tracking can show the code and link needed to finish Gmail's setup.

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import AuthenticationServices
 import CryptoKit
 import UserNotifications
@@ -34,6 +35,7 @@ final class AppleAccountStore: ObservableObject {
     private var syncing = false
     private var pendingResync = false
     private var restoreStarted = false
+    private var proWatch: AnyCancellable?
 
     func restore() async {
         guard !restoreStarted else { return }; restoreStarted = true
@@ -57,6 +59,8 @@ final class AppleAccountStore: ObservableObject {
             let id = CommandLine.arguments.contains("--ui-test-owner-b") ? "00000000-0000-4000-8000-000000000002" : "00000000-0000-4000-8000-000000000001"
             account = AccountIdentity(id: id, email: nil, displayName: "Preview", appleUserID: "ui-test")
             tracker = TrackerStore(accountID: id, suppressNotifications: true)
+            // Previews and UI tests have Pro unless a test asks to see HowMuch without it.
+            ProStore.shared.setServer(pro: !CommandLine.arguments.contains("--ui-test-free"), reason: "pioneer", accountID: id)
             if CommandLine.arguments.contains("--ui-test-widgets") { tracker?.activateWidgets() }
             if (CommandLine.arguments.contains("--ui-test-payments") || CommandLine.arguments.contains("--ui-test-travel") || CommandLine.arguments.contains("--ui-test-receipts") || CommandLine.arguments.contains("--ui-test-pet-codes") || CommandLine.arguments.contains("--ui-test-telegram") || CommandLine.arguments.contains("--ui-test-friends")), let account {
                 api.setSession(AccountSession(accessToken: "synthetic-ui-test", refreshToken: "unused-ui-test", expiresAt: Date().timeIntervalSince1970 + 86400, account: account))
@@ -163,12 +167,39 @@ final class AppleAccountStore: ObservableObject {
         syncTask?.cancel(); conflict = nil
         tracker?.deactivateWidgets()
         account = value
+        // Pro as last known for this account, before anything below checks it.
+        let pro = ProStore.shared
+        pro.setServer(pro: nil, reason: nil, accountID: value.id)
+        pro.accountToken = UUID(uuidString: value.id)
         let store = TrackerStore(accountID: value.id)
         tracker = store
         store.activateWidgets()
         store.onChange = { [weak self] in self?.scheduleSync() }
         PushCenter.shared.currentAccountID = value.id
         if !isDemo { LiveShiftCenter.connect { [weak self] token in await self?.sendLiveToken(token, owner: value.id) } }
+        pro.recordPurchases = { [weak self] signed in await self?.recordPurchases(signed, owner: value.id) }
+        // Pro starting or ending changes reminders, the Lock Screen card and widgets straight away.
+        proWatch = pro.objectWillChange.receive(on: RunLoop.main).map { _ in ProStore.shared.hasPro }.prepend(pro.hasPro).removeDuplicates().dropFirst()
+            .sink { [weak store] _ in
+                guard let store else { return }
+                store.refreshReminders(); store.refreshWidgets()
+                LiveShiftCenter.sync(store.data, accountID: store.accountID)
+            }
+        Task { await pro.refreshEntitlements(); await pro.finishWaitingTransactions() }
+    }
+    /// Sends App Store transactions to the account. Returns the transaction IDs the server accepted, or nil when it couldn't be reached.
+    func recordPurchases(_ signed: [String], owner: String) async -> Set<String>? {
+        guard !isDemo, account?.id == owner, !signed.isEmpty else { return nil }
+        struct Body: Encodable { let transactions: [String] }
+        struct Result: Decodable { let accepted: [String]; let pro: Bool?; let proReason: String?; let petUnlocks: [String]?; let helloCoins: Int? }
+        do {
+            let body = try JSONEncoder().encode(Body(transactions: Array(signed.prefix(50))))
+            let result = try JSONDecoder().decode(Result.self, from: await api.request("/v1/store/transactions", method: "POST", body: body))
+            guard account?.id == owner else { return nil }
+            tracker?.setPetUnlocks(result.petUnlocks); tracker?.setHelloCoins(result.helloCoins)
+            if let pro = result.pro { ProStore.shared.setServer(pro: pro, reason: result.proReason, accountID: owner) }
+            return Set(result.accepted)
+        } catch { return nil }
     }
     /// Lets the server start and renew the Lock Screen shift card for this account.
     func sendLiveToken(_ token: LiveShiftCenter.Token, owner: String) async {
@@ -232,6 +263,7 @@ final class AppleAccountStore: ObservableObject {
                     try store.applySynced(remote, current: target)
                     pushReady = remote.pushReady ?? false
                     store.setPioneer(remote.pioneer); store.setDeveloper(remote.developer); store.setPetUnlocks(remote.petUnlocks); store.setHelloCoins(remote.helloCoins)
+                    ProStore.shared.setServer(pro: remote.proStatus, reason: remote.proReason, accountID: account.id)
                     await registerPushIfAllowed()
                     return
                 }
@@ -251,6 +283,7 @@ final class AppleAccountStore: ObservableObject {
                     try store.applySynced(uploaded, current: afterUpload)
                     pushReady = uploaded.pushReady ?? false
                     store.setPioneer(uploaded.pioneer); store.setDeveloper(uploaded.developer); store.setPetUnlocks(uploaded.petUnlocks); store.setHelloCoins(uploaded.helloCoins)
+                    ProStore.shared.setServer(pro: uploaded.proStatus, reason: uploaded.proReason, accountID: account.id)
                     await registerPushIfAllowed()
                     if store.hasPendingChanges { scheduleSync() }
                     return
@@ -312,6 +345,7 @@ final class AppleAccountStore: ObservableObject {
         tracker?.deactivateWidgets(); SharedWidgetStorage.clear()
         let previousStore = tracker
         account = nil; tracker = nil; conflict = nil; notificationJob = nil
+        ProStore.shared.signedOut(); ProStore.shared.recordPurchases = nil
         api.setSession(nil); AccountVault.remove("session")
         PushCenter.shared.currentAccountID = nil
         UIApplication.shared.unregisterForRemoteNotifications()

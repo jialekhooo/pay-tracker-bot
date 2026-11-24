@@ -1,0 +1,169 @@
+{
+  "identifier": "C5B4CC31",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "49.98",
+      "familyShareable": false,
+      "internalID": "2CED4A7E",
+      "localizations": [
+        {
+          "description": "Every Pro feature, forever.",
+          "displayName": "HowMuch Pro Lifetime",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.jialekhoo.howmuch.pro.lifetime",
+      "referenceName": "Pro Lifetime",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "2.98",
+      "familyShareable": false,
+      "internalID": "6B4A9657",
+      "localizations": [
+        {
+          "description": "Halo, heart glasses, flower lei, fireworks and the Galaxy skin.",
+          "displayName": "Celebration pack",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.jialekhoo.howmuch.penny.celebration",
+      "referenceName": "Celebration pack",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "2.98",
+      "familyShareable": false,
+      "internalID": "93F76270",
+      "localizations": [
+        {
+          "description": "Bunny ears, 3D glasses, lucky bell, aurora and the Frost skin.",
+          "displayName": "Wonder pack",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.jialekhoo.howmuch.penny.wonder",
+      "referenceName": "Wonder pack",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "1.48",
+      "familyShareable": false,
+      "internalID": "B8192F3B",
+      "localizations": [
+        {
+          "description": "Coins for Penny's shop.",
+          "displayName": "150 coins",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.jialekhoo.howmuch.coins.150",
+      "referenceName": "150 coins",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "2.98",
+      "familyShareable": false,
+      "internalID": "6903BB87",
+      "localizations": [
+        {
+          "description": "Coins for Penny's shop.",
+          "displayName": "400 coins",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.jialekhoo.howmuch.coins.400",
+      "referenceName": "400 coins",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "5.98",
+      "familyShareable": false,
+      "internalID": "BCF4B911",
+      "localizations": [
+        {
+          "description": "Coins for Penny's shop.",
+          "displayName": "1,000 coins",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.jialekhoo.howmuch.coins.1000",
+      "referenceName": "1000 coins",
+      "type": "Consumable"
+    }
+  ],
+  "settings": {
+    "_applicationInternalID": "6830079731",
+    "_developerTeamID": "8FSHKXDVJ2",
+    "_failTransactionsEnabled": false,
+    "_locale": "en_SG",
+    "_storefront": "SGP",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [
+    {
+      "id": "83934960",
+      "localizations": [],
+      "name": "HowMuch Pro",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "19.98",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "467CC7C2",
+          "introductoryOffer": {
+            "internalID": "69E13E13",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [
+            {
+              "description": "Pay-in tracking, reminders, calendar sync and insights.",
+              "displayName": "HowMuch Pro Yearly",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.jialekhoo.howmuch.pro.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Pro Yearly",
+          "subscriptionGroupID": "83934960",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "2.98",
+          "familyShareable": false,
+          "groupNumber": 2,
+          "internalID": "962CCA65",
+          "introductoryOffer": {
+            "internalID": "952957EE",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [
+            {
+              "description": "Pay-in tracking, reminders, calendar sync and insights.",
+              "displayName": "HowMuch Pro Monthly",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.jialekhoo.howmuch.pro.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Pro Monthly",
+          "subscriptionGroupID": "83934960",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 4,
+    "minor": 0
+  }
+}

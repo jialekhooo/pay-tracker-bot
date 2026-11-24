@@ -195,7 +195,9 @@ async def refresh_due(storage,client,now=None):
         "JOIN auth_sessions s ON s.session_id=d.session_id JOIN documents doc ON doc.account_id=a.account_id "
         "WHERE s.refresh_expires>? AND json_extract(doc.body,'$.data.preferences.travel.enabled') IN (1,'true')",(now,)).fetchall()
     due=[]
+    from .store import has_pro
     for account in accounts:
+        if not has_pro(db,account['account_id']):continue  # time-to-leave alerts are part of HowMuch Pro
         envelope=read_document(storage,account);reconcile(storage,account,envelope['data'],envelope['timezone'],now)
         options,items=candidates(envelope['data'],envelope['timezone'],now)
         for item in items[:2]:

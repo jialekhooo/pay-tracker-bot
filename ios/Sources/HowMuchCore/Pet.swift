@@ -233,7 +233,7 @@ public enum PetSlot: String, CaseIterable, Codable, Sendable {
 }
 
 public struct PetItem: Identifiable, Equatable, Sendable {
-    public enum Unlock: Equatable, Sendable { case free, coins(Int), achievement(String), code }
+    public enum Unlock: Equatable, Sendable { case free, coins(Int), achievement(String), code, pack(String) }
     public let id: String
     public let name: String
     public let slot: PetSlot
@@ -298,22 +298,24 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         .init(id: "blaze", name: "Blaze", slot: .skin, unlock: .achievement("unstoppable")),
         .init(id: "terminal", name: "Terminal", slot: .skin, unlock: .achievement("developer")),
         .init(id: "holo", name: "Holographic", slot: .skin, unlock: .achievement("developer")),
-        // Gift-code specials: only from a code (or for developers).
-        .init(id: "halo", name: "Golden halo", slot: .hat, unlock: .code),
-        .init(id: "heart-glasses", name: "Heart glasses", slot: .face, unlock: .code),
-        .init(id: "lei", name: "Flower lei", slot: .neck, unlock: .code),
-        .init(id: "fireworks", name: "Fireworks", slot: .background, unlock: .code),
-        .init(id: "galaxy", name: "Galaxy", slot: .skin, unlock: .code),
-        .init(id: "bunny-ears", name: "Bunny ears", slot: .hat, unlock: .code),
-        .init(id: "3d-glasses", name: "3D glasses", slot: .face, unlock: .code),
-        .init(id: "bell-collar", name: "Lucky bell", slot: .neck, unlock: .code),
-        .init(id: "aurora", name: "Aurora", slot: .background, unlock: .code),
-        .init(id: "frost", name: "Frost", slot: .skin, unlock: .code),
+        // Item packs, bought in the App Store (gift codes can unlock them too; developers have them all).
+        .init(id: "halo", name: "Golden halo", slot: .hat, unlock: .pack("celebration")),
+        .init(id: "heart-glasses", name: "Heart glasses", slot: .face, unlock: .pack("celebration")),
+        .init(id: "lei", name: "Flower lei", slot: .neck, unlock: .pack("celebration")),
+        .init(id: "fireworks", name: "Fireworks", slot: .background, unlock: .pack("celebration")),
+        .init(id: "galaxy", name: "Galaxy", slot: .skin, unlock: .pack("celebration")),
+        .init(id: "bunny-ears", name: "Bunny ears", slot: .hat, unlock: .pack("wonder")),
+        .init(id: "3d-glasses", name: "3D glasses", slot: .face, unlock: .pack("wonder")),
+        .init(id: "bell-collar", name: "Lucky bell", slot: .neck, unlock: .pack("wonder")),
+        .init(id: "aurora", name: "Aurora", slot: .background, unlock: .pack("wonder")),
+        .init(id: "frost", name: "Frost", slot: .skin, unlock: .pack("wonder")),
     ]
     /// Only for people who joined before launch: hidden from everyone else.
     public var pioneerOnly: Bool { unlock == .achievement("pioneer") }
     /// Only for pioneers or developers: hidden from everyone else.
     public var exclusive: Bool { unlock == .achievement("pioneer") || unlock == .achievement("developer") || unlock == .code }
+    /// The item pack it comes in, if it's sold in one.
+    public var pack: PetPack? { if case .pack(let id) = unlock { return PetPack.named(id) }; return nil }
     public static func named(_ id: String?) -> PetItem? { catalog.first { $0.id == id } }
     public var price: Int? { if case .coins(let price) = unlock { return price }; return nil }
     /// For sale while Penny is still an egg: the party hat, straw hat, round glasses, bow tie and Sunset.
@@ -326,8 +328,22 @@ public struct PetItem: Identifiable, Equatable, Sendable {
         case .coins(let price): return "\(price) coins"
         case .achievement(let id): return "Badge: " + (PetProgress(shifts: []).achievements.first { $0.id == id }?.title ?? id)
         case .code: return "Gift code"
+        case .pack(let id): return PetPack.named(id)?.name ?? "Item pack"
         }
     }
+}
+
+/// A themed set of items sold together in the App Store.
+public struct PetPack: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let name: String
+    public let detail: String
+    public var items: [PetItem] { PetItem.catalog.filter { $0.unlock == .pack(id) } }
+    public static let all = [
+        PetPack(id: "celebration", name: "Celebration pack", detail: "A golden halo, heart glasses, a flower lei, a fireworks scene and the Galaxy skin."),
+        PetPack(id: "wonder", name: "Wonder pack", detail: "Bunny ears, 3D glasses, a lucky bell, an aurora scene and the Frost skin."),
+    ]
+    public static func named(_ id: String) -> PetPack? { all.first { $0.id == id } }
 }
 
 /// What's been bought and what Penny is wearing. Synced with the account.
@@ -349,7 +365,7 @@ public struct PetCloset: Codable, Equatable, Sendable {
         case .free: return true
         case .coins: return bought.contains(item.id)
         case .achievement(let id): return pet.hasAchievement(id)
-        case .code: return false
+        case .code, .pack: return false
         }
     }
 

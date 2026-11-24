@@ -1,0 +1,53 @@
+# Monetization
+
+HowMuch sells three things through the App Store. Tracking shifts, earnings, the calendar and Penny stay free.
+
+## Products
+
+| Product ID | Type | Price (SGD base) | What it gives |
+| --- | --- | --- | --- |
+| `com.jialekhoo.howmuch.pro.yearly` | Auto-renewing, group "HowMuch Pro" (level 1) | S$19.98/year, 1-week free trial | Pro |
+| `com.jialekhoo.howmuch.pro.monthly` | Auto-renewing, group "HowMuch Pro" (level 2) | S$2.98/month, 1-week free trial | Pro |
+| `com.jialekhoo.howmuch.pro.lifetime` | Non-consumable | S$49.98 | Pro forever |
+| `com.jialekhoo.howmuch.penny.celebration` | Non-consumable | S$2.98 | Halo, heart glasses, flower lei, Fireworks, Galaxy skin |
+| `com.jialekhoo.howmuch.penny.wonder` | Non-consumable | S$2.98 | Bunny ears, 3D glasses, lucky bell, Aurora, Frost skin |
+| `com.jialekhoo.howmuch.coins.150` / `.400` / `.1000` | Consumable | S$1.48 / S$2.98 / S$5.98 | Coins for Penny's shop |
+
+All are set up in App Store Connect (name, description, price in 175 countries, availability). `HowMuch.storekit` mirrors them for the simulator (the scheme's Run action uses it).
+
+## What Pro unlocks
+
+- Pay-in tracking (bank notifications, forwarded emails, mailbox connection). The server ignores alerts, skips mailbox polling and refuses scans without Pro.
+- Reminders and live shift: job notifications, time to leave, the Lock Screen shift card. The server plans none of them without Pro, and plans them as soon as Pro is bought.
+- Calendar sync and exports: the calendar feed, CSV and .ics export. Full-archive backup and restore stay free.
+- Insights and widgets: the monthly recap, earnings by month, Home Screen widgets (they show a "part of HowMuch Pro" card without it).
+
+Without Pro the Settings rows carry a PRO tag and open the plans instead (`ProGate`).
+
+## Who has Pro
+
+Pro is on when any of these is true (`ProStore.hasPro`, server `store.pro_status`):
+
+1. A live subscription or lifetime on this Apple Account (StoreKit).
+2. A purchase the server has on record for the HowMuch account (follows the account to other iPhones).
+3. The account is a pioneer: made before `HOWMUCH_PIONEER_UNTIL`. **Until that is set, every account is a pioneer**, so everyone has Pro free.
+4. The account is a developer (`HOWMUCH_DEVELOPERS`).
+
+## How purchases are checked
+
+The app sends each StoreKit transaction (Apple's signed JWS) to `POST /v1/store/transactions`. The server verifies the chain to Apple Root CA - G3 (`howmuch_api/AppleRootCA-G3.cer`), Apple's marker extensions, the ES256 signature, the bundle ID and the purchase's `appAccountToken` (the HowMuch account ID). Coins are credited once per transaction ID, ever. A coin purchase stays unfinished in StoreKit until the server confirms it, so coins bought offline arrive on the next launch.
+
+## Launch checklist
+
+1. **Paid Apps agreement** (you): App Store Connect → Business. Update the legal entity, sign the Paid Apps Agreement, add bank and tax details. Nothing can be bought, even in the sandbox, until it is active.
+2. **Review screenshots** (you): each of the 8 products needs a screenshot under Review Information. Use the paywall (Settings → HowMuch Pro) for the Pro products, and Penny's store for packs and coins.
+3. **Deploy the server** before the app build that sells anything.
+4. **Set the cutoff** just before submitting the paid version for review: `flyctl secrets set HOWMUCH_PIONEER_UNTIL=YYYY-MM-DD --app howmuch-ios`. Accounts made before that date keep Pro free. App Review's new account will then see the paywall.
+5. **Submit** the products with the new app version (the first subscription and in-app purchases must go with a version). Add the Terms of Use link to the App Store description: `https://www.apple.com/legal/internet-services/itunes/dev/stdeula/`.
+6. **App Privacy** in App Store Connect: add Purchases → Purchase History (linked to the user, for app functionality).
+
+## Testing
+
+- Simulator: run from Xcode; `HowMuch.storekit` supplies the products. Coin purchases made here are signed by Xcode, so the server refuses them (expected).
+- TestFlight: testers are pioneers, so they have Pro free. Settings → HowMuch Pro → Testing → "Test as a new user" ignores that on the iPhone so the paywall and sandbox purchases can be tried.
+- UI tests: `--ui-test-free` shows HowMuch without Pro; previews and other UI tests have Pro.

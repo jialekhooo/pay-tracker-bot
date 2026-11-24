@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse,PlainTextResponse
 from .database import AppStorage
 from . import privacy as privacy_policy
-from . import friends,telegram_link,schedule_link,pet_codes,auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity,pay_in
+from . import friends,telegram_link,schedule_link,pet_codes,auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity,pay_in,store
 
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
@@ -38,6 +38,7 @@ app.include_router(email_providers.router,prefix='/v1')
 app.include_router(travel.router,prefix='/v1')
 app.include_router(receipts.router,prefix='/v1')
 app.include_router(pet_codes.router,prefix='/v1')
+app.include_router(store.router,prefix='/v1')
 app.include_router(telegram_link.router,prefix='/v1')
 app.include_router(schedule_link.router,prefix='/v1')
 app.include_router(friends.router,prefix='/v1')

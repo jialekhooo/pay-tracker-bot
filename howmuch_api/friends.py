@@ -174,7 +174,7 @@ def used_zone(db, account_id, now):
 
 
 def bonus_coins(db, account_id) -> int:
-    """Coins kept on the server: gift codes, hellos sent and received at HELLO_COINS each, and treats
+    """Coins kept on the server: coin bundles bought in the app, gift codes, hellos sent and received at HELLO_COINS each, and treats
     given or received on visits at TREAT_COINS each.
     Sent to the app as helloCoins, so builds from before coin codes count them too."""
     db.executescript(SCHEMA)
@@ -182,7 +182,8 @@ def bonus_coins(db, account_id) -> int:
     got = db.execute('SELECT COUNT(*) FROM pet_hellos WHERE to_account=?', (account_id,)).fetchone()[0]
     treats = db.execute('SELECT COUNT(*) FROM pet_visits WHERE treat IS NOT NULL AND (from_account=? OR to_account=?)', (account_id, account_id)).fetchone()[0]
     kept = db.execute('SELECT COALESCE(SUM(coins),0) FROM pet_kept_coins WHERE account_id=?', (account_id,)).fetchone()[0]
-    return HELLO_COINS * (sent + got) + TREAT_COINS * treats + gift_coins(db, account_id) + kept
+    from .store import bought_coins  # coin bundles bought in the app
+    return HELLO_COINS * (sent + got) + TREAT_COINS * treats + gift_coins(db, account_id) + kept + bought_coins(db, account_id)
 
 
 def forget_account(db, leaving):

@@ -13,6 +13,7 @@ struct HowMuchApp: App {
         #endif
         OpeningSplash.shared.isReady = { !AppleAccountStore.shared.restoring }
         OpeningSplash.shared.prepareForLaunch()
+        ProStore.shared.start()
     }
     var body: some Scene {
         WindowGroup {

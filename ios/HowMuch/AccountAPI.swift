@@ -33,8 +33,13 @@ struct CloudEnvelope: Codable {
     let developer: Bool?
     /// Penny items unlocked with gift codes.
     let petUnlocks: [String]?
-    /// Coins kept on the server: hellos with friends and gift codes.
+    /// Coins kept on the server: hellos with friends, gift codes and coin bundles.
     let helloCoins: Int?
+    /// HowMuch Pro as the server sees it, and why: "pioneer", "developer" or "purchase".
+    let pro: Bool?
+    let proReason: String?
+    /// Servers from before Pro don't send it; everyone was an early supporter then.
+    var proStatus: Bool? { pro ?? pioneer.map { $0 || (developer ?? false) } }
 }
 
 struct AccountHTTPError: LocalizedError {

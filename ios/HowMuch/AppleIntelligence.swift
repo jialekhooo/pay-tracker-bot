@@ -200,10 +200,11 @@ struct MonthRecapCard: View {
     @EnvironmentObject private var store: TrackerStore
     let now: Date
     @State private var recap: String?
+    @ObservedObject private var pro = ProStore.shared
 
     var body: some View {
         Group {
-            if let recap {
+            if let recap, pro.hasPro {
                 Card {
                     Label("Your month so far", systemImage: "apple.intelligence").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
                     Text(recap).font(.subheadline).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -211,8 +212,8 @@ struct MonthRecapCard: View {
                 }.accessibilityIdentifier("recap.card")
             }
         }
-        .task(id: facts) {
-            guard AppleIntelligence.isAvailable else { return }
+        .task(id: facts + (pro.hasPro ? "|pro" : "")) {
+            guard AppleIntelligence.isAvailable, pro.hasPro else { return }
             let key = facts
             if let saved = UserDefaults.standard.string(forKey: "recap.text"), UserDefaults.standard.string(forKey: "recap.key") == key { recap = saved; return }
             guard let text = await AppleIntelligence.recap(facts: facts), !text.isEmpty else { return }

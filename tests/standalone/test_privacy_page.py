@@ -7,7 +7,7 @@ from howmuch_api import privacy
 def test_policy_keeps_the_required_statements():
     page = privacy.PAGE
     for text in ('Google API Services User Data Policy', 'Limited Use requirements', 'not used to train AI models',
-                 'Delete account', 'advertising or analytics', 'Friends never see your shifts', 'Job briefs', 'Cloudflare',
+                 'Delete account', 'advertising or analytics', 'App Store purchases', 'signed record of the purchase', 'Friends never see your shifts', 'Job briefs', 'Cloudflare',
                  privacy.CONTACT, privacy.UPDATED):
         assert text in page, text
 

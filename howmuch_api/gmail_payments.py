@@ -449,6 +449,9 @@ async def _scan_query(client, headers, query, store, user_id, connection, payers
 async def scan(request: Request, authorization: str | None = Header(default=None)):
     store, user_id = store_for(request, authorization)
     limit(request, "scan", maximum=10, key=str(user_id))  # mailbox scans are slow and costly
+    from .store import has_pro_user
+    if not has_pro_user(store.db, user_id):
+        raise HTTPException(402, "Pay-in tracking is part of HowMuch Pro.")
     try:
         await scan_mailbox(store.storage, user_id)
     except ValueError as exc:
@@ -460,7 +463,10 @@ async def poll_mailboxes(storage):
     while True:
         store = PaymentStore(storage)
         users = [r[0] for r in store.db.execute("SELECT user_id FROM payment_connections WHERE refresh_token IS NOT NULL")]
+        from .store import has_pro_user
         for user_id in users:
+            if not has_pro_user(store.db, user_id):
+                continue  # pay-in tracking is part of HowMuch Pro
             try:
                 await scan_mailbox(storage, user_id)
             except ValueError:

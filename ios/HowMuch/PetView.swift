@@ -877,6 +877,8 @@ struct PetDetailView: View {
     @State private var notice: String?
     @State private var purchased = 0
     @State private var visits: FriendsOverview?
+    @State private var showingStore = false
+    @ObservedObject private var purchases = ProStore.shared
     @FocusState private var naming: Bool
 
     private var displayName: String { store.petPreferences.displayName }
@@ -921,6 +923,9 @@ struct PetDetailView: View {
         .onDisappear(perform: saveName)
         .task { visits = (try? await auth.api.request("/v1/friends")).flatMap { try? JSONDecoder().decode(FriendsOverview.self, from: $0) } }
         .sensoryFeedback(.success, trigger: purchased)
+        .sheet(isPresented: $showingStore) {
+            NavigationStack { PennyStoreView(petName: displayName).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showingStore = false } } } }
+        }
         .confirmationDialog(buying.map { "Buy \($0.name) for \($0.requirement)?" } ?? "", isPresented: Binding(get: { buying != nil }, set: { if !$0 { buying = nil } }), titleVisibility: .visible) {
             if let item = buying { Button("Buy \(item.name)") { buy(item, pet) } }
         }
@@ -1069,6 +1074,18 @@ struct PetDetailView: View {
                 Label("Starter items are for sale now. The rest of the shop opens when \(displayName) hatches.", systemImage: "sparkles")
                     .font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("pet.shop.starter")
             }
+            Button { showingStore = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "bag.fill").font(.title3).frame(width: 40, height: 40).foregroundStyle(PetPalette.outline)
+                        .background(PetPalette.gold, in: RoundedRectangle(cornerRadius: 11))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Item packs and coins").font(.appHeadline).foregroundStyle(Palette.ink)
+                        Text("Special outfits for \(displayName), and coins to spend in the shop.").font(.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
+                }.padding(14).background(Palette.surface, in: RoundedRectangle(cornerRadius: 18)).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("pet.store")
             PillPicker(values: PetSlot.allCases.map(\.title), selection: Binding(get: { slot.title }, set: { title in slot = PetSlot.allCases.first { $0.title == title } ?? .hat }))
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 // What can be worn or bought now first, then what unlocks later; catalogue order within each.
@@ -1099,6 +1116,7 @@ struct PetDetailView: View {
                     else if owned { Text("Owned · tap to wear").foregroundStyle(Palette.muted) }
                     else if locked { Text("Unlocks at \(item.stage.title)").foregroundStyle(Palette.muted) }
                     else if let price = item.price { CoinLabel(amount: price, font: .caption.weight(.bold)) }
+                    else if let pack = item.pack { Label(pack.name, systemImage: "bag").foregroundStyle(Palette.teal) }
                     else { Label(item.requirement, systemImage: "rosette").foregroundStyle(Palette.muted) }
                 }.font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
             }
@@ -1118,6 +1136,7 @@ struct PetDetailView: View {
             if balance >= price { buying = item }
             else { notice = "\(item.name) costs \(price) coins. Earn \(price - balance) more by working shifts and finishing missions." }
         case .code: notice = "\(item.name) is a gift-code special. Redeem a code below to unlock it."
+        case .pack: showingStore = true
         case .achievement: notice = "\(item.name) comes with the \(item.requirement.replacingOccurrences(of: "Badge: ", with: "")) badge."
         case .free: break
         }
@@ -1307,7 +1326,7 @@ struct PetCodesView: View {
             HStack(spacing: 6) {
                 Image(systemName: chosen ? "checkmark.circle.fill" : "circle").font(.footnote)
                 Text(item.name).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
-                if item.unlock == .code { Image(systemName: "sparkles").font(.caption2).foregroundStyle(PetPalette.goldDark) }
+                if item.unlock == .code || item.pack != nil { Image(systemName: "sparkles").font(.caption2).foregroundStyle(PetPalette.goldDark) }
                 Spacer(minLength: 0)
             }
             .foregroundStyle(chosen ? Color.white : Palette.ink)

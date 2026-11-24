@@ -62,7 +62,7 @@ struct WorkCalendarView: View {
                 // 44-point tall targets, though the labels are small.
                 Button { sharingAvailability = true } label: { Label("Share availability", systemImage: "person.badge.clock").font(.caption.bold()).frame(minHeight: 44).contentShape(Rectangle()) }
                     .accessibilityIdentifier("calendar.availability")
-                NavigationLink { CalendarSettingsView() } label: { Label("Export", systemImage: "square.and.arrow.up").font(.caption.bold()).frame(minHeight: 44).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.export")
+                NavigationLink { ProGate(feature: .calendar) { CalendarSettingsView() } } label: { Label("Export", systemImage: "square.and.arrow.up").font(.caption.bold()).frame(minHeight: 44).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.export")
             }
             SectionHeading(title: selected.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)), detail: counted(selectedShifts.count, "shift"))
             if selectedShifts.isEmpty { EmptyCard(title: "A day with possibilities", message: "No shifts booked for this date.") }

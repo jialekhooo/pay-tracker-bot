@@ -240,14 +240,14 @@ final class PetTests: XCTestCase {
         XCTAssertEqual(wearing.wearing(.skin, developer)?.id, "midnight")
     }
 
-    func testEveryCategoryHasCoinBadgeAndGiftCodeItems() throws {
+    func testEveryCategoryHasCoinBadgeAndPackItems() throws {
         XCTAssertEqual(Set(PetItem.catalog.map(\.id)).count, PetItem.catalog.count, "item ids are unique")
         let badges = Set(PetProgress(shifts: [], pioneer: true, developer: true).achievements.map(\.id))
         for slot in PetSlot.allCases {
             let items = PetItem.catalog.filter { $0.slot == slot }
             XCTAssertGreaterThanOrEqual(items.filter { $0.price != nil }.count, 4, slot.rawValue)
             XCTAssertTrue(items.contains { if case .achievement = $0.unlock { return true }; return false }, slot.rawValue)
-            XCTAssertGreaterThanOrEqual(items.filter { $0.unlock == .code }.count, 2, slot.rawValue)
+            XCTAssertEqual(items.filter { $0.pack != nil }.count, 2, slot.rawValue)  // one in each pack
             for item in items {
                 if case .achievement(let id) = item.unlock { XCTAssertTrue(badges.contains(id), item.id) }
                 if let price = item.price { XCTAssertTrue((40...400).contains(price), item.id); XCTAssertTrue(item.stage > .egg || item.starter, item.id) }
@@ -260,8 +260,8 @@ final class PetTests: XCTestCase {
         XCTAssertTrue(closet.owns(PetItem.named("lanyard")!, pet))
         XCTAssertFalse(closet.owns(PetItem.named("sleep-mask")!, pet))
         XCTAssertEqual(PetItem.named("sleep-mask")!.requirement, "Badge: Night owl")
-        XCTAssertEqual(PetItem.named("frost")!.requirement, "Gift code")
-        XCTAssertTrue(PetItem.named("bunny-ears")!.exclusive)
+        XCTAssertEqual(PetItem.named("frost")!.requirement, "Wonder pack")
+        XCTAssertFalse(PetItem.named("bunny-ears")!.exclusive)  // packs are for sale, so they show in the shop
         // Treasure-stage items wait until Penny is a treasure.
         XCTAssertLessThan(pet.stage, .treasure)
         XCTAssertTrue(closet.locked(PetItem.named("gold-chain")!, pet))
@@ -276,6 +276,22 @@ final class PetTests: XCTestCase {
         Dictionary(uniqueKeysWithValues: [PetSlot.hat, .face, .neck, .background].compactMap { slot in closet.wearing(slot, pet).map { (slot.rawValue, $0.id) } })
     }
 
+    func testPacksHoldFiveItemsEachAndAreOwnedOnlyOnceUnlocked() {
+        XCTAssertEqual(PetPack.all.map(\.id), ["celebration", "wonder"])
+        for pack in PetPack.all {
+            XCTAssertEqual(pack.items.count, 5, pack.id)
+            XCTAssertEqual(Set(pack.items.map(\.slot)), Set(PetSlot.allCases), pack.id)  // one of each kind
+            XCTAssertTrue(pack.items.allSatisfy { $0.pack == pack && $0.stage == .egg && $0.price == nil }, pack.id)
+        }
+        let bought = PetProgress(shifts: [], now: now, calendar: calendar, unlocked: Set(PetPack.named("wonder")!.items.map(\.id)))
+        let closet = PetCloset()
+        XCTAssertTrue(PetPack.named("wonder")!.items.allSatisfy { closet.owns($0, bought) })
+        XCTAssertFalse(PetPack.named("celebration")!.items.contains { closet.owns($0, bought) })
+        var spending = PetCloset()
+        XCTAssertThrowsError(try spending.buy(PetItem.named("halo")!, bought))  // packs aren't bought with coins
+        XCTAssertEqual(spending.spent, 0)
+    }
+
     func testGiftCodesUnlockSpecialsOnlyForThatAccount() throws {
         let gifted = PetProgress(shifts: [], now: now, calendar: calendar, unlocked: ["halo", "wizard-hat"])
         let everyone = PetProgress(shifts: [], now: now, calendar: calendar)
@@ -284,8 +300,7 @@ final class PetTests: XCTestCase {
         XCTAssertTrue(closet.owns(PetItem.named("wizard-hat")!, gifted)) // codes can also give shop items, even before the stage
         XCTAssertFalse(closet.locked(PetItem.named("wizard-hat")!, gifted))
         XCTAssertFalse(closet.owns(PetItem.named("halo")!, everyone))
-        XCTAssertTrue(PetItem.named("galaxy")!.exclusive)
-        XCTAssertEqual(PetItem.named("fireworks")!.requirement, "Gift code")
+        XCTAssertEqual(PetItem.named("fireworks")!.requirement, "Celebration pack")
         var wearing = PetCloset(); try wearing.toggle(PetItem.named("halo")!, gifted)
         XCTAssertEqual(wearing.wearing(.hat, gifted)?.id, "halo")
         XCTAssertNil(wearing.wearing(.hat, everyone))

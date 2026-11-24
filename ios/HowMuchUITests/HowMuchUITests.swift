@@ -898,7 +898,7 @@ final class HowMuchUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-pet-codes"]; app.launch()
         let card = app.buttons["pet.card"]
         XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()
-        XCTAssertFalse(app.buttons["pet.item.halo"].exists) // specials are hidden until unlocked
+        // Pack items (like the halo) show in the shop with their pack; a code can still unlock them.
         XCTAssertFalse(app.buttons["pet.code.make"].exists)  // only developers make codes
         let redeem = app.buttons["pet.code.redeem"]
         reveal(redeem, in: app); redeem.tap()
@@ -1008,6 +1008,69 @@ final class HowMuchUITests: XCTestCase {
         app.swipeDown(); app.swipeDown(); app.swipeDown()
         attach("Egg wearing the party hat", app: app)
     }
+    /// Without Pro, Pro screens show the plans instead, Settings tags them PRO, and the monthly breakdown is locked.
+    @MainActor
+    func testFreeAccountShowsProTagsAndPlans() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-free"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        XCTAssertTrue(app.staticTexts["Try it"].waitForExistence(timeout: 5))
+        let payIn = app.staticTexts["Pay-in tracking"]; reveal(payIn, in: app)
+        let tagged = NSPredicate(format: "label CONTAINS %@", "Needs HowMuch Pro")
+        XCTAssertTrue(app.descendants(matching: .any).matching(tagged).firstMatch.exists)
+        attach("Settings without Pro", app: app)
+        payIn.tap()
+        let title = app.staticTexts["pro.paywall.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, "Pay-in tracking is part of Pro")
+        XCTAssertTrue(app.buttons["pro.plan.yearly"].exists && app.buttons["pro.plan.monthly"].exists && app.buttons["pro.plan.lifetime"].exists)
+        let restore = app.buttons["pro.restore"]; reveal(restore, in: app)
+        XCTAssertTrue(restore.exists && app.buttons["Terms of Use"].exists && app.buttons["Privacy Policy"].exists)
+        attach("Pay-in tracking paywall", app: app)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["nav.earnings"].tap()
+        let months = app.buttons["Months"]; XCTAssertTrue(months.waitForExistence(timeout: 5)); months.tap()
+        XCTAssertTrue(app.buttons["pro.locked.insights"].waitForExistence(timeout: 5))
+        attach("Earnings by month without Pro", app: app)
+        app.buttons["pro.locked.insights"].tap()
+        XCTAssertTrue(app.staticTexts["pro.paywall.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["pro.paywall.title"].label, "Insights and widgets is part of Pro")
+    }
+
+    /// Early supporters keep Pro free, and Settings says so.
+    @MainActor
+    func testEarlySupporterHasProForFree() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        let row = app.staticTexts["HowMuch Pro"].firstMatch; XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Needs HowMuch Pro")).firstMatch.exists)
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Pro is on"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["pro.status"].label, "Free for early supporters")
+        attach("HowMuch Pro for an early supporter", app: app)
+        app.navigationBars.buttons.firstMatch.tap()
+        let payIn = app.staticTexts["Pay-in tracking"]; reveal(payIn, in: app); payIn.tap()
+        XCTAssertFalse(app.staticTexts["pro.paywall.title"].waitForExistence(timeout: 2))
+    }
+
+    /// Penny's store lists both item packs and the coin bundles; pack items in the shop point to their pack.
+    @MainActor
+    func testPennyStoreListsPacksAndCoins() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()
+        let card = app.buttons["pet.card"]; XCTAssertTrue(card.waitForExistence(timeout: 10)); reveal(card, in: app); card.tap()
+        let store = app.buttons["pet.store"]; XCTAssertTrue(store.waitForExistence(timeout: 5)); reveal(store, in: app)
+        app.buttons["Hats"].tap()
+        // Bunny ears come in the Wonder pack (the halo may already be unlocked by the gift-code test on this simulator).
+        let ears = app.buttons["pet.item.bunny-ears"]; reveal(ears, in: app)
+        XCTAssertTrue(ears.label.contains("Wonder pack") || ears.label.contains("Owned"), ears.label)
+        attach("Shop with pack items", app: app)
+        store.tap()
+        XCTAssertTrue(app.staticTexts["Celebration pack"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Wonder pack"].exists)
+        let coins = app.descendants(matching: .any).matching(identifier: "store.coins.1000").firstMatch; reveal(coins, in: app)
+        XCTAssertTrue(coins.exists)
+        attach("Penny's store", app: app)
+    }
+
     @MainActor
     func testPetCardOpensItsPage() {
         let app = XCUIApplication(); app.launchArguments = ["--preview"]; app.launch()

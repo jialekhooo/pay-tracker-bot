@@ -52,11 +52,13 @@ def normalized(code: str) -> str:
 
 
 def unlocks(db, account_id) -> list[str]:
-    """Every item an account has unlocked with codes."""
+    """Every item an account has unlocked with codes or bought in a Penny pack."""
     ensure_schema(db)
     items = set()
     for row in db.execute('SELECT items FROM pet_redemptions WHERE account_id=?', (account_id,)):
         items.update(json.loads(row['items']))
+    from .store import pack_items  # Penny packs bought in the app
+    items.update(pack_items(db, account_id))
     return sorted(items)
 
 

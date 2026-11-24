@@ -84,6 +84,10 @@ async def unregister_device(request: Request,authorization: str|None=Header(defa
 
 def rebuild_jobs(storage,account,data,timezone_name,now=None):
     now=int(time.time()) if now is None else now
+    from .store import has_pro
+    if not has_pro(storage._conn,account['account_id']):
+        # Reminders, travel alerts and Lock Screen cards are part of HowMuch Pro: without it, plan none (and cancel any pending).
+        data={**data,'shifts':[]}
     from .travel import reconcile
     reconcile(storage,account,data,timezone_name,now)
     zone=ZoneInfo(timezone_name)

@@ -13,7 +13,19 @@ enum SharedWidgetStorage {
     static func clear() {
         if let directory { try? WidgetSnapshotFile.clear(directory: directory) }
         PennyWidgetFile.clear()
+        WidgetLock.set(false)
         WidgetCenter.shared.reloadAllTimelines()
+    }
+}
+
+/// Widgets are part of HowMuch Pro. While Pro is off the app leaves this marker (and no shift data) for the widgets,
+/// which then say so instead of showing shifts.
+enum WidgetLock {
+    private static var url: URL? { SharedWidgetStorage.directory?.appendingPathComponent("pro-locked") }
+    static var isLocked: Bool { url.map { FileManager.default.fileExists(atPath: $0.path) } ?? false }
+    static func set(_ locked: Bool) {
+        guard let url, locked != isLocked else { return }
+        if locked { try? Data().write(to: url, options: .atomic) } else { try? FileManager.default.removeItem(at: url) }
     }
 }
 
