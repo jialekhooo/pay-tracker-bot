@@ -221,6 +221,7 @@ Build 80: Bug sweep. Repeating and duplicated shifts get the right payment due d
 Build 81: The shift card sends its Live Activity id with its update token, so when iOS renews a running card's token the server updates that card instead of treating it as a new one and ending it. (Server: once-a-day hellos and visits use the earliest date across recently used time zones, so changing time zone can't repeat them.)
 Build 82: Starter shop. While Penny is still an egg, the party hat, straw sun hat, round glasses, bow tie and Sunset scene are for sale (40-60 coins), so a first paid shift buys something; the straw hat and glasses are drawn on the egg. The shop lists what can be bought now first and tells egg owners the rest opens when Penny hatches.
 Build 83: Telegram is hidden while the bot's server (pay-tracker-bot) is off. The Telegram row in Settings, the bot link in Data & backups and the welcome page line are gone; "Import shifts from CSV" still reads HowMuch and bot exports. Everything is behind TelegramBot.available, so setting it back to true restores it.
+Build 84 (version 1.2): The first App Store update after 1.1 (build 75), carrying builds 76-83: shift cards that start before a shift and ask Finished or Staying late, Larger Text throughout, the bug sweep, the starter shop and Telegram hidden. No code changes from build 83.
 
 ### Review fixes — 10 November 2026
 
