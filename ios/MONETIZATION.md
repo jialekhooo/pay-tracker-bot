@@ -38,6 +38,12 @@ Pro is on when any of these is true (`ProStore.hasPro`, server `store.pro_status
 
 The app sends each StoreKit transaction (Apple's signed JWS) to `POST /v1/store/transactions`. The server verifies the chain to Apple Root CA - G3 (`howmuch_api/AppleRootCA-G3.cer`), Apple's marker extensions, the ES256 signature, the bundle ID and the purchase's `appAccountToken` (the HowMuch account ID). Coins are credited once per transaction ID, ever. A coin purchase stays unfinished in StoreKit until the server confirms it, so coins bought offline arrive on the next launch.
 
+## App Review
+
+- Guideline 3.1.1: Penny gift codes can't unlock items or coins sold in the app, so only developers see and redeem them; after launch the server refuses everyone else (403). Codes redeemed earlier are kept. Use App Store offer codes for promotions.
+- Guideline 3.1.2: the plans show each plan's name, length and price (the most prominent price), trial terms, Restore purchases, Terms of Use and Privacy Policy.
+- Guideline 2.1: App Review must be able to find and buy the products, so set `HOWMUCH_PIONEER_UNTIL` before submitting (otherwise the reviewer has Pro free and never sees the plans). Review notes: "Settings → HowMuch Pro shows the subscriptions and lifetime unlock. Penny's store (Overview → Penny → Store) sells the two item packs and coin bundles. A new account can keep 5 events; adding a 6th shows the plans."
+
 ## Launch checklist
 
 1. **Paid Apps agreement** (you): App Store Connect → Business. Update the legal entity, sign the Paid Apps Agreement, add bank and tax details. Nothing can be bought, even in the sandbox, until it is active.

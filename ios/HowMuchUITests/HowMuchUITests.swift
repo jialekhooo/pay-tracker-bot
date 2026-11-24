@@ -896,11 +896,16 @@ final class HowMuchUITests: XCTestCase {
     }
     @MainActor
     func testGiftCodesUnlockSpecialItemsAndDevelopersMakeThem() {
-        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-pet-codes"]; app.launch()
+        // Only developers make or redeem codes (App Store Review Guideline 3.1.1: items and coins are sold in the app).
+        let person = XCUIApplication(); person.launchArguments = ["--preview", "--ui-test-pet-codes"]; person.launch()
+        XCTAssertTrue(person.buttons["pet.card"].waitForExistence(timeout: 10)); person.buttons["pet.card"].tap()
+        XCTAssertTrue(person.buttons["pet.store"].waitForExistence(timeout: 5))
+        XCTAssertFalse(person.buttons["pet.code.redeem"].exists || person.buttons["pet.code.make"].exists)
+        person.terminate()
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-pet-codes", "--ui-test-developer"]; app.launch()
         let card = app.buttons["pet.card"]
         XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()
-        // Pack items (like the halo) show in the shop with their pack; a code can still unlock them.
-        XCTAssertFalse(app.buttons["pet.code.make"].exists)  // only developers make codes
+        // Pack items (like the halo) show in the shop with their pack; a developer's code can still unlock them.
         let redeem = app.buttons["pet.code.redeem"]
         reveal(redeem, in: app); redeem.tap()
         let field = app.alerts.textFields.firstMatch
@@ -951,7 +956,7 @@ final class HowMuchUITests: XCTestCase {
     func testCoinCodesAddCoinsToSpendAndDevelopersMakeThem() {
         let app = XCUIApplication()
         // Start from no server-side coins, however earlier runs left this simulator.
-        app.launchArguments = ["--preview", "--ui-test-pet-codes", "-helloCoins.00000000-0000-4000-8000-000000000001", "0"]
+        app.launchArguments = ["--preview", "--ui-test-pet-codes", "--ui-test-developer", "-helloCoins.00000000-0000-4000-8000-000000000001", "0"]
         app.launch()
         let card = app.buttons["pet.card"]
         XCTAssertTrue(card.waitForExistence(timeout: 10)); card.tap()

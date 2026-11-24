@@ -155,6 +155,10 @@ class Redeem(BaseModel):
 @router.post('/redeem')
 async def redeem(payload: Redeem, request: Request, authorization: str | None = Header(default=None)):
     account = authenticated_account(request, authorization)
+    # App Store Review Guideline 3.1.1: once HowMuch sells items and coins, only developers can redeem codes (for testing).
+    from .auth import launched
+    if launched() and not developer(account):
+        raise HTTPException(403, 'Gift codes are no longer available.')
     limit(request, 'pet-redeem', maximum=10, key=account['account_id'])  # stops guessing codes
     db = db_for(request)
     code, now = normalized(payload.code), int(time.time())

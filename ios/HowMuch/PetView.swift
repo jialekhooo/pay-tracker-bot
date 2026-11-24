@@ -938,13 +938,15 @@ struct PetDetailView: View {
         } message: { Text("Codes unlock special outfits, skins and scenes for \(displayName).") }
     }
 
-    /// Gift codes: anyone can redeem one; developers can also make them.
-    private var codes: some View {
-        Card {
-            Button { giftCode = ""; redeeming = true } label: {
-                Label(checkingCode ? "Checking code…" : "Redeem a gift code", systemImage: "gift.fill")
-            }.rowAction().disabled(checkingCode).accessibilityIdentifier("pet.code.redeem")
-            if store.developer {
+    /// Gift codes: developers make and test them. App Store Review Guideline 3.1.1 doesn't let an app unlock items or coins
+    /// it sells through in-app purchase with its own codes, so redeeming is for developers only (the server agrees after launch).
+    /// Items and coins from codes redeemed earlier are kept.
+    @ViewBuilder private var codes: some View {
+        if store.developer {
+            Card {
+                Button { giftCode = ""; redeeming = true } label: {
+                    Label(checkingCode ? "Checking code…" : "Redeem a gift code", systemImage: "gift.fill")
+                }.rowAction().disabled(checkingCode).accessibilityIdentifier("pet.code.redeem")
                 NavigationLink { PetCodesView() } label: {
                     HStack { Label("Make gift codes", systemImage: "wand.and.stars"); Spacer(); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
                         .font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.teal).frame(minHeight: 44).contentShape(Rectangle())

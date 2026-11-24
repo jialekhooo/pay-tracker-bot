@@ -1,4 +1,4 @@
-"""Penny gift codes: only developers make them; anyone can redeem each code once."""
+"""Penny gift codes: only developers make them; before launch anyone can redeem each code once, after it only developers."""
 import time
 
 from .test_accounts import setup, login, headers
@@ -117,3 +117,13 @@ def test_codes_redeemed_before_coin_codes_survive_the_upgrade(setup, monkeypatch
     assert data['petUnlocks'] == ['halo'] and data['helloCoins'] == 0
     made = setup.client.post('/v1/pet/codes', headers=headers(me), json={'coins': 75}).json()['code']
     assert setup.client.post('/v1/pet/redeem', headers=headers(friend), json={'code': made}).json()['helloCoins'] == 75
+
+
+def test_after_launch_only_developers_redeem_codes(setup, monkeypatch):
+    # App Store Review Guideline 3.1.1: items and coins are sold in the app, so codes can't unlock them for everyone.
+    me, friend = prepare(setup, monkeypatch)
+    code = setup.client.post('/v1/pet/codes', headers=headers(me), json={'items': ['halo'], 'max_uses': 5}).json()['code']
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', '2000-01-01')
+    refused = setup.client.post('/v1/pet/redeem', headers=headers(friend), json={'code': code})
+    assert refused.status_code == 403
+    assert setup.client.post('/v1/pet/redeem', headers=headers(me), json={'code': code}).status_code == 200
