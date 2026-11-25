@@ -220,8 +220,10 @@ def test_bot_added_shifts_respect_the_event_limit(setup, monkeypatch, chain):
 
 
 def app_transaction(environment):
-    return {'bundleId': BUNDLE, 'environment': environment, 'appAppleId': 1, 'applicationVersion': '86',
-            'originalApplicationVersion': '86', 'receiptType': environment, 'originalPurchaseDate': int(time.time() * 1000)}
+    # The fields of Apple's signed app transaction (JWSAppTransactionDecodedPayload): the environment is receiptType.
+    return {'bundleId': BUNDLE, 'receiptType': environment, 'appAppleId': 1, 'applicationVersion': '86',
+            'originalApplicationVersion': '86', 'receiptCreationDate': int(time.time() * 1000),
+            'originalPurchaseDate': int(time.time() * 1000), 'appTransactionId': '7050000000000001', 'originalPlatform': 'iOS'}
 
 
 def test_testflight_builds_mark_early_supporters_until_launch(setup, monkeypatch, chain):

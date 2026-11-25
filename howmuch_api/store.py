@@ -266,7 +266,9 @@ async def app_transaction(payload: AppTransaction, request: Request, authorizati
     except Unverified as error:
         raise HTTPException(422, str(error)) from None
     db = request.app.state.storage._conn
-    if info.get('environment') == 'Sandbox' and made_before_launch(account) and not account['tester']:
+    # App transactions name their environment receiptType ("Production", "Sandbox", "Xcode"); purchases call it environment.
+    environment = info.get('receiptType') or info.get('environment')
+    if environment == 'Sandbox' and made_before_launch(account) and not account['tester']:
         with db:
             db.execute('UPDATE accounts SET tester=1 WHERE account_id=?', (account['account_id'],))
         account = db.execute('SELECT * FROM accounts WHERE account_id=?', (account['account_id'],)).fetchone()
