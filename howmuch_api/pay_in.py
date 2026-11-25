@@ -137,9 +137,23 @@ def saved_payer(store: PaymentStore, user_id: int, payer: str) -> str | None:
     return match_payer(store, user_id, payer)[0]
 
 
+MONEY_OUT = re.compile(r"\bfrom\s+(?:your\s+)?(?:a/c|acct|account)\b|\b(?:debited|withdrawn|withdrawal)\b"
+                       r"|\byou(?:'ve| have)?\s+(?:sent|paid|transferred|spent)\b|\b(?:payment|transfer|paynow|sent)\s+to\s+(?!your\b)", re.I)
+PLAINLY_IN = re.compile(r"\b(?:you(?:'ve| have)?\s+received|credited\s+to|incoming)\b", re.I)
+
+
+def money_out(text: str) -> bool:
+    """Money leaving the person's own account ("Successful PayNow: S$11.40 from A/C ending 8370 to ..."). Mirrors the
+    app's PayInText.looksLikeMoneyOut: never pay received, whatever amount the app passes."""
+    flat = " ".join((text or "").split())
+    return bool(MONEY_OUT.search(flat)) and not PLAINLY_IN.search(flat)
+
+
 def parse_notification(text: str) -> tuple[Decimal | None, str]:
     """Best effort for bank push text such as "You have received SGD 1,200.00 from REFIX PTE. LTD." """
     flat = " ".join(text.split())
+    if money_out(flat):
+        return None, ""
     if not re.search(r"\b(received|incoming|credited|paynow from|transfer from|deposit)\b", flat, re.I):
         return None, ""
     amount = re.search(AMOUNT, flat, re.I)
@@ -213,6 +227,8 @@ async def record_notification(payload: Notification, request: Request, authoriza
     from .store import has_pro_user
     if not has_pro_user(request.app.state.storage._conn, user_id):
         return {"status": "ignored", "message": "Pay-in tracking is part of HowMuch Pro."}
+    if money_out(payload.text):
+        return {"status": "ignored", "message": "That notification is money going out, not pay received."}
     parsed_amount, parsed_payer = parse_notification(payload.text)
     try:
         amount = Decimal(payload.amount.replace(",", "")) if payload.amount else parsed_amount

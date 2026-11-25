@@ -217,3 +217,23 @@ def test_odd_amounts_fall_back_to_the_alert_text_instead_of_failing(setup):
                                    headers=headers(session))
         assert result.status_code == 200, (amount, result.text)
         assert result.json()['status'] == 'ignored' and not paid(setup, session)
+
+
+DBS_TRANSFER_OUT = ('Fr DBS: Successful PayNow: S$11.40 from A/C ending 8370 to KHXX JIX YIXX (MOBILE ending 5128), '
+                    '25 Nov 14:25 SGT. If unauthorised, call DBS hotline.')
+
+
+def test_transfers_out_are_never_pay_received(setup):
+    # A real DBS alert for money the person sent: it has "from" and an amount, but it's money going out.
+    assert pay_in.money_out(DBS_TRANSFER_OUT)
+    assert pay_in.parse_notification(DBS_TRANSFER_OUT) == (None, '')
+    for text in ('You have received SGD 1,200.50 from REFIX PTE. LTD. on 5 Nov.',
+                 'You have received SGD 50.00 from JOHN TAN (MOBILE ending 1234) to your A/C ending 8370',
+                 'Funds transfer to your a/c 1234: SGD 80.00 from ACME PTE LTD'):
+        assert not pay_in.money_out(text), text
+    session = finished_roadshow(setup)
+    # Even when the app passes an amount and payer (as Apple Intelligence once did for this alert), it's ignored.
+    result = setup.client.post('/v1/payment-detection/notification',
+                               json={'text': DBS_TRANSFER_OUT, 'amount': '11.40', 'payer': 'DBS'}, headers=headers(session)).json()
+    assert result['status'] == 'ignored' and 'going out' in result['message']
+    assert paid(setup, session) is False

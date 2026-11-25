@@ -89,7 +89,12 @@ final class ProStore: ObservableObject {
     }
 
     /// What StoreKit last said, so a launch doesn't briefly lock Pro features while it checks again.
-    private init() { purchasedPro = UserDefaults.standard.bool(forKey: "pro.purchased") }
+    private init() {
+        purchasedPro = UserDefaults.standard.bool(forKey: "pro.purchased")
+        #if DEBUG
+        if CommandLine.arguments.contains("--ui-test-test-build") { isTestBuild = true }  // UI tests: act like a TestFlight build
+        #endif
+    }
 
     func start() {
         guard updates == nil else { return }

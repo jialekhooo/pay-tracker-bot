@@ -62,7 +62,7 @@ enum AppleIntelligence {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             guard let read = try? await PaymentReader.read(text) else { return .couldNotCheck }
-            guard read.isMoneyIn else { return .notPayment }
+            guard read.isMoneyIn, !PayInText.looksLikeMoneyOut(text) else { return .notPayment }
             // The model only says *whether* money came in; the amount must be one written in the alert.
             guard let amount = PayInText.confirmedAmount(in: text, suggested: read.amount.map { Decimal(string: String(format: "%.2f", $0)) ?? 0 }) else { return .couldNotCheck }
             return .payment(amount: NSDecimalNumber(decimal: amount).doubleValue, payer: read.from?.trimmed ?? "")
@@ -187,7 +187,8 @@ private enum PaymentReader {
     static func read(_ text: String) async throws -> Payment {
         let session = LanguageModelSession(instructions: """
             You read bank app notifications. Decide whether money came IN to the account (a transfer, PayNow or deposit received). \
-            Spending, bills, one-time codes and promotions are not money in.
+            Money the person sent or paid out is not money in: "Successful PayNow ... from A/C ending 1234 to someone" is a \
+            transfer OUT of their own account. Spending, bills, one-time codes and promotions are not money in either.
             """)
         return try await session.respond(to: String(text.prefix(1000)), generating: Payment.self).content
     }

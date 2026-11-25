@@ -130,6 +130,11 @@ extension IntentActions {
     static func recordPayReceived(text: String, amount: Double?, payer: String?) async throws -> String {
         // Only money coming in leaves the phone; codes, spending and promotions are dropped here.
         var amount = amount, payer = payer
+        // Transfers and payments the person made are never pay, even if a Shortcut passes an amount.
+        if PayInText.looksLikeMoneyOut(text) {
+            PayInLog.record("Money going out, not pay coming in, so it stayed on your iPhone.")
+            return "Not a payment."
+        }
         if amount == nil, !PayInText.looksLikeMoneyIn(text) {
             // Wording the rules don't know: Apple Intelligence decides on the iPhone whether it's money in.
             switch await AppleIntelligence.readPayment(text) {

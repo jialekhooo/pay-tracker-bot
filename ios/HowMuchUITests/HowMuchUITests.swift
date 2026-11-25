@@ -1058,6 +1058,21 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["pro.paywall.title"].waitForExistence(timeout: 2))
     }
 
+    /// TestFlight's "Test as a new user" turns Pro off, so the plans replace Settings → HowMuch Pro: the switch must be there too.
+    @MainActor
+    func testTestingAsANewUserCanBeTurnedOffAgain() {
+        let app = XCUIApplication(); app.launchArguments = ["--preview", "--ui-test-test-build", "-pro.testAsNewUser", "NO"]; app.launch()
+        XCTAssertTrue(app.buttons["nav.settings"].waitForExistence(timeout: 10)); app.buttons["nav.settings"].tap()
+        let row = app.staticTexts["HowMuch Pro"].firstMatch; XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        let on = app.switches["pro.testAsNewUser"]; XCTAssertTrue(on.waitForExistence(timeout: 5)); reveal(on, in: app)
+        on.switches.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["pro.paywall.title"].waitForExistence(timeout: 5))
+        let off = app.switches["pro.paywall.testAsNewUser"]; reveal(off, in: app); XCTAssertTrue(off.exists)
+        attach("Testing as a new user, with the switch on the plans", app: app)
+        off.switches.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Pro is on"].waitForExistence(timeout: 5))
+    }
+
     /// Penny's store lists both item packs and the coin bundles; pack items in the shop point to their pack.
     @MainActor
     func testPennyStoreListsPacksAndCoins() {

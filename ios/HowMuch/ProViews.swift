@@ -182,6 +182,15 @@ struct ProPaywall: View {
                     HStack(spacing: 16) { links }
                     VStack(alignment: .leading, spacing: 4) { links }
                 }
+                // While testing as a new user, Pro is off, so Settings shows these plans instead of the switch: keep it here.
+                if pro.isTestBuild && pro.testAsNewUser {
+                    Card {
+                        Toggle("Test as a new user", isOn: $pro.testAsNewUser).font(.subheadline.weight(.semibold))
+                            .accessibilityIdentifier("pro.paywall.testAsNewUser")
+                        Text("TestFlight only. Turn this off to see HowMuch with your own Pro again.").font(.caption).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .padding(20).readableWidth()
         }
