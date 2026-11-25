@@ -89,6 +89,12 @@ def launched() -> bool:
     return until is not None and time.time()>=until
 
 
+def made_before_launch(account) -> bool:
+    """The account existed before HowMuch Pro launched (always true until the launch time is set)."""
+    until=launch_time()
+    return until is None or int(account['created'])<until
+
+
 def pioneer(account) -> bool:
     """Early supporters: accounts seen in a TestFlight build of the beta (accounts.tester). Until the launch time
     (HOWMUCH_PIONEER_UNTIL) has passed every account counts, so nobody loses anything before Pro launches."""

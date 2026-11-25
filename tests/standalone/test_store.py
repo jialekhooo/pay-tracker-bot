@@ -239,3 +239,18 @@ def test_testflight_builds_mark_early_supporters_until_launch(setup, monkeypatch
     # After launch a Sandbox install (App Review, or a new tester) doesn't make an early supporter.
     late = sent(other, chain.sign(app_transaction('Sandbox'))).json()
     assert late['pioneer'] is False and late['pro'] is False
+
+
+def test_accounts_made_before_launch_are_marked_by_testflight_after_launch(setup, monkeypatch, chain):
+    me, other = prepare(setup, monkeypatch)
+    db = setup.storage._conn
+    db.execute('UPDATE accounts SET created=? WHERE account_id=?', (int(time.time()) - 86400, me['account']['id'])); db.commit()
+    monkeypatch.setenv('HOWMUCH_PIONEER_UNTIL', str(int(time.time()) - 60))  # launched a minute ago
+    sent = lambda session: setup.client.post('/v1/store/app-transaction', headers=headers(session),
+                                             json={'jws': chain.sign(app_transaction('Sandbox'))}).json()
+    # A tester whose account predates launch opens TestFlight after launch: still an early supporter.
+    mine = sent(me)
+    assert mine['pioneer'] is True and mine['proReason'] == 'pioneer'
+    # An account made after launch (like App Review's) is never marked.
+    theirs = sent(other)
+    assert theirs['pioneer'] is False and theirs['pro'] is False

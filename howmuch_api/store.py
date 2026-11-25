@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .auth import authenticated_account, bundle_id, developer, launched, pioneer
+from .auth import authenticated_account, bundle_id, developer, made_before_launch, pioneer
 from .database import limit
 
 router = APIRouter(prefix='/store')
@@ -256,9 +256,9 @@ class AppTransaction(BaseModel):
 
 @router.post('/app-transaction')
 async def app_transaction(payload: AppTransaction, request: Request, authorization: str | None = Header(default=None)):
-    """TestFlight builds send Apple's signed app transaction. Before launch, an account seen in one (Apple's Sandbox
-    environment) is marked as a TestFlight tester: an early supporter, with Pro free. After launch nobody new is
-    marked, so App Review (also Sandbox) sees HowMuch as a new person would."""
+    """TestFlight builds send Apple's signed app transaction. An account made before launch that is seen in one (Apple's
+    Sandbox environment), whenever that happens, is marked as a TestFlight tester: an early supporter, with Pro free.
+    Accounts made after launch are never marked, so App Review's new account (also Sandbox) sees the paywall."""
     account = authenticated_account(request, authorization)
     limit(request, 'store', maximum=60, key=account['account_id'])
     try:
@@ -266,7 +266,7 @@ async def app_transaction(payload: AppTransaction, request: Request, authorizati
     except Unverified as error:
         raise HTTPException(422, str(error)) from None
     db = request.app.state.storage._conn
-    if info.get('environment') == 'Sandbox' and not launched() and not account['tester']:
+    if info.get('environment') == 'Sandbox' and made_before_launch(account) and not account['tester']:
         with db:
             db.execute('UPDATE accounts SET tester=1 WHERE account_id=?', (account['account_id'],))
         account = db.execute('SELECT * FROM accounts WHERE account_id=?', (account['account_id'],)).fetchone()

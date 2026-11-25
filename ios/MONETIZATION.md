@@ -31,7 +31,7 @@ Pro is on when any of these is true (`ProStore.hasPro`, server `store.pro_status
 
 1. A live subscription or lifetime on this Apple Account (StoreKit).
 2. A purchase the server has on record for the HowMuch account (follows the account to other iPhones).
-3. The account is a pioneer (early supporter): it used a TestFlight build before launch. TestFlight builds send Apple's signed app transaction to `POST /v1/store/app-transaction`; the server checks Apple's signature and, if the environment is Sandbox and HowMuch Pro hasn't launched, marks the account (`accounts.tester`). **Until the launch time `HOWMUCH_PIONEER_UNTIL` has passed, every account is a pioneer**, so everyone has Pro free. After it, only marked accounts are, and no new accounts are marked, so App Review (also Sandbox) sees the paywall. Testers must open build 86 or later before launch to be marked.
+3. The account is a pioneer (early supporter): it used a TestFlight build before launch. TestFlight builds send Apple's signed app transaction to `POST /v1/store/app-transaction`; the server checks Apple's signature and, if the environment is Sandbox and the account was made before launch, marks the account (`accounts.tester`), whenever that happens. **Until the launch time `HOWMUCH_PIONEER_UNTIL` has passed, every account is a pioneer**, so everyone has Pro free. After it, only marked accounts are. Accounts made after launch are never marked, so App Review's new account (also Sandbox) sees the paywall. A tester is marked the first time they open build 86 or later.
 4. The account is a developer (`HOWMUCH_DEVELOPERS`).
 
 ## How purchases are checked
