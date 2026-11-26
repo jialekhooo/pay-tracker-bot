@@ -873,7 +873,7 @@ struct PetDetailView: View {
     @State private var checkingCode = false
     @State private var name = ""
     @State private var slot: PetSlot = .hat
-    @State private var buying: PetItem?
+    @State private var trying: PetItem?
     @State private var notice: String?
     @State private var purchased = 0
     @State private var visits: FriendsOverview?
@@ -926,8 +926,13 @@ struct PetDetailView: View {
         .sheet(isPresented: $showingStore) {
             NavigationStack { PennyStoreView(petName: displayName).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showingStore = false } } } }
         }
-        .confirmationDialog(buying.map { "Buy \($0.name) for \($0.requirement)?" } ?? "", isPresented: Binding(get: { buying != nil }, set: { if !$0 { buying = nil } }), titleVisibility: .visible) {
-            if let item = buying { Button("Buy \(item.name)") { buy(item, pet) } }
+        .sheet(item: $trying) { item in
+            NavigationStack {
+                PetTryOnView(title: item.name, detail: item.slot.single + " · " + item.requirement, items: [item], pet: pet, closet: closet, petName: displayName) {
+                    PetItemOffer(item: item, pet: pet, closet: closet, petName: displayName,
+                                 buy: { buy(item, pet) }, seePacks: { trying = nil; showingStore = true })
+                }
+            }
         }
         .alert(notice ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) { Button("OK", role: .cancel) {} }
         .alert("Redeem a gift code", isPresented: $redeeming) {
@@ -1071,7 +1076,7 @@ struct PetDetailView: View {
 
     private func shop(_ pet: PetProgress, _ closet: PetCloset) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeading(title: "Shop & wardrobe", detail: "Tap to buy or wear")
+            SectionHeading(title: "Shop & wardrobe", detail: "Tap to try on or wear")
             if pet.stage == .egg {
                 Label("Starter items are for sale now. The rest of the shop opens when \(displayName) hatches.", systemImage: "sparkles")
                     .font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("pet.shop.starter")
@@ -1129,26 +1134,17 @@ struct PetDetailView: View {
         }.buttonStyle(.plain).accessibilityIdentifier("pet.item." + item.id)
     }
 
+    /// Owned items go on or come off. Anything else opens the try-on first, where coin items are bought after a confirmation.
     private func tap(_ item: PetItem, _ pet: PetProgress, _ closet: PetCloset) {
         if closet.owns(item, pet) { store.savePet { var updated = $0.closet ?? PetCloset(); try? updated.toggle(item, pet); $0.closet = updated }; return }
-        if closet.locked(item, pet) { notice = "\(item.name) is for sale once \(displayName) becomes a \(item.stage.title.lowercased()). \(displayName) is a \(pet.stage.title.lowercased()) now."; return }
-        switch item.unlock {
-        case .coins(let price):
-            let balance = closet.balance(pet)
-            if balance >= price { buying = item }
-            else { notice = "\(item.name) costs \(price) coins. Earn \(price - balance) more by working shifts and finishing missions." }
-        case .code: notice = "\(item.name) is a gift-code special. Redeem a code below to unlock it."
-        case .pack: showingStore = true
-        case .achievement: notice = "\(item.name) comes with the \(item.requirement.replacingOccurrences(of: "Badge: ", with: "")) badge."
-        case .free: break
-        }
+        trying = item
     }
 
     private func buy(_ item: PetItem, _ pet: PetProgress) {
         var closet = store.petCloset
-        do { try closet.buy(item, pet); store.savePet { $0.closet = closet }; purchased += 1 }
+        trying = nil
+        do { try closet.buy(item, pet); store.savePet { $0.closet = closet }; slot = item.slot; purchased += 1 }
         catch { notice = "Not enough coins for \(item.name)." }
-        buying = nil
     }
 
     private func saveName() {
@@ -1229,6 +1225,125 @@ struct PetGiftCode: Decodable, Identifiable {
     var shareText: String { "Use the code \(code) in HowMuch (Penny → Redeem a gift code) to get \(rewards)." }
 }
 private struct PetGiftCodes: Decodable { let codes: [PetGiftCode] }
+
+/// Try items on before buying: your pet at its own stage, in its current outfit, with the items swapped in.
+/// "Now" shows the current look to compare. The actions underneath buy, or say how to get the items.
+struct PetTryOnView<Actions: View>: View {
+    let title: String
+    let detail: String
+    let items: [PetItem]
+    let pet: PetProgress
+    let closet: PetCloset
+    let petName: String
+    @ViewBuilder let actions: () -> Actions
+    @State private var showingNow = false
+    @Environment(\.dismiss) private var dismiss
+
+    /// The pet's own stage, or the stage the items go on sale at. An egg only shows the starter items, so others go on a coinling.
+    private var stage: PetProgress.Stage {
+        let needed = max(pet.stage, items.map(\.stage).max() ?? .egg)
+        let eggShows = items.allSatisfy { $0.starter || $0.slot == .background || $0.slot == .skin }
+        return needed == .egg && !eggShows ? .coinling : needed
+    }
+
+    private var stageNote: String? {
+        guard stage != pet.stage else { return nil }
+        if pet.stage == .egg && items.allSatisfy({ $0.stage == .egg }) { return "Shown on a coinling: an egg only shows the starter items. \(petName) can wear \(items.count == 1 ? "it" : "them") once hatched." }
+        return "Shown on a \(stage.title.lowercased()), the stage it goes on sale at. \(petName) is a \(pet.stage.title.lowercased()) now."
+    }
+
+    var body: some View {
+        let now = petOutfit(closet, pet)
+        var tried = now
+        for item in items { tried[item.slot] = item }
+        let outfit = showingNow ? now : tried
+        return ScrollView {
+            VStack(spacing: 16) {
+                ZStack {
+                    PetScene(item: outfit[.background])
+                    PetSprite(stage: showingNow ? pet.stage : stage, mood: .happy, outfit: outfit.filter { $0.key != .background })
+                        .frame(width: 180, height: 180)
+                }
+                .frame(maxWidth: .infinity).frame(height: 240).clipShape(RoundedRectangle(cornerRadius: 24))
+                .accessibilityElement().accessibilityLabel(showingNow ? "\(petName) as they look now" : "\(petName) wearing \(title)")
+                .accessibilityIdentifier("pet.tryOn.preview")
+                Picker("Look", selection: $showingNow) {
+                    Text("Try on").tag(false)
+                    Text("Now").tag(true)
+                }.pickerStyle(.segmented).accessibilityIdentifier("pet.tryOn.compare")
+                VStack(spacing: 4) {
+                    Text(title).font(.appTitle).foregroundStyle(Palette.ink).multilineTextAlignment(.center).accessibilityIdentifier("pet.tryOn.title")
+                    Text(detail).font(.subheadline).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                }
+                if let stageNote, !showingNow {
+                    Text(stageNote).font(.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                }
+                actions()
+            }
+            .padding(20).readableWidth()
+        }
+        .background(AppBackdrop())
+        .navigationTitle("Try on").navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.accessibilityIdentifier("pet.tryOn.close") } }
+        .presentationDetents([.large])
+    }
+}
+
+extension PetSlot {
+    /// "Hat", "Scene": one item of the slot.
+    var single: String { ["Hat", "Glasses", "Neckwear", "Scene", "Skin"][Self.allCases.firstIndex(of: self)!] }
+}
+
+/// Under the try-on for one shop item: buy it with coins (after a confirmation), or how to get it.
+private struct PetItemOffer: View {
+    let item: PetItem
+    let pet: PetProgress
+    let closet: PetCloset
+    let petName: String
+    let buy: () -> Void
+    let seePacks: () -> Void
+    @State private var confirming = false
+
+    var body: some View {
+        let balance = closet.balance(pet)
+        VStack(spacing: 10) {
+            if closet.locked(item, pet) {
+                note("For sale once \(petName) becomes a \(item.stage.title.lowercased()). Keep working shifts and getting paid to help \(petName) grow.")
+            } else {
+                switch item.unlock {
+                case .coins(let price):
+                    Button { confirming = true } label: { Text("Buy for \(price) coins") }
+                        .primaryButton().disabled(balance < price).accessibilityIdentifier("pet.tryOn.buy")
+                    note(balance >= price ? "You have \(balance) coins. \(balance - price) left after buying."
+                                          : "You have \(balance) coins. Earn \(price - balance) more by working shifts and finishing missions.")
+                        .accessibilityIdentifier("pet.tryOn.balance")
+                case .pack(let id):
+                    let pack = PetPack.named(id)?.name ?? "item pack"
+                    Button { seePacks() } label: { Text("See the \(pack)") }.primaryButton().accessibilityIdentifier("pet.tryOn.pack")
+                    note("\(item.name) comes in the \(pack), bought in the App Store.")
+                case .achievement:
+                    note("Comes with the \(item.requirement.replacingOccurrences(of: "Badge: ", with: "")) badge.")
+                case .code:
+                    note("A gift-code special.")
+                case .free:
+                    EmptyView()
+                }
+            }
+        }
+        .alert("Buy \(item.name)?", isPresented: $confirming) {
+            Button("Buy") { buy() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let price = item.price {
+                Text("\(price) coins will be spent, leaving \(balance - price). \(petName) puts it on straight away.")
+            }
+        }
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+    }
+}
 
 /// Developers only: make codes that give coins or unlock wardrobe items, then share them.
 struct PetCodesView: View {

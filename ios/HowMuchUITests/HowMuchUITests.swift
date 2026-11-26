@@ -1007,8 +1007,18 @@ final class HowMuchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pet.item.beanie"].staticTexts["Unlocks at Hatchling"].exists)
         let partyHat = app.buttons["pet.item.party-hat"]
         reveal(partyHat, in: app); partyHat.tap()
-        let buy = app.buttons["Buy Party hat"]
-        XCTAssertTrue(buy.waitForExistence(timeout: 5)); buy.tap()
+        // The try-on shows the egg in the hat first; buying asks to confirm, and Cancel spends nothing.
+        let buy = app.buttons["pet.tryOn.buy"]
+        XCTAssertTrue(buy.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["pet.tryOn.preview"].exists)
+        attach("Trying on the party hat", app: app)
+        app.buttons["Now"].tap(); attach("The egg as it is now", app: app); app.buttons["Try on"].tap()
+        buy.tap()
+        XCTAssertTrue(app.alerts["Buy Party hat?"].waitForExistence(timeout: 5))
+        attach("Confirm buying the party hat", app: app)
+        app.alerts.buttons["Cancel"].tap()
+        XCTAssertTrue(buy.waitForExistence(timeout: 3), "Cancel keeps the try-on open")
+        buy.tap(); XCTAssertTrue(app.alerts["Buy Party hat?"].waitForExistence(timeout: 5)); app.alerts.buttons["Buy"].tap()
         XCTAssertTrue(partyHat.staticTexts["Wearing"].waitForExistence(timeout: 5))
         attach("Starter shop with the party hat on", app: app)
         app.swipeDown(); app.swipeDown(); app.swipeDown()
@@ -1087,6 +1097,10 @@ final class HowMuchUITests: XCTestCase {
         store.tap()
         XCTAssertTrue(app.staticTexts["Celebration pack"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Wonder pack"].exists)
+        let tryOn = app.buttons["store.tryOn.celebration"]; XCTAssertTrue(tryOn.exists); tryOn.tap()
+        XCTAssertTrue(app.staticTexts["pet.tryOn.title"].waitForExistence(timeout: 5))
+        attach("Trying on the Celebration pack", app: app)
+        app.buttons["pet.tryOn.close"].tap()
         let coins = app.descendants(matching: .any).matching(identifier: "store.coins.1000").firstMatch; reveal(coins, in: app)
         XCTAssertTrue(coins.exists)
         attach("Penny's store", app: app)
@@ -1164,9 +1178,10 @@ final class HowMuchUITests: XCTestCase {
         reveal(partyHat, in: app)
         attach("Pet wardrobe", app: app)
         partyHat.tap()
-        let buy = app.buttons["Buy Party hat"]
+        let buy = app.buttons["pet.tryOn.buy"]
         XCTAssertTrue(buy.waitForExistence(timeout: 5))
         buy.tap()
+        XCTAssertTrue(app.alerts["Buy Party hat?"].waitForExistence(timeout: 5)); app.alerts.buttons["Buy"].tap()
         XCTAssertTrue(partyHat.staticTexts["Wearing"].waitForExistence(timeout: 5))
         app.buttons["Scenes"].tap()
         let mint = app.buttons["pet.item.mint"]
@@ -1176,9 +1191,11 @@ final class HowMuchUITests: XCTestCase {
         let sunglasses = app.buttons["pet.item.sunglasses"]
         XCTAssertTrue(sunglasses.waitForExistence(timeout: 5))
         sunglasses.tap()
-        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5) || app.buttons["Buy Sunglasses"].exists)
-        attach("Not enough coins or buy sunglasses", app: app)
-        if app.alerts.firstMatch.exists { app.alerts.buttons["OK"].tap() } else { app.buttons["Buy Sunglasses"].tap() }
+        // Not bought yet: the try-on shows Penny in them, with the price and what's left (or how many more coins).
+        XCTAssertTrue(app.staticTexts["pet.tryOn.title"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["pet.tryOn.balance"].exists || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'For sale once'")).firstMatch.exists)
+        attach("Trying on the cool shades", app: app)
+        app.buttons["pet.tryOn.close"].tap()
         // Pioneers (everyone before launch) get their own skin.
         app.buttons["Skins"].tap()
         let pioneer = app.buttons["pet.item.pioneer"]

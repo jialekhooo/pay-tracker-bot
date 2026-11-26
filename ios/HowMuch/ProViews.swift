@@ -258,6 +258,7 @@ struct PennyStoreView: View {
     let petName: String
     @EnvironmentObject private var store: TrackerStore
     @ObservedObject private var purchases = ProStore.shared
+    @State private var trying: String?
 
     var body: some View {
         let pet = store.petProgress()
@@ -281,6 +282,30 @@ struct PennyStoreView: View {
         .detailStyle("Penny's store")
         .toolbar { ToolbarItem(placement: .topBarTrailing) { CoinLabel(amount: store.petCloset.balance(pet)) } }
         .task { await purchases.loadProducts() }
+        .sheet(item: Binding(get: { trying.map(PackChoice.init) }, set: { trying = $0?.id })) { choice in
+            NavigationStack { packTryOn(choice.id, pet) }
+        }
+    }
+
+    private struct PackChoice: Identifiable { let id: String }
+
+    /// The whole pack on your pet before buying. The App Store asks to confirm the purchase itself.
+    private func packTryOn(_ id: String, _ pet: PetProgress) -> some View {
+        let pack = PetPack.named(id.replacingOccurrences(of: StoreCatalog.prefix + "penny.", with: ""))!
+        let owned = pack.items.allSatisfy { store.petCloset.owns($0, pet) }
+        return PetTryOnView(title: pack.name, detail: pack.detail, items: pack.items, pet: pet, closet: store.petCloset, petName: petName) {
+            if owned {
+                Label("Owned · wear them from the wardrobe", systemImage: "checkmark.circle.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.success)
+            } else {
+                Button { Task { if await purchases.buy(id) { trying = nil } } } label: {
+                    if purchases.busy == id { ProgressView().tint(.white) } else { Text("Buy " + (purchases.price(id).map { "· \($0)" } ?? "")) }
+                }
+                .primaryButton().disabled(purchases.products[id] == nil || purchases.busy != nil).accessibilityIdentifier("store.tryOn.buy.\(pack.id)")
+            }
+            if let message = purchases.message {
+                Text(message).font(.caption).foregroundStyle(Palette.warning).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private func packCard(_ id: String, _ pet: PetProgress) -> some View {
@@ -300,6 +325,8 @@ struct PennyStoreView: View {
                     Text(pack.detail).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            Button { trying = id } label: { Label("Try it on \(petName)", systemImage: "sparkles") }
+                .rowAction().accessibilityIdentifier("store.tryOn.\(pack.id)")
             if owned {
                 Label("Owned · wear them from the wardrobe", systemImage: "checkmark.circle.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.success)
                     .accessibilityIdentifier("store.owned.\(pack.id)")
