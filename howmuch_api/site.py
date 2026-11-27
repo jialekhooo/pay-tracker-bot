@@ -121,6 +121,7 @@ a{color:var(--link);text-underline-offset:3px;text-decoration-thickness:2px}
 .top{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--ink);text-decoration:none;letter-spacing:-.01em;margin-right:auto}
 .brand .px{width:auto;height:36px}
+@media (prefers-color-scheme:dark){.brand .px,.pagehead .px,.btn:not(.primary) .px{filter:drop-shadow(0 0 1.5px #fff7e6)}}
 .links{display:flex;gap:4px;margin:0;padding:0;list-style:none}
 .links a{display:block;padding:8px 12px;border-radius:12px;color:var(--muted);font-weight:800;font-size:16px;text-decoration:none}
 .links a:hover{color:var(--ink);background:var(--panel)}
@@ -236,11 +237,10 @@ td:first-child{font-weight:800;width:27%}
 th:last-child,td:last-child{padding-right:0}
 
 /* Footer */
-footer{margin-top:64px;text-align:center;color:var(--muted);font-size:15px;font-weight:600}
-footer .px{width:44px;height:auto;margin:0 auto 10px}
-.ground{height:10px;margin:0 auto 18px;max-width:520px;border-radius:4px;
- background:repeating-linear-gradient(90deg,var(--edge) 0 10px,transparent 10px 20px)}
-footer a{color:var(--muted);white-space:nowrap}
+footer{margin-top:72px}
+.ground{height:10px;margin:0 0 22px;border-radius:4px;background:repeating-linear-gradient(90deg,var(--edge) 0 10px,transparent 10px 20px)}
+.legal{margin:18px 0 0;text-align:center;color:var(--muted);font-size:14px;font-weight:600}
+.legal a{color:var(--muted);white-space:nowrap}
 
 @media (max-width:820px){
  .screens{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:18px;padding:8px 4px 16px;margin:0 -16px;padding-left:16px;padding-right:16px}
@@ -273,6 +273,12 @@ PAGES = (('/#what', 'Features'), ('/#plans', 'Pricing'), ('/support', 'Support')
 def page(path: str, title: str, description: str, body: str) -> str:
     """A full HTML page with the shared header, links and footer."""
     links = ''.join(f'<li><a href="{href}"{" aria-current=page" if href == path else ""}>{name}</a></li>' for href, name in PAGES)
+
+    def bar(label: str) -> str:
+        # The same logo, tabs and button at the top and bottom of every page.
+        return (f'<a class="brand" href="/"{" aria-current=page" if path == "/" else ""}>{penny()} HowMuch</a>'
+                f'<nav aria-label="{label}"><ul class="links">{links}</ul></nav>'
+                f'<a class="btn primary cta" href="{APP_STORE}">Get the app</a>')
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -286,16 +292,12 @@ def page(path: str, title: str, description: str, body: str) -> str:
 <style>{STYLE}</style>
 </head>
 <body><main class="wrap">
-<header class="top">
- <a class="brand" href="/"{" aria-current=page" if path == "/" else ""}>{penny()} HowMuch</a>
- <nav aria-label="Site"><ul class="links">{links}</ul></nav>
- <a class="btn primary cta" href="{APP_STORE}">Get the app</a>
-</header>
+<header class="top">{bar("Site")}</header>
 {body}
 <footer>
- {penny()}
  <div class="ground"></div>
- HowMuch by Jia Le Khoo &middot; <a href="/support">Support</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms of Use</a>
+ <div class="top">{bar("Footer")}</div>
+ <p class="legal">HowMuch by Jia Le Khoo &middot; <a href="/terms">Terms of Use</a></p>
 </footer>
 </main></body>
 </html>
