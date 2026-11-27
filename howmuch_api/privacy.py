@@ -1,10 +1,19 @@
 """The public privacy policy at /privacy, in the website's shared look (site.py)."""
-from .site import CONTACT, TELEGRAM, icon, page, page_head
+from .site import CONTACT, TELEGRAM, icon, page, stage
 
 UPDATED = '27 November 2026'
 
-BODY = page_head('Privacy policy', 'HowMuch keeps track of your shifts and pay. This page explains what that involves, in plain language: what we store, why, who else handles it, and how to get a copy or delete it.',
-                 f'<p class="date">Last updated {UPDATED}</p>') + '<div class="narrow">' + f"""
+BODY = f"""
+<div class="hero">
+ <div>
+  <span class="kicker">In plain language</span>
+  <h1>Privacy policy</h1>
+  <p class="lede">HowMuch keeps track of your shifts and pay. This page explains what that involves, in plain language: what we store, why, who else handles it, and how to get a copy or delete it.</p>
+  <p class="date">Last updated {UPDATED}</p>
+  <div class="actions"><a class="btn primary" href="#short">Read the short version</a><a class="btn" href="#choices">Your choices</a></div>
+ </div>
+ {stage('Your data is yours!', 'Penny, the HowMuch pet, among gold coins saying Your data is yours!')}
+</div>
 
 <section aria-labelledby="short">
  <div class="head">{icon('shield')}<h2 id="short">The short version</h2></div>
@@ -157,8 +166,6 @@ BODY = page_head('Privacy policy', 'HowMuch keeps track of your shifts and pay. 
   <a class="btn" href="mailto:{CONTACT}?subject=HowMuch%20privacy">Email<small>{CONTACT}</small></a>
  </div>
 </section>
-
-</div>
 """
 
 PAGE = page('/privacy', 'Privacy policy | HowMuch', 'What HowMuch stores, why, who handles it, and how to export or delete it.', BODY)

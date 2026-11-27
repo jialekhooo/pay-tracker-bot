@@ -123,13 +123,12 @@ body{margin:0;background-color:var(--bg);background-image:radial-gradient(var(--
 a{color:var(--link);text-underline-offset:3px;text-decoration-thickness:2px}
 .px{display:block;image-rendering:pixelated}
 .wrap{max-width:1040px;margin:0 auto;padding:18px 20px 40px}
-.narrow{max-width:780px;margin:0 auto}
 
 /* Header */
 .top{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--ink);text-decoration:none;letter-spacing:-.01em;margin-right:auto}
 .brand .px{width:auto;height:36px}
-@media (prefers-color-scheme:dark){.brand .px,.pagehead .px,.btn:not(.primary) .px{filter:drop-shadow(0 0 1.5px #fff7e6)}}
+@media (prefers-color-scheme:dark){.brand .px,.btn:not(.primary) .px{filter:drop-shadow(0 0 1.5px #fff7e6)}}
 .links{display:flex;gap:4px;margin:0;padding:0;list-style:none}
 .links a{display:block;padding:8px 12px;border-radius:12px;color:var(--muted);font-weight:800;font-size:16px;text-decoration:none}
 .links a:hover{color:var(--ink);background:var(--panel)}
@@ -218,9 +217,6 @@ section>:last-child,section>:last-child>:last-child{margin-bottom:0}
 .faq section{margin-top:0}
 
 /* Pages */
-.pagehead{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:40px auto 8px}
-.pagehead .px{width:110px;height:auto;flex:none;animation:hop 2.6s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){.pagehead .px{animation:none}}
 .contact{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:6px 0 16px}
 .contact .btn{justify-content:center;flex-direction:column;gap:4px;padding:16px;text-align:center}
 .contact .btn small{font-weight:600;font-size:14px;color:inherit;opacity:.8;word-break:break-all}
@@ -265,14 +261,13 @@ footer{margin-top:72px}
  .top nav{order:3;width:100%}.links{justify-content:space-between;gap:0}.links a{padding:6px 8px;font-size:15px}
  .features,.plans,.short,.contact,.faq{grid-template-columns:1fr}
  .card,section{padding:22px 18px;border-radius:20px}
- .pagehead .px{width:72px}
  nav.toc ol{columns:1}
  thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
  table,tbody,tr,td{display:block;width:100%}
  tr{border-top:2px dashed var(--line);padding:12px 0}tr:first-child{border-top:0;padding-top:0}tr:last-child{padding-bottom:0}
  td,td:first-child{border:0;padding:0;width:100%}td:first-child{margin-bottom:2px}td+td{color:var(--muted)}td+td+td{margin-top:4px}
 }
-@media print{body{background:#fff}.card,section,.features li,.plan{box-shadow:none;border-width:1px}nav,.actions,.stage,.pagehead .px,.ground{display:none}a{color:inherit}}
+@media print{body{background:#fff}.card,section,.features li,.plan{box-shadow:none;border-width:1px}nav,.actions,.stage,.ground{display:none}a{color:inherit}}
 """
 
 # The logo is the way home. The tabs go from learning about the app, to getting help, to the legal page.
@@ -321,14 +316,6 @@ def stage(bubble: str, label: str) -> str:
   <div class="bubble">{bubble}</div>
   {penny('penny')}
  </div>"""
-
-
-def page_head(title: str, lede: str, extra: str = '') -> str:
-    """The heading of an inner page, with Penny beside it."""
-    return f"""<header class="pagehead narrow">
- <div><h1>{title}</h1><p class="lede">{lede}</p>{extra}</div>
- {penny()}
-</header>"""
 
 
 SCREEN_ITEMS = ''.join(

@@ -16,9 +16,9 @@ def test_page_is_self_contained_and_its_links_work():
     page = privacy.PAGE
     assert not re.search(r'<script|<link |<img |@import|url\(', page)
     assert re.findall(r'src="', page) == []
-    targets = re.findall(r'href="#([^"]+)"', page)
-    assert len(set(targets)) == 10  # the ten sections in "On this page"
-    for target in targets:
+    contents = re.search(r'<nav class="toc".*?</nav>', page, re.S).group(0)
+    assert len(re.findall(r'href="#', contents)) == 10  # the ten sections in "On this page"
+    for target in re.findall(r'href="#([^"]+)"', page):
         assert f'id="{target}"' in page, target
 
 
