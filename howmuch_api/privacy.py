@@ -1,14 +1,10 @@
 """The public privacy policy at /privacy, in the website's shared look (site.py)."""
-from .site import CONTACT, page
+from .site import CONTACT, page, page_head
 
 UPDATED = '27 November 2026'
 
-BODY = f"""
-<header>
- <h1>Privacy policy</h1>
- <p class="lede">HowMuch keeps track of your shifts and pay. This page explains what that involves, in plain language: what we store, why, who else handles it, and how to get a copy or delete it.</p>
- <p class="date">Last updated {UPDATED}</p>
-</header>
+BODY = page_head('Privacy policy', 'HowMuch keeps track of your shifts and pay. This page explains what that involves, in plain language: what we store, why, who else handles it, and how to get a copy or delete it.',
+                 f'<p class="date">Last updated {UPDATED}</p>') + '<div class="narrow">' + f"""
 
 <section aria-labelledby="short">
  <h2 id="short">The short version</h2>
@@ -167,6 +163,7 @@ BODY = f"""
  <p>HowMuch is run by Jia Le Khoo. For questions or requests about your data, email <a href="mailto:{CONTACT}">{CONTACT}</a>. We will reply within 7 days.</p>
 </section>
 
+</div>
 """
 
 PAGE = page('/privacy', 'Privacy policy | HowMuch', 'What HowMuch stores, why, who handles it, and how to export or delete it.', BODY)
