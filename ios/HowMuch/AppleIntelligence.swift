@@ -207,9 +207,9 @@ struct MonthRecapCard: View {
         Group {
             if let recap, pro.hasPro {
                 Card {
-                    Label("Your month so far", systemImage: "apple.intelligence").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
+                    Label("Your month so far", systemImage: "apple.intelligence").font(.footnote.weight(.semibold)).foregroundStyle(Palette.teal)
                     Text(recap).font(.subheadline).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                    Text("Written by Apple Intelligence on your iPhone").font(.caption2).foregroundStyle(Palette.muted)
+                    Text("Written by Apple Intelligence on your iPhone").font(.caption).foregroundStyle(Palette.muted)
                 }.accessibilityIdentifier("recap.card")
             }
         }

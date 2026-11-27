@@ -61,7 +61,7 @@ struct ShiftDetailView: View {
                                     } else {
                                         LabeledContent("Hourly Rate", value: money(shift.rate, shift.currency) + "/h")
                                         if let threshold = shift.overtimeAfter {
-                                            Text("Overtime after \(threshold)h · ×\(shift.overtimeMultiplier)").font(.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity, alignment: .leading)
+                                            Text("Overtime after \(threshold)h · ×\(shift.overtimeMultiplier)").font(.footnote).foregroundStyle(Palette.muted).frame(maxWidth: .infinity, alignment: .leading)
                                         }
                                     }
                                     if let extra = shift.extra {
@@ -121,7 +121,7 @@ struct ReimbursementsSection: View {
             if claims.isEmpty {
                 Card {
                     Label("Keep your expenses with this work", systemImage: "receipt").font(.subheadline.weight(.medium))
-                    Text("Add cab, food or miscellaneous claims to your estimated bank credit.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Add cab, food or miscellaneous claims to your estimated bank credit.").font(.footnote).foregroundStyle(Palette.muted)
                 }
             }
             ForEach(claims) { claim in
@@ -130,7 +130,7 @@ struct ReimbursementsSection: View {
                         Image(systemName: claim.category.symbol).font(.system(size: 17)).foregroundStyle(Palette.teal).frame(width: 40, height: 40).background(Palette.mint, in: RoundedRectangle(cornerRadius: 13))
                         VStack(alignment: .leading, spacing: 6) {
                             Text(claim.note.isEmpty ? claim.category.title + " claim" : claim.note).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink)
-                            Text(claim.category.title + " · " + displayDay(claim.day) + (claim.receiptID == nil ? "" : " · Receipt attached")).font(.caption).foregroundStyle(Palette.muted)
+                            Text(claim.category.title + " · " + displayDay(claim.day) + (claim.receiptID == nil ? "" : " · Receipt attached")).font(.footnote).foregroundStyle(Palette.muted)
                             Text(money(claim.amount, currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.teal)
                         }
                         Spacer(minLength: 0)
@@ -151,13 +151,13 @@ struct ReimbursementsSection: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Estimated bank credit").font(.subheadline.weight(.semibold))
-                        Text("Work payout + claims").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Work payout + claims").font(.footnote).foregroundStyle(Palette.muted)
                     }
                     Spacer()
                     Text(money(shifts.reduce(Decimal.zero) { $0 + $1.total } + total, currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
                 }
             }
-            Text("Claims are separate from earnings. Marking work paid tracks its payout only.").font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+            Text("Claims are separate from earnings. Marking work paid tracks its payout only.").font(.footnote).foregroundStyle(Palette.muted).padding(.horizontal, 4)
         }
         .sheet(isPresented: $adding) { if let shift = shifts.first { ClaimEditor(shift: shift) } }
         .sheet(item: $viewingReceipt) { claim in if let id = claim.receiptID { SavedReceiptView(receiptID: id) } }

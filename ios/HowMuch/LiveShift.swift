@@ -262,7 +262,7 @@ struct FinishShiftSheet: View {
                             Divider()
                             Text(money(updated.total, updated.currency)).amountFont().foregroundStyle(Palette.ink)
                                 .accessibilityIdentifier("finish.pay")
-                            Text(change(from: latest, to: updated)).font(.caption).foregroundStyle(Palette.muted)
+                            Text(change(from: latest, to: updated)).font(.footnote).foregroundStyle(Palette.muted)
                         }
                     }
                     Button("I finished on time", systemImage: "checkmark") { finishOnTime() }
@@ -321,15 +321,15 @@ struct LiveShiftSettingsView: View {
             Section {
                 Toggle("Show on Lock Screen", isOn: lockScreen).accessibilityIdentifier("live.lockScreen")
                 Text("While a shift is on, the Lock Screen and Dynamic Island show the time left and your pay for the shift. It appears 30 minutes before the shift with a countdown to the start, even if HowMuch is closed, and stays live through long shifts. When the booked time ends it asks if you've finished: tap Staying late to count your overtime, then Finished now when you leave. Job names follow your Job notifications privacy setting.")
-                    .font(.caption).foregroundStyle(Palette.muted)
+                    .font(.footnote).foregroundStyle(Palette.muted)
                 if !LiveShiftCenter.systemAllows {
-                    Text("Live Activities are turned off for HowMuch in iPhone Settings.").font(.caption).foregroundStyle(.orange)
+                    Text("Live Activities are turned off for HowMuch in iPhone Settings.").font(.footnote).foregroundStyle(.orange)
                 }
             } header: { FormHeader("Lock Screen") }
             Section {
                 Toggle("Ask what time I finished", isOn: askFinish).accessibilityIdentifier("live.askFinish")
                 Text("After an hourly shift ends, HowMuch asks once whether you finished on time. Staying late updates that shift's pay, including overtime.")
-                    .font(.caption).foregroundStyle(Palette.muted)
+                    .font(.footnote).foregroundStyle(Palette.muted)
             } header: { FormHeader("Finish time") }
         }
         .detailStyle("Live shift")

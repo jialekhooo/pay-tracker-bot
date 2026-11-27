@@ -100,7 +100,7 @@ struct JobLocationPicker: View {
                         TextField("Place, address or postal code", text: $query).font(.appBody).frame(minHeight: 48)
                             .autocorrectionDisabled().focused($focused).submitLabel(.search).accessibilityIdentifier("location.query")
                             .onSubmit { focused = false; Task { await search.find(query) } }
-                        Text("Place searches are sent to Apple Maps. You can also keep a location you type yourself.").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Place searches are sent to Apple Maps. You can also keep a location you type yourself.").font(.footnote).foregroundStyle(Palette.muted)
                     }
                     if search.searching { ProgressView("Finding places…").frame(maxWidth: .infinity) }
                     if let error = search.error { Label(error, systemImage: "wifi.exclamationmark").font(.subheadline).foregroundStyle(Palette.muted) }
@@ -136,7 +136,7 @@ struct JobLocationPicker: View {
             Image(systemName: "mappin.circle.fill").font(.title2).foregroundStyle(Palette.teal)
             VStack(alignment: .leading, spacing: 5) {
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Palette.muted) }
+                if !subtitle.isEmpty { Text(subtitle).font(.footnote).foregroundStyle(Palette.muted) }
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
@@ -157,7 +157,7 @@ struct JobDirectionsView: View {
                     Card {
                         Label("JOB LOCATION", systemImage: "mappin.and.ellipse").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
                         Text(location).font(.appHeadline)
-                        Text("Confirm the destination before starting directions.").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Confirm the destination before starting directions.").font(.footnote).foregroundStyle(Palette.muted)
                     }
                     if search.searching { ProgressView("Looking up your workplace…").frame(maxWidth: .infinity) }
                     if let item = selected {
@@ -167,7 +167,7 @@ struct JobDirectionsView: View {
                         Card {
                             Text(item.name ?? "Destination").font(.appHeadline)
                             Text(JobPlaceSearch.address(item)).font(.subheadline).foregroundStyle(Palette.muted)
-                            Text("Apple Maps will show routes from your current location and handle any location permission.").font(.caption).foregroundStyle(Palette.muted)
+                            Text("Apple Maps will show routes from your current location and handle any location permission.").font(.footnote).foregroundStyle(Palette.muted)
                         }
                         VStack(spacing: 10) {
                             Button("Public transport", systemImage: "tram.fill") { open(item, mode: MKLaunchOptionsDirectionsModeTransit) }.glassAction().accessibilityIdentifier("location.transit")
@@ -181,7 +181,7 @@ struct JobDirectionsView: View {
                             Button { selected = item } label: {
                                 Card {
                                     Text(item.name ?? "Place").font(.appHeadline).foregroundStyle(Palette.ink)
-                                    Text(JobPlaceSearch.address(item)).font(.caption).foregroundStyle(Palette.muted)
+                                    Text(JobPlaceSearch.address(item)).font(.footnote).foregroundStyle(Palette.muted)
                                     Label("Show this destination", systemImage: "map").font(.subheadline).foregroundStyle(Palette.teal)
                                 }
                             }.buttonStyle(.plain).accessibilityIdentifier("location.destination.\(index)")
@@ -192,7 +192,7 @@ struct JobDirectionsView: View {
                         Button("Try again", systemImage: "arrow.clockwise") { Task { await lookup() } }.glassAction()
                     }
                     if let launchError { Text(launchError).font(.subheadline).foregroundStyle(.red) }
-                    Text("Maps and route availability depend on Apple Maps coverage and your connection.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Maps and route availability depend on Apple Maps coverage and your connection.").font(.footnote).foregroundStyle(Palette.muted)
                 }.padding(20)
             }.detailStyle("Map & directions")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }

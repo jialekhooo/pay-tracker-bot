@@ -90,9 +90,11 @@ private struct GlassChrome<S: Shape>: ViewModifier {
 }
 
 struct Card<Content: View>: View {
+    /// Gap between items. Forms use less, since their rows are already 44 points tall.
+    var spacing: CGFloat = 14
     @ViewBuilder var content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) { content }
+        VStack(alignment: .leading, spacing: spacing) { content }
             .font(.appBody)
             .padding(18).frame(maxWidth: .infinity, alignment: .leading)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
@@ -115,7 +117,7 @@ struct ScreenShell<Content: View>: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("HOWMUCH").font(.caption2.weight(.bold)).tracking(2.2).opacity(0.65)
                         Text(title).font(.system(.title, design: .rounded, weight: .bold))
-                        Text(subtitle).font(.caption).opacity(0.78)
+                        Text(subtitle).font(.footnote).opacity(0.78)
                     }
                     Spacer(minLength: 10)
                     Button { search = true } label: {
@@ -158,7 +160,7 @@ struct SectionHeading: View {
         HStack {
             Text(title).font(.appHeadline).foregroundStyle(Palette.ink)
             Spacer()
-            Text(detail).font(.caption).foregroundStyle(Palette.muted)
+            Text(detail).font(.footnote).foregroundStyle(Palette.muted)
         }.padding(.top, 4)
     }
 }
@@ -172,10 +174,13 @@ struct PillPicker: View {
             HStack(spacing: 6) {
                 ForEach(values, id: \.self) { value in
                     Button { selection = value } label: {
-                        Text(value).font(.system(.caption, design: .rounded, weight: .semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 11).frame(minHeight: 44)
+                        // A slim pill, with the full 44-point height still tappable above and below it.
+                        Text(value).font(.system(.footnote, design: .rounded, weight: .semibold))
+                            .padding(.horizontal, 14).padding(.vertical, 7)
                             .foregroundStyle(selection == value ? (onDark ? Color(red: 0.094, green: 0.231, blue: 0.216) : Color.white) : (onDark ? .white : Palette.muted))
-                            .background(selection == value ? (onDark ? Color.white : Palette.accent) : (onDark ? .white.opacity(0.12) : Palette.surface), in: Capsule()).contentShape(Capsule())
+                            .background(selection == value ? (onDark ? Color.white : Palette.accent) : (onDark ? .white.opacity(0.12) : Palette.surface), in: Capsule())
+                            .overlay(Capsule().stroke(selection == value || onDark ? .clear : Palette.line.opacity(0.7), lineWidth: 0.6))
+                            .frame(minHeight: 44).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityAddTraits(selection == value ? .isSelected : [])
                 }
             }
@@ -207,7 +212,7 @@ struct StatusPill: View {
     var paid = false
     var body: some View {
         Label(title, systemImage: paid ? "checkmark.circle.fill" : title == "Working now" ? "clock.fill" : "circle.fill")
-            .font(.caption2.weight(.semibold)).foregroundStyle(paid ? Palette.success : Palette.teal)
+            .font(.caption.weight(.semibold)).foregroundStyle(paid ? Palette.success : Palette.teal)
             .lineLimit(1).fixedSize()
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background((paid ? Color.green : Palette.teal).opacity(0.08), in: Capsule())
@@ -237,9 +242,9 @@ struct ShiftRow: View {
             VStack(alignment: .leading, spacing: 7) {
                 Label(shift.whenLabel, systemImage: "calendar")
                 if !shift.location.isEmpty { Label(shift.location, systemImage: "mappin.and.ellipse").lineLimit(stacked ? nil : 2) }
-            }.font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }.font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             let hours = HStack {
-                Text(hoursText(shift.hours) + " paid time").font(.caption).foregroundStyle(Palette.muted)
+                Text(hoursText(shift.hours) + " paid time").font(.footnote).foregroundStyle(Palette.muted)
                 if !stacked { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
             }
             let pill = StatusPill(title: shift.state(at: Date()), paid: shift.paid && shift.endDate <= Date())
@@ -249,7 +254,7 @@ struct ShiftRow: View {
                 HStack { pill; Spacer(); hours }
             }
             if store.data.shifts.contains(where: { shift.overlaps($0) }) {
-                Label("Overlapping shift", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+                Label("Overlapping shift", systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.orange)
             }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 2).contentShape(Rectangle())
     }
@@ -312,8 +317,8 @@ struct AppForm<Content: View>: View {
 extension View {
     /// Settings-style forms: compact section spacing and rows that size themselves.
     func appForm() -> some View { self.environment(\.inAppForm, true).listSectionSpacing(.compact) }
-    /// A Form footer note: caption size and muted, matching notes on card pages.
-    func formFootnote() -> some View { self.font(.caption).foregroundStyle(Palette.muted) }
+    /// A Form footer note: footnote size and muted, matching notes on card pages.
+    func formFootnote() -> some View { self.font(.footnote).foregroundStyle(Palette.muted) }
     func glassChrome<S: Shape>(in shape: S, tint: Color? = nil) -> some View { modifier(GlassChrome(shape: shape, tint: tint)) }
     func glassAction() -> some View { self.buttonStyle(GlassActionButtonStyle()) }
     func primaryButton() -> some View { self.buttonStyle(PrimaryActionButtonStyle()) }

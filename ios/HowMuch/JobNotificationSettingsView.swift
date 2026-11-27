@@ -34,14 +34,14 @@ struct JobNotificationSettingsView: View {
                     })).disabled(!options.starts).accessibilityIdentifier("notifications.start.\(minutes)")
                 }
                 Text(options.startReminderMinutes.isEmpty ? "Choose at least one time, or turn Job start reminders off." : "Choose as many as you like. Each selected time sends one reminder per job. Passed times are skipped.")
-                    .font(.caption).foregroundStyle(Palette.muted)
+                    .font(.footnote).foregroundStyle(Palette.muted)
             }
             Section(styled: "Other timing & privacy") {
                 DatePicker("Day-before alert", selection: $dayBefore, displayedComponents: .hourAndMinute)
                 DatePicker("Payment due alert", selection: $paymentTime, displayedComponents: .hourAndMinute)
                 LabeledContent("Timezone", value: TimeZone.current.identifier)
                 Toggle("Show job names and locations", isOn: $options.showDetails).accessibilityIdentifier("notifications.details")
-                Text("Turn this off to keep job names and locations off your lock screen. Times and reminder types remain visible.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Turn this off to keep job names and locations off your lock screen. Times and reminder types remain visible.").font(.footnote).foregroundStyle(Palette.muted)
             }
             Section(styled: "Lock-screen preview") {
                 HStack(alignment: .top, spacing: 12) {
@@ -51,17 +51,17 @@ struct JobNotificationSettingsView: View {
                         Text(preview.body).font(.subheadline)
                     }.accessibilityIdentifier("notifications.preview")
                 }.padding(.vertical, 6)
-                Text("Touch and hold a reminder to open its job or review a payment. Notifications are grouped by job.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Touch and hold a reminder to open its job or review a payment. Notifications are grouped by job.").font(.footnote).foregroundStyle(Palette.muted)
             }
             Section(styled: "Delivery") {
                 Label(deliveryTitle, systemImage: notificationsAllowed ? "checkmark.circle.fill" : "bell.slash")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(notificationsAllowed ? Palette.teal : Palette.ink)
                     .accessibilityIdentifier("notifications.deliveryStatus")
-                Text(deliveryDetail).font(.caption).foregroundStyle(Palette.muted)
+                Text(deliveryDetail).font(.footnote).foregroundStyle(Palette.muted)
                 if let error = push.registrationError {
-                    Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+                    Label(error, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.orange)
                 } else if auth.pushMessage.hasPrefix("Couldn’t") {
-                    Label(auth.pushMessage, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+                    Label(auth.pushMessage, systemImage: "exclamationmark.circle").font(.footnote).foregroundStyle(.orange)
                 }
                 if authorization == .notDetermined {
                     Button("Enable notifications", systemImage: "bell.badge") { Task { await auth.enableNotifications(); await readPermission() } }.rowAction().accessibilityIdentifier("notifications.enable")
@@ -71,7 +71,7 @@ struct JobNotificationSettingsView: View {
                 if notificationsAllowed {
                     Button("Send test notification", systemImage: "paperplane") { Task { await sendTest() } }.rowAction().disabled(testing).accessibilityIdentifier("notifications.test")
                 }
-                if !testMessage.isEmpty { Text(testMessage).font(.caption).foregroundStyle(Palette.muted) }
+                if !testMessage.isEmpty { Text(testMessage).font(.footnote).foregroundStyle(Palette.muted) }
                 Button("Open iPhone notification settings", systemImage: "gearshape") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }.rowAction()
             }
 
@@ -187,7 +187,7 @@ struct TravelReminderSettingsView: View {
                     Text("Your usual starting point").font(.appHeadline)
                     TextField("Departure address, city and country", text: $options.origin, axis: .vertical).autocorrectionDisabled().focused($originFocused).accessibilityIdentifier("travel.origin")
                     Button("Find a departure address", systemImage: "magnifyingglass") { originFocused = false; choosingOrigin = true }.rowAction()
-                    Text("This saved address is used for every job. HowMuch does not track where you are. Include a city and country to avoid a wrong match.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("This saved address is used for every job. HowMuch does not track where you are. Include a city and country to avoid a wrong match.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 Card {
                     LabeledContent("Travel by") {
@@ -198,11 +198,11 @@ struct TravelReminderSettingsView: View {
                     Stepper("Arrive \(options.arrivalBuffer) min early", value: $options.arrivalBuffer, in: 0...120, step: 5).controlSize(.small)
                     Stepper(options.prepareMinutes == 0 ? "No preparation reminder" : "Heads-up \(options.prepareMinutes) min before leaving", value: $options.prepareMinutes, in: 0...60, step: 5).controlSize(.small)
                     if options.transit != true { Toggle("Check for journey changes", isOn: $options.trafficUpdates) }
-                    Text("Public transport uses Apple Maps estimates refreshed when HowMuch opens. Planned reminders can fire while the app is closed; live bus/MRT delay updates require opening the app again.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Public transport uses Apple Maps estimates refreshed when HowMuch opens. Planned reminders can fire while the app is closed; live bus/MRT delay updates require opening the app again.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 Card {
                     Label(options.transit == true ? "iPhone public-transport reminders" : loaded ? (ready ? "Routing service ready" : "Routing service unavailable") : "Checking routing service…", systemImage: "map").font(.subheadline.weight(.semibold))
-                    Text(options.transit == true ? "Allow notifications, then open HowMuch regularly to refresh up to four upcoming journeys within 24 hours. Passed reminder times are skipped. Route availability depends on Apple Maps coverage." : "Checks run about every 5 minutes during the 6 hours before a job. Allow push notifications on this iPhone. Delivery and traffic estimates can change; always check your route before travelling.").font(.caption).foregroundStyle(Palette.muted)
+                    Text(options.transit == true ? "Allow notifications, then open HowMuch regularly to refresh up to four upcoming journeys within 24 hours. Passed reminder times are skipped. Route availability depends on Apple Maps coverage." : "Checks run about every 5 minutes during the 6 hours before a job. Allow push notifications on this iPhone. Delivery and traffic estimates can change; always check your route before travelling.").font(.footnote).foregroundStyle(Palette.muted)
                     Button("Enable iPhone notifications", systemImage: "bell.badge") { Task { await auth.enableNotifications() } }.rowAction()
                     #if DEBUG
                     if CommandLine.arguments.contains("--ui-test-transit-notification") {
@@ -216,21 +216,21 @@ struct TravelReminderSettingsView: View {
                         }.rowAction().accessibilityIdentifier("travel.testPlan")
                     }
                     #endif
-                    if !auth.pushMessage.isEmpty { Text(auth.pushMessage).font(.caption).foregroundStyle(Palette.muted) }
+                    if !auth.pushMessage.isEmpty { Text(auth.pushMessage).font(.footnote).foregroundStyle(Palette.muted) }
                 }
-                if options.transit == true { Text(transitPlanner.message).font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("travel.transitStatus") }
+                if options.transit == true { Text(transitPlanner.message).font(.footnote).foregroundStyle(Palette.muted).accessibilityIdentifier("travel.transitStatus") }
                 Button(busy ? "Saving…" : "Save travel preferences") {
                     originFocused = false
                     if options.enabled { consent = true } else { Task { await save() } }
                 }.glassAction().disabled(busy || (options.enabled && options.origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)).accessibilityIdentifier("travel.save")
                 if let shift = next {
                     Card {
-                        Label("NEXT JOURNEY", systemImage: "map").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
+                        Label("NEXT JOURNEY", systemImage: "map").font(.footnote.weight(.semibold)).foregroundStyle(Palette.teal)
                         Text(shift.event).font(.appHeadline)
                         Text(shift.location).font(.subheadline).foregroundStyle(Palette.muted)
                         if let estimate { TravelEstimateSummary(estimate: estimate) }
                         Button("Check saved route", systemImage: "arrow.clockwise") { originFocused = false; Task { await check(shift) } }.rowAction().disabled(busy || (!ready && options.transit != true) || !store.data.settings.travelEnabled).accessibilityIdentifier("travel.check")
-                        Text("Save first. Checking sends your saved departure and this destination to HowMuch and Apple Maps. Confirm the resolved places below before relying on a reminder.").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Save first. Checking sends your saved departure and this destination to HowMuch and Apple Maps. Confirm the resolved places below before relying on a reminder.").font(.footnote).foregroundStyle(Palette.muted)
                     }
                 } else { Text("Add a job with a location starting within 24 hours to preview its route.").font(.subheadline).foregroundStyle(Palette.muted) }
                 if !message.isEmpty { Text(message).font(.subheadline).foregroundStyle(Palette.muted).accessibilityIdentifier("travel.message") }
@@ -284,11 +284,11 @@ private struct TravelEstimateSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(estimate.leaveAt <= Date().timeIntervalSince1970 ? "Leave now" : "Leave at \(Date(timeIntervalSince1970: estimate.leaveAt).formatted(date: .omitted, time: .shortened))").font(.title3.bold()).foregroundStyle(Palette.teal)
-            if estimate.leaveAt <= Date().timeIntervalSince1970 { Text("Your planned departure time has passed. Check your route in Maps now.").font(.caption).foregroundStyle(Palette.muted) }
+            if estimate.leaveAt <= Date().timeIntervalSince1970 { Text("Your planned departure time has passed. Check your route in Maps now.").font(.footnote).foregroundStyle(Palette.muted) }
             Text("About \(Int(ceil(Double(estimate.durationSeconds) / 60))) min · arrive by \(Date(timeIntervalSince1970: estimate.arriveAt).formatted(date: .omitted, time: .shortened))").font(.subheadline)
-            if !estimate.originName.isEmpty { Text("From: " + estimate.originName).font(.caption) }
-            if !estimate.destinationName.isEmpty { Text("To: " + estimate.destinationName).font(.caption) }
-            Text("Checked \(Date(timeIntervalSince1970: estimate.checkedAt).formatted(date: .omitted, time: .shortened)). Estimates can change.").font(.caption).foregroundStyle(Palette.muted)
+            if !estimate.originName.isEmpty { Text("From: " + estimate.originName).font(.footnote) }
+            if !estimate.destinationName.isEmpty { Text("To: " + estimate.destinationName).font(.footnote) }
+            Text("Checked \(Date(timeIntervalSince1970: estimate.checkedAt).formatted(date: .omitted, time: .shortened)). Estimates can change.").font(.footnote).foregroundStyle(Palette.muted)
         }.accessibilityElement(children: .combine)
     }
 }
@@ -303,7 +303,7 @@ struct TravelDepartureView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Card {
-                    Label("YOUR NEXT JOURNEY", systemImage: "map").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
+                    Label("YOUR NEXT JOURNEY", systemImage: "map").font(.footnote.weight(.semibold)).foregroundStyle(Palette.teal)
                     Text(shift.event).font(.appTitle)
                     Text(shift.location).font(.appHeadline)
                     Text("Shift starts \(shift.startDate.formatted(date: .abbreviated, time: .shortened))").font(.subheadline).foregroundStyle(Palette.muted)
@@ -324,7 +324,7 @@ struct TravelDepartureView: View {
         }.detailStyle("Time to leave")
             .sheet(isPresented: $manualDirections) {
                 JobDirectionsView(location: shift.location)
-                    .safeAreaInset(edge: .bottom) { Text("On this iOS version, confirm your departure address and cycling mode in Apple Maps. Directions initially use your current location.").font(.caption).padding().background(.regularMaterial) }
+                    .safeAreaInset(edge: .bottom) { Text("On this iOS version, confirm your departure address and cycling mode in Apple Maps. Directions initially use your current location.").font(.footnote).padding().background(.regularMaterial) }
             }
     }
 }

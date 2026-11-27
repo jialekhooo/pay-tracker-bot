@@ -226,8 +226,8 @@ struct AppleWelcomeView: View {
                 Spacer(minLength: 20)
                 AppleAccountButton()
                 Text("Sign in to create your account or return to your records.")
-                    .font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                HStack { Link("Privacy", destination: AccountAPI.base.appending(path: "/privacy")); Spacer(); Text("HowMuch for iPhone").foregroundStyle(Palette.muted) }.font(.caption)
+                    .font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                HStack { Link("Privacy", destination: AccountAPI.base.appending(path: "/privacy")); Spacer(); Text("HowMuch for iPhone").foregroundStyle(Palette.muted) }.font(.footnote)
                }.padding(28).padding(.bottom, 12)
                 .frame(minHeight: geometry.size.height, alignment: .leading)
               }
@@ -249,9 +249,9 @@ struct AppleAccountButton: View {
             }).signInWithAppleButtonStyle(.black).frame(height: 52).clipShape(RoundedRectangle(cornerRadius: 14))
                 .disabled(auth.challenge == nil || auth.signingIn).accessibilityIdentifier(deleting ? "account.deleteApple" : "account.signInApple")
             if auth.challenge == nil && !auth.signingIn {
-                Button("Prepare Apple sign-in", systemImage: "arrow.clockwise") { Task { await auth.prepareChallenge() } }.font(.caption)
+                Button("Prepare Apple sign-in", systemImage: "arrow.clockwise") { Task { await auth.prepareChallenge() } }.font(.footnote)
             }
-            if auth.signingIn { ProgressView("Verifying with Apple…").font(.caption) }
+            if auth.signingIn { ProgressView("Verifying with Apple…").font(.footnote) }
         }
         .task {
             await auth.prepareChallenge()
@@ -276,12 +276,12 @@ struct AccountSettingsView: View {
                 Label("Signed in with Apple", systemImage: "apple.logo")
                 if let email = auth.account?.email { LabeledContent("Email", value: email) }
                 LabeledContent("Account", value: auth.account?.id ?? "")
-                Text("Each Apple sign-in owns a separate HowMuch account. Your account records sync through the independent iOS service.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Each Apple sign-in owns a separate HowMuch account. Your account records sync through the independent iOS service.").font(.footnote).foregroundStyle(Palette.muted)
             }
             Section(styled: "Sync") {
                 Text(store.syncMessage).font(.subheadline)
                 Button("Sync now", systemImage: "arrow.triangle.2.circlepath") { Task { await auth.synchronize() } }.rowAction().disabled(auth.isDemo)
-                Text("Offline edits stay in this account’s cache on your phone. Shared edits are kept for review instead of overwriting another device.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Offline edits stay in this account’s cache on your phone. Shared edits are kept for review instead of overwriting another device.").font(.footnote).foregroundStyle(Palette.muted)
             }
             Section {
                 Button("Sign out", role: .destructive) { signOut = true }.rowAction().accessibilityIdentifier("account.signOut")
@@ -335,7 +335,7 @@ struct AccountConflictView: View {
     private func version(_ title: String, _ data: TrackerData) -> some View {
         Card {
             Text(title).font(.appHeadline)
-            Text("\(counted(data.shifts.count, "shift")) · \(counted(data.claims.count, "claim"))").font(.caption).foregroundStyle(Palette.muted)
+            Text("\(counted(data.shifts.count, "shift")) · \(counted(data.claims.count, "claim"))").font(.footnote).foregroundStyle(Palette.muted)
             ForEach(Array(Set(data.shifts.map(\.currency))).sorted(), id: \.self) { currency in
                 Text(money(data.shifts.filter { $0.currency == currency }.reduce(0) { $0 + $1.total }, currency)).font(.subheadline.bold())
             }
@@ -471,7 +471,7 @@ private struct AppLockScreen: View {
                     Button("Unlock with \(lock.methodName)") { Task { await lock.unlock() } }
                         .primaryButton().padding(.horizontal, 40).accessibilityIdentifier("appLock.unlock")
                 }
-                if let message = lock.message { Text(message).font(.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).padding(.horizontal, 32) }
+                if let message = lock.message { Text(message).font(.footnote).foregroundStyle(Palette.muted).multilineTextAlignment(.center).padding(.horizontal, 32) }
             }
         }
     }
@@ -489,7 +489,7 @@ struct AppLockToggleRow: View {
                 }
             }.tint(Palette.accent).frame(minHeight: 48).accessibilityIdentifier("settings.appLock")
             Text(lock.message ?? "Ask for \(lock.methodName) each time HowMuch is opened. Only on this iPhone.")
-                .font(.caption).foregroundStyle(Palette.muted).padding(.leading, 44).padding(.bottom, 8)
+                .font(.footnote).foregroundStyle(Palette.muted).padding(.leading, 44).padding(.bottom, 8)
         }
     }
 }

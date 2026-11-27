@@ -54,9 +54,15 @@ struct EarningsView: View {
                 if store.data.currencies.count > 1 { PillPicker(values: store.data.currencies, selection: currencyChoice, onDark: false) }
                 EarningsHero(shifts: shifts, currency: currency, label: scope == "All time" ? "ALL-TIME EARNINGS" : "\(scope.uppercased()) EARNINGS", now: clock.date)
                 if scope == "All time" {
-                    PillPicker(values: ["Events", "Months"], selection: $grouping)
+                    // A two-way switch, then the event filters close under it, so the controls don't pile up as rows of pills.
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("Group by", selection: $grouping) { Text("Events").tag("Events"); Text("Months").tag("Months") }
+                            .pickerStyle(.segmented).controlSize(.large)
+                        if grouping == "Events" {
+                            PillPicker(values: ["All events", "Ongoing", "Upcoming", "Unpaid", "Paid out"], selection: $filter)
+                        }
+                    }
                     if grouping == "Events" {
-                        PillPicker(values: ["All events", "Ongoing", "Upcoming", "Unpaid", "Paid out"], selection: $filter)
                         if filter == "Upcoming" {
                             UpcomingGroupingControl()
                             HStack {
@@ -82,7 +88,7 @@ struct EarningsView: View {
                                         Image(systemName: "calendar").foregroundStyle(Palette.teal)
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(TrackerCalendar.localDate(month + "-01")?.formatted(.dateTime.month(.wide).year()) ?? month).font(.appHeadline)
-                                            Text("\(counted(records.count, "shift")) · \(PayEngine.rounded(records.reduce(0) { $0 + $1.hours }))h").font(.caption).foregroundStyle(Palette.muted)
+                                            Text("\(counted(records.count, "shift")) · \(PayEngine.rounded(records.reduce(0) { $0 + $1.hours }))h").font(.footnote).foregroundStyle(Palette.muted)
                                         }
                                         Spacer()
                                         Text(money(records.reduce(0) { $0 + $1.total }, currency)).font(.subheadline.bold())
@@ -111,6 +117,7 @@ struct EarningsView: View {
 
 struct EventCard: View {
     @EnvironmentObject private var store: TrackerStore
+    @Environment(\.dynamicTypeSize) private var typeSize
     let event: String
     let currency: String
     var showsDisclosure = false
@@ -121,25 +128,31 @@ struct EventCard: View {
         let cabs = claims.reduce(Decimal.zero) { $0 + $1.amount }
         let completed = shifts.allSatisfy { $0.endDate <= Date() }
         let paid = completed && shifts.allSatisfy(\.paid)
-        Card {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(event).font(.appHeadline).foregroundStyle(Palette.ink)
-                    Text("\(shifts.count) \(shifts.count == 1 ? "shift" : "shifts") · \(displayDay(shifts.map(\.day).max() ?? ""))").font(.caption).foregroundStyle(Palette.muted)
+        // Laid out like a shift card: name and pay, then when and where, then the status.
+        let stacked = typeSize.isAccessibilitySize
+        Card(spacing: 12) {
+            let amount = Text(money(earnings, currency)).font(.cardTitle).foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.6).accessibilityLabel("Work earnings \(money(earnings, currency))")
+            if stacked {
+                Text(event).font(.appHeadline).foregroundStyle(Palette.ink)
+                amount
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(event).font(.appHeadline).foregroundStyle(Palette.ink).lineLimit(2)
+                    Spacer(minLength: 4)
+                    amount.fixedSize()
                 }
-                Spacer(minLength: 0)
-                if showsDisclosure { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted).padding(.top, 3) }
             }
             let locations = Array(Set(shifts.map(\.location).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })).sorted()
-            Label(locations.count == 1 ? locations[0] : locations.isEmpty ? "No location added" : "\(locations.count) locations", systemImage: "mappin.and.ellipse")
-                .font(.caption).foregroundStyle(Palette.muted).lineLimit(2)
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Work earnings").font(.caption).foregroundStyle(Palette.muted)
-                    Text(money(earnings, currency)).font(.appTitle).foregroundStyle(Palette.ink).minimumScaleFactor(0.65).lineLimit(1)
-                }
-                Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 7) {
+                Label("\(shifts.count) \(shifts.count == 1 ? "shift" : "shifts") · \(displayDay(shifts.map(\.day).max() ?? ""))", systemImage: "calendar")
+                Label(locations.count == 1 ? locations[0] : locations.isEmpty ? "No location added" : "\(locations.count) locations", systemImage: "mappin.and.ellipse")
+                    .lineLimit(2)
+            }.font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            HStack {
                 StatusPill(title: paid ? "Paid" : completed ? "Awaiting payment" : shifts.allSatisfy { $0.startDate > Date() } ? "Upcoming" : "In progress", paid: paid)
+                Spacer(minLength: 4)
+                if showsDisclosure { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
             }
             if cabs > 0 {
                 Divider()
@@ -147,7 +160,7 @@ struct EventCard: View {
                     Label("+" + money(cabs, currency) + " claims", systemImage: "receipt").foregroundStyle(Palette.teal)
                     Spacer(minLength: 4)
                     Text("Est. credit " + money(earnings + cabs, currency)).foregroundStyle(Palette.muted)
-                }.font(.caption)
+                }.font(.footnote)
             }
         }
     }
@@ -180,7 +193,7 @@ struct EventDetailView: View {
                     if locations.count == 1 { Button("Map & directions", systemImage: "map") { directions = true }.glassAction() }
                     Button("Edit event details", systemImage: "pencil") { editingDetails = true }.glassAction().accessibilityIdentifier("event.editDetails")
                         .disabled(shifts.isEmpty)
-                    Text("Name and location are shared across all shifts in this event.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Name and location are shared across all shifts in this event.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 Card { EventPayerRow(event: activeEvent) }
                 if !shifts.isEmpty && shifts.allSatisfy({ $0.endDate <= Date() }) {
@@ -188,7 +201,7 @@ struct EventDetailView: View {
                         let paid = !shifts.allSatisfy(\.paid)
                         store.update { data in for index in data.shifts.indices where data.shifts[index].event.caseInsensitiveCompare(activeEvent) == .orderedSame && data.shifts[index].currency == currency { data.shifts[index].paid = paid } }
                     }.primaryButton()
-                    if store.canUndo { Button("Undo payment change", systemImage: "arrow.uturn.backward") { store.undo() }.font(.caption).rowAction() }
+                    if store.canUndo { Button("Undo payment change", systemImage: "arrow.uturn.backward") { store.undo() }.font(.footnote).rowAction() }
                 }
                 SectionHeading(title: "Shifts")
                 ShiftCards(shifts: shifts)
@@ -246,12 +259,12 @@ struct EventDetailsEditor: View {
                         TextField("Location (optional)", text: $location).font(.subheadline).frame(minHeight: 48)
                         Button("Find a place in Apple Maps", systemImage: "map") { findingLocation = true }.glassAction().accessibilityIdentifier("event.findLocation")
                         if locations.count > 1 {
-                            Text("These shifts currently have different locations. Enter a shared location to replace them all.").font(.caption).foregroundStyle(Palette.muted)
-                            ForEach(locations, id: \.self) { value in Text(value.isEmpty ? "No location" : value).font(.caption).foregroundStyle(Palette.muted) }
+                            Text("These shifts currently have different locations. Enter a shared location to replace them all.").font(.footnote).foregroundStyle(Palette.muted)
+                            ForEach(locations, id: \.self) { value in Text(value.isEmpty ? "No location" : value).font(.footnote).foregroundStyle(Palette.muted) }
                         }
                         Button("Clear location for all shifts", role: .destructive) { location = ""; clearLocation = true }.rowAction().font(.subheadline)
                     }
-                    Text("Saving updates the name and changed location for all \(shifts.count) shifts in this event, including other currencies. Dates, hours, rates, paid status and claims are kept.").font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+                    Text("Saving updates the name and changed location for all \(shifts.count) shifts in this event, including other currencies. Dates, hours, rates, paid status and claims are kept.").font(.footnote).foregroundStyle(Palette.muted).padding(.horizontal, 4)
                     if let error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red) }
                 }.padding(20)
             }.detailStyle("Edit event details").scrollDismissesKeyboard(.interactively)
@@ -280,16 +293,16 @@ struct EventMoneySummary: View {
     private var summary: EventFinancialSummary { EventFinancialSummary(data: store.data, event: event, currency: currency) }
     var body: some View {
         Card {
-            Label("EVENT SUMMARY", systemImage: "chart.bar.xaxis").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
+            Label("EVENT SUMMARY", systemImage: "chart.bar.xaxis").font(.footnote.weight(.semibold)).foregroundStyle(Palette.teal)
             Text(money(summary.netWorkPay, currency)).amountFont().foregroundStyle(Palette.ink).accessibilityIdentifier("event.netWork")
-            Text("Work earnings · including scheduled shifts").font(.caption).foregroundStyle(Palette.muted)
+            Text("Work earnings · including scheduled shifts").font(.footnote).foregroundStyle(Palette.muted)
             Divider()
             LabeledContent("Work pay", value: money(summary.workPay, currency))
             LabeledContent("Reimbursements", value: money(summary.reimbursements, currency))
             LabeledContent("Expected bank credit", value: money(summary.expectedCredit, currency))
             LabeledContent("Paid hours", value: "\(PayEngine.rounded(summary.paidHours))")
             if let hourly = summary.effectiveHourly { LabeledContent("Effective hourly rate", value: money(hourly, currency)).accessibilityIdentifier("event.effectiveHourly") }
-            Text("Cab, food and miscellaneous claims are reimbursements. They are added to your expected bank credit and do not reduce your work earnings.").font(.caption).foregroundStyle(Palette.muted)
+            Text("Cab, food and miscellaneous claims are reimbursements. They are added to your expected bank credit and do not reduce your work earnings.").font(.footnote).foregroundStyle(Palette.muted)
         }
     }
 }

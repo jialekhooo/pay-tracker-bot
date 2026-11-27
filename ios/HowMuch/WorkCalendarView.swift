@@ -22,8 +22,8 @@ struct WorkCalendarView: View {
             Card {
                 // The month and its buttons share a line while they fit; with large text the buttons go underneath.
                 let title = Text(month.formatted(.dateTime.month(.wide).year())).font(.system(.title3, design: .rounded, weight: .bold))
-                let buttons = HStack {
-                    Button { month = Date(); selected = Date() } label: { Text("Today").font(.caption.bold()).lineLimit(1).fixedSize().padding(.horizontal, 10).frame(minHeight: 44).background(Palette.mint, in: Capsule()).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.today")
+                let buttons = HStack(spacing: 0) {
+                    Button { month = Date(); selected = Date() } label: { Text("Today").font(.footnote.bold()).lineLimit(1).fixedSize().padding(.horizontal, 12).padding(.vertical, 6).background(Palette.mint, in: Capsule()).frame(minHeight: 44).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.today")
                     Button { move(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Previous month")
                     Button { move(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Next month")
                 }
@@ -31,8 +31,8 @@ struct WorkCalendarView: View {
                     HStack { title.lineLimit(1).fixedSize(); Spacer(); buttons }
                     VStack(alignment: .leading, spacing: 4) { title; buttons }
                 }
-                LazyVGrid(columns: columns, spacing: 7) {
-                    ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, label in Text(label).font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.bottom, 4) }
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, label in Text(label).font(.caption.weight(.semibold)).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.bottom, 4) }
                     ForEach(Array(TrackerCalendar.monthDays(month).enumerated()), id: \.offset) { _, date in
                         if let date {
                             let key = Shift.dayString(date)
@@ -54,15 +54,19 @@ struct WorkCalendarView: View {
                     }
                 }
                 Divider()
-                HStack(spacing: 6) { Circle().fill(Palette.teal).frame(width: 5, height: 5); Text("Booked shift"); Spacer(); Circle().fill(.orange).frame(width: 5, height: 5); Text("Overlapping") }.font(.caption2).foregroundStyle(Palette.muted)
+                HStack(spacing: 6) { Circle().fill(Palette.teal).frame(width: 5, height: 5); Text("Booked shift"); Spacer(); Circle().fill(.orange).frame(width: 5, height: 5); Text("Overlapping") }.font(.caption).foregroundStyle(Palette.muted)
             }
-            HStack {
-                Text("\(counted(monthShifts.count, "shift")) this month").font(.caption).foregroundStyle(Palette.muted)
-                Spacer()
-                // 44-point tall targets, though the labels are small.
-                Button { sharingAvailability = true } label: { Label("Share availability", systemImage: "person.badge.clock").font(.caption.bold()).frame(minHeight: 44).contentShape(Rectangle()) }
+            let count = Text("\(counted(monthShifts.count, "shift")) this month").font(.footnote).foregroundStyle(Palette.muted)
+            // 44-point tall targets, though the labels are small.
+            let actions = HStack(spacing: 14) {
+                Button { sharingAvailability = true } label: { Label("Share availability", systemImage: "person.badge.clock").font(.footnote.bold()).lineLimit(1).frame(minHeight: 44).contentShape(Rectangle()) }
                     .accessibilityIdentifier("calendar.availability")
-                NavigationLink { ProGate(feature: .calendar) { CalendarSettingsView() } } label: { Label("Export", systemImage: "square.and.arrow.up").font(.caption.bold()).frame(minHeight: 44).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.export")
+                NavigationLink { ProGate(feature: .calendar) { CalendarSettingsView() } } label: { Label("Export", systemImage: "square.and.arrow.up").font(.footnote.bold()).lineLimit(1).frame(minHeight: 44).contentShape(Rectangle()) }.accessibilityIdentifier("calendar.export")
+            }
+            // One line while it fits; on narrow iPhones or with large text the buttons go under the count.
+            ViewThatFits(in: .horizontal) {
+                HStack { count.lineLimit(1); Spacer(minLength: 8); actions }
+                VStack(alignment: .leading, spacing: 0) { count; actions }
             }
             SectionHeading(title: selected.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)), detail: counted(selectedShifts.count, "shift"))
             if selectedShifts.isEmpty { EmptyCard(title: "A day with possibilities", message: "No shifts booked for this date.") }
@@ -108,7 +112,7 @@ struct AvailabilitySheet: View {
                 Section {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
                         ForEach(["M", "T", "W", "T", "F", "S", "S"].indices, id: \.self) { index in
-                            Text(["M", "T", "W", "T", "F", "S", "S"][index]).font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted)
+                            Text(["M", "T", "W", "T", "F", "S", "S"][index]).font(.caption.weight(.semibold)).foregroundStyle(Palette.muted)
                         }
                         // Line day 1 up under its weekday (weeks start on Monday).
                         ForEach(0..<((TrackerCalendar.calendar.component(.weekday, from: from) + 5) % 7), id: \.self) { _ in Color.clear.frame(height: 36) }
@@ -137,7 +141,7 @@ struct AvailabilitySheet: View {
         return Button {
             if isBlocked { blocked.remove(key) } else { blocked.insert(key) }
         } label: {
-            Text("\(TrackerCalendar.calendar.component(.day, from: date))").font(.caption.weight(.semibold))
+            Text("\(TrackerCalendar.calendar.component(.day, from: date))").font(.footnote.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .foregroundStyle(isBlocked ? .white : Palette.ink)
                 .background(isBlocked ? Color.red.opacity(0.75) : state == .free ? Palette.mint.opacity(0.6) : Palette.teal.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))

@@ -17,7 +17,7 @@ struct SettingsView: View {
                         ProfileAvatar(size: 44)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(store.data.settings.displayName.isEmpty ? "Your profile" : store.data.settings.displayName).font(.appHeadline)
-                            Text(ProfileStats(shifts: store.data.shifts, currency: store.data.rules.currency).summary(store.data.rules.currency)).font(.caption).foregroundStyle(Palette.muted)
+                            Text(ProfileStats(shifts: store.data.shifts, currency: store.data.rules.currency).summary(store.data.rules.currency)).font(.footnote).foregroundStyle(Palette.muted)
                         }
                         Spacer(); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
                     }.foregroundStyle(Palette.ink)
@@ -60,7 +60,7 @@ struct SettingsView: View {
                 settingsRow("Data & backups", "square.and.arrow.down") { DataToolsView() }
             }
             Text("HowMuch \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
-                .font(.caption2).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.vertical, 8)
+                .font(.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.vertical, 8)
         }
     }
     /// A small titled group of rows.
@@ -129,7 +129,7 @@ struct ProfileSettingsView: View {
                                     .frame(width: 36, height: 36).background(Palette.accent, in: Circle()).overlay(Circle().stroke(Palette.surface, lineWidth: 3))
                             }.buttonStyle(.plain).disabled(loading).accessibilityLabel("Choose photo").accessibilityIdentifier("profile.choosePhoto")
                         }
-                    if loading { ProgressView("Preparing photo…").font(.caption) }
+                    if loading { ProgressView("Preparing photo…").font(.footnote) }
                     HStack(spacing: 6) {
                         // The field hugs the name itself, so the pencil sits right beside it.
                         Text(name.isEmpty ? "Your name" : name).font(.appTitle).lineLimit(1)
@@ -143,13 +143,13 @@ struct ProfileSettingsView: View {
                     }.foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
                     HStack(spacing: 8) {
                     if store.developer {
-                        Label("Developer", systemImage: "hammer.circle.fill").font(.caption.weight(.bold)).foregroundStyle(Color(red: 0.3, green: 1, blue: 0.55))
+                        Label("Developer", systemImage: "hammer.circle.fill").font(.footnote.weight(.bold)).foregroundStyle(Color(red: 0.3, green: 1, blue: 0.55))
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Color(red: 0.08, green: 0.11, blue: 0.11), in: Capsule())
                             .accessibilityLabel("Developer: builds HowMuch").accessibilityIdentifier("profile.developer")
                     }
                     if store.pioneer {
-                        Label("Pioneer", systemImage: "star.circle.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
+                        Label("Pioneer", systemImage: "star.circle.fill").font(.footnote.weight(.bold)).foregroundStyle(.white)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(LinearGradient(colors: [Color(red: 0.16, green: 0.62, blue: 0.5), Palette.accent], startPoint: .leading, endPoint: .trailing), in: Capsule())
                             .accessibilityLabel("Pioneer: tested HowMuch in the TestFlight beta").accessibilityIdentifier("profile.pioneer")
@@ -157,7 +157,7 @@ struct ProfileSettingsView: View {
                     }
                     Text(stats.since.map { "Tracking pay since \($0)" } ?? "Add your first shift to start your story").font(.subheadline).foregroundStyle(Palette.muted)
                     if store.data.settings.avatar != nil {
-                        Button("Remove photo", role: .destructive) { notice = .remove }.font(.caption.weight(.semibold)).buttonStyle(.borderless).disabled(loading).accessibilityIdentifier("profile.removePhoto")
+                        Button("Remove photo", role: .destructive) { notice = .remove }.font(.footnote.weight(.semibold)).buttonStyle(.borderless).disabled(loading).accessibilityIdentifier("profile.removePhoto")
                     }
                     #if DEBUG
                     if CommandLine.arguments.contains("--ui-test-profile-photo") {
@@ -167,7 +167,7 @@ struct ProfileSettingsView: View {
                                 prepare(data)
                             }.accessibilityIdentifier("profile.samplePhoto")
                             Button("Use unreadable photo") { prepare(Data("not a photo".utf8)) }.accessibilityIdentifier("profile.invalidPhoto")
-                        }.font(.caption).buttonStyle(.borderless)
+                        }.font(.footnote).buttonStyle(.borderless)
                     }
                     #endif
                 }.frame(maxWidth: .infinity).padding(.top, 8)
@@ -195,7 +195,7 @@ struct ProfileSettingsView: View {
                         PetStage(pet: pet, outfit: petOutfit(store.petCloset, pet), name: petName, size: 52, corner: 14).allowsHitTesting(false)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("\(petName) · Level \(pet.level)").font(.system(.subheadline, design: .rounded, weight: .semibold))
-                            Text("\(pet.achievements.filter(\.earned).count) of \(pet.achievements.count) badges earned").font(.caption).foregroundStyle(Palette.muted)
+                            Text("\(pet.achievements.filter(\.earned).count) of \(pet.achievements.count) badges earned").font(.footnote).foregroundStyle(Palette.muted)
                         }
                         Spacer()
                         Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
@@ -243,7 +243,7 @@ struct ProfileSettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Image(systemName: icon).scaledFont(14, relativeTo: .subheadline, weight: .semibold).foregroundStyle(Palette.teal)
             Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-            Text(label).font(.caption).foregroundStyle(Palette.muted)
+            Text(label).font(.footnote).foregroundStyle(Palette.muted)
         }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
             .accessibilityElement(children: .combine)
@@ -366,18 +366,18 @@ struct DataToolsView: View {
                 NavigationLink { ProGate(feature: .calendar) { CalendarSettingsView() } } label: {
                     HStack { Text("Export calendar (.ics)"); if !pro.hasPro { Spacer(); ProBadge() } }
                 }
-                Text(TelegramBot.available ? "Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules." : "Imports a CSV exported from HowMuch or the Telegram bot. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.caption).foregroundStyle(Palette.muted)
+                Text(TelegramBot.available ? "Use /export in the bot for all shifts. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules." : "Imports a CSV exported from HowMuch or the Telegram bot. Exact repeated rows are skipped. Imported pay stays fixed because the CSV does not contain original rate or overtime rules.").font(.footnote).foregroundStyle(Palette.muted)
             }
             if store.hasLegacyImport {
                 Section(styled: "Earlier iPhone records") {
                     Button("Import earlier iPhone records") { legacyImport = true }.rowAction()
-                    Text("Move the unassigned records from the earlier version of HowMuch into this Apple account. This does not connect to Telegram or alter its data.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Move the unassigned records from the earlier version of HowMuch into this Apple account. This does not connect to Telegram or alter its data.").font(.footnote).foregroundStyle(Palette.muted)
                 }
             }
             Section(styled: "Full backups") {
                 Button("Export full archive", systemImage: "externaldrive") { run { try await exportBackup() } }.rowAction()
                 Button("Restore full archive", systemImage: "arrow.counterclockwise") { archiveImport = true; importing = true }.rowAction()
-                Text("ZIP backups include shifts, claims, receipt photos, profile and preferences. Keep the ZIP private: it contains your work and receipt details. Earlier JSON archives can still be restored, but contain no receipt photos. Account credentials are never included.").font(.caption).foregroundStyle(Palette.muted)
+                Text("ZIP backups include shifts, claims, receipt photos, profile and preferences. Keep the ZIP private: it contains your work and receipt details. Earlier JSON archives can still be restored, but contain no receipt photos. Account credentials are never included.").font(.footnote).foregroundStyle(Palette.muted)
             }
             if store.canUndo { Section { Button("Undo last change", systemImage: "arrow.uturn.backward") { store.undo() }.rowAction() } }
         }.disabled(working).detailStyle("Data & backups")
@@ -528,12 +528,12 @@ struct PayersSettingsView: View {
     private var payers: [SavedPayer] { (store.data.settings.savedPayers ?? []).filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.bankNames.contains { $0.localizedCaseInsensitiveContains(search) } }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending } }
     var body: some View {
         List {
-            Section { Text("Save each company once, then choose who pays for an event. Bank names must match the payer shown in your DBS alert; you can save multiple names for one company.").font(.caption).foregroundStyle(Palette.muted) }
+            Section { Text("Save each company once, then choose who pays for an event. Bank names must match the payer shown in your DBS alert; you can save multiple names for one company.").font(.footnote).foregroundStyle(Palette.muted) }
             Section {
                 Button("Add payer", systemImage: "plus") { adding = true }.rowAction().accessibilityIdentifier("payers.add")
                 ForEach(payers) { payer in
                     Button { editing = payer } label: {
-                        VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.appHeadline); Text(payer.bankNames.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted) }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.appHeadline); Text(payer.bankNames.joined(separator: " · ")).font(.footnote).foregroundStyle(Palette.muted) }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("payers.item.\(payer.id)")
                         .swipeActions { Button("Remove", role: .destructive) { deleting = payer } }
                 }
@@ -564,7 +564,7 @@ struct SavedPayerEditor: View {
                 Section(styled: "Company") { TextField("Company display name", text: $name).accessibilityIdentifier("payers.name") }
                 Section(styled: "Bank-transfer payer names") {
                     TextField("Exact payer name · one per line", text: $bankNames, axis: .vertical).lineLimit(3...8).textInputAutocapitalization(.characters).autocorrectionDisabled().accessibilityIdentifier("payers.bankNames")
-                    Text("Enter each exact name shown after ‘From’ in your DBS alert, one per line. These names are used for matching; the company display name is for you.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Enter each exact name shown after ‘From’ in your DBS alert, one per line. These names are used for matching; the company display name is for you.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 if !error.isEmpty { Section { Text(error).foregroundStyle(.red) } }
             }.scrollDismissesKeyboard(.interactively).navigationTitle(existing == nil ? "Add payer" : "Edit payer")
@@ -595,7 +595,7 @@ struct PayerPickerView: View {
                 Button("Choose payer later") { onSelect(nil); dismiss() }.rowAction()
                 ForEach(payers) { payer in
                     Button { onSelect(payer.id); dismiss() } label: {
-                        HStack { VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.appHeadline); Text(payer.bankNames.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted) }; Spacer(); if selected == payer.id { Image(systemName: "checkmark").foregroundStyle(Palette.teal) } }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        HStack { VStack(alignment: .leading, spacing: 5) { Text(payer.displayName).font(.appHeadline); Text(payer.bankNames.joined(separator: " · ")).font(.footnote).foregroundStyle(Palette.muted) }; Spacer(); if selected == payer.id { Image(systemName: "checkmark").foregroundStyle(Palette.teal) } }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("payer.select.\(payer.name)")
                 }
                 Button("Add new payer", systemImage: "plus") { adding = true }.rowAction().accessibilityIdentifier("payer.addNew")
@@ -612,11 +612,11 @@ struct EventPayerRow: View {
     @State private var selecting = false
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Paid by").font(.caption).foregroundStyle(Palette.muted)
+            Text("Paid by").font(.footnote).foregroundStyle(Palette.muted)
             Button { selecting = true } label: {
-                HStack { Text(store.data.settings.payer(for: event)?.displayName ?? "Choose payer"); Spacer(); Image(systemName: "chevron.down").font(.caption) }.frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
+                HStack { Text(store.data.settings.payer(for: event)?.displayName ?? "Choose payer"); Spacer(); Image(systemName: "chevron.down").font(.footnote) }.frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
             }.buttonStyle(.plain).foregroundStyle(Palette.teal).accessibilityIdentifier("event.payer")
-            Text("Shared by every shift in this event. Manage company bank names in Settings → Payers.").font(.caption2).foregroundStyle(Palette.muted)
+            Text("Shared by every shift in this event. Manage company bank names in Settings → Payers.").font(.caption).foregroundStyle(Palette.muted)
         }.sheet(isPresented: $selecting) { PayerPickerView(selected: store.data.settings.payer(for: event)?.id) { id in store.updatePreferences { $0.assignPayer(id, to: event) } } }
     }
 }
@@ -692,9 +692,9 @@ struct TelegramSettingsView: View {
                     Button(busy ? "Opening Telegram…" : "Link Telegram", systemImage: "link") { Task { await link() } }
                         .primaryButton().disabled(busy || status == nil)
                         .listRowBackground(Color.clear).listRowInsets(EdgeInsets()).accessibilityIdentifier("telegram.link")
-                    Text("Opens \(TelegramBot.handle) in Telegram. Tap Start there to finish linking.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Opens \(TelegramBot.handle) in Telegram. Tap Start there to finish linking.").font(.footnote).foregroundStyle(Palette.muted)
                 }
-                if !message.isEmpty { Text(message).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("telegram.message") }
+                if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(.orange).accessibilityIdentifier("telegram.message") }
             } header: { FormHeader("Telegram") }
 
             Section(styled: "What you can do in Telegram") {
@@ -709,7 +709,7 @@ struct TelegramSettingsView: View {
                 guideRow("2.circle", "Tap Start in Telegram", "The bot confirms it's linked to your HowMuch account.")
                 guideRow("3.circle", "Send your shifts", "They show up here, on every device you're signed in to.")
                 Text("The link only lets the bot add shifts and read what's owed and upcoming. It can't see your bank emails or change anything else. Each link code works once and expires after 15 minutes.")
-                    .font(.caption).foregroundStyle(Palette.muted)
+                    .font(.footnote).foregroundStyle(Palette.muted)
             }
             Section(styled: "Used the bot before linking?") {
                 Text("Shifts you logged in the bot before linking stay in the bot. To bring them over, send /export to the bot, save the CSV, then use Settings → Data & backups → Import Telegram CSV.")
@@ -735,7 +735,7 @@ struct TelegramSettingsView: View {
             Image(systemName: icon).frame(width: 26).foregroundStyle(Palette.teal)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(detail).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                Text(detail).font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
         }.padding(.vertical, 2).accessibilityElement(children: .combine)
     }
@@ -768,7 +768,7 @@ struct AppearancePicker: View {
             Picker("Appearance", selection: $appearance) {
                 ForEach(AppAppearance.allCases) { Text($0.title).tag($0.rawValue) }
             }.pickerStyle(.segmented).accessibilityIdentifier("settings.appearance")
-            Text(caption).font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("settings.appearanceCaption")
+            Text(caption).font(.footnote).foregroundStyle(Palette.muted).accessibilityIdentifier("settings.appearanceCaption")
         }.padding(.vertical, 10)
     }
     /// Describes the option that's chosen.

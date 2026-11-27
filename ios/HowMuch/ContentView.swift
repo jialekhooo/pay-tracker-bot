@@ -247,7 +247,7 @@ struct EarningsHero: View {
                 .minimumScaleFactor(0.5).lineLimit(1).foregroundStyle(Palette.ink)
                 // With nothing booked, the headline is the total.
                 .accessibilityIdentifier(split.booked > 0 ? "earnings.earned" : "earnings.total")
-            Text(workedLine(split)).font(.caption).foregroundStyle(Palette.muted)
+            Text(workedLine(split)).font(.footnote).foregroundStyle(Palette.muted)
             Divider().overlay(Palette.line)
             // Side by side while they fit at full size; with larger text, one per row rather than cutting amounts off.
             ViewThatFits(in: .horizontal) {
@@ -265,7 +265,7 @@ struct EarningsHero: View {
                 }
             }
             if split.booked > 0 {
-                Text("\(money(split.total, currency)) including booked shifts").font(.caption2).foregroundStyle(Palette.muted)
+                Text("\(money(split.total, currency)) including booked shifts").font(.caption).foregroundStyle(Palette.muted)
                     .accessibilityIdentifier("earnings.total")
             }
         }
@@ -278,7 +278,7 @@ struct EarningsHero: View {
     private func owedColor(_ split: EarningsBreakdown) -> Color { split.owed > 0 ? Palette.warning : Palette.ink }
     private func figure(_ title: String, _ value: Decimal, color: Color, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 5) {
-            Text(title).font(.caption2).foregroundStyle(Palette.muted).fixedSize()
+            Text(title).font(.caption).foregroundStyle(Palette.muted).fixedSize()
             Text(money(value, currency)).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(color)
                 .fixedSize()
         }.accessibilityElement(children: .combine).accessibilityIdentifier("earnings." + title.lowercased().replacingOccurrences(of: " ", with: "-"))
@@ -291,9 +291,9 @@ struct GlanceCard: View {
     let symbol: String
     var body: some View {
         Card {
-            HStack { Image(systemName: symbol).font(.caption).foregroundStyle(Palette.teal); Spacer(); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
+            HStack { Image(systemName: symbol).font(.footnote).foregroundStyle(Palette.teal); Spacer(); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
             Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-            Text(title).font(.caption).foregroundStyle(Palette.muted)
+            Text(title).font(.footnote).foregroundStyle(Palette.muted)
         }
     }
 }
@@ -314,7 +314,7 @@ struct ShiftsView: View {
             VStack(spacing: 16) {
                 PillPicker(values: ["All", "Upcoming", "Unpaid"], selection: $filter)
                 UpcomingGroupingControl()
-                HStack { Text(counted(shifts.count, "shift")).font(.caption).foregroundStyle(Palette.muted); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.caption) }
+                HStack { Text(counted(shifts.count, "shift")).font(.footnote).foregroundStyle(Palette.muted); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.footnote) }
                 if shifts.isEmpty { EmptyCard(title: "No shifts here", message: "Try another search or add a new shift.") }
                 else if filter == "Upcoming" { UpcomingWorkList(shifts: shifts, ascending: ascending) }
                 else if store.data.settings.groupUpcomingByEvent ?? false { groupedCards }
@@ -341,9 +341,9 @@ struct ShiftsView: View {
                             Text(money(items.reduce(Decimal.zero) { $0 + $1.total }, first.currency)).font(.appHeadline)
                         }.foregroundStyle(Palette.ink)
                         HStack {
-                            Text("\(items.count) \(items.count == 1 ? "shift" : "shifts")").font(.caption)
+                            Text("\(items.count) \(items.count == 1 ? "shift" : "shifts")").font(.footnote)
                             Spacer()
-                            Text(displayDay(first.day)).font(.caption)
+                            Text(displayDay(first.day)).font(.footnote)
                             Image(systemName: "chevron.right").font(.chevron)
                         }.foregroundStyle(Palette.muted)
                     }.contentShape(Rectangle())
@@ -377,7 +377,7 @@ struct ShiftBrowser: View {
                     PillPicker(values: ["Tomorrow", "7 days", "14 days", "30 days", "All time"], selection: $range)
                     UpcomingGroupingControl()
                 }
-                HStack { Text(counted(shifts.count, "shift")).font(.caption); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.caption) }
+                HStack { Text(counted(shifts.count, "shift")).font(.footnote); Spacer(); Button(ascending ? "Earliest first" : "Latest first", systemImage: "arrow.up.arrow.down") { ascending.toggle() }.font(.footnote) }
                 if mode == "Upcoming shifts" { UpcomingWorkList(shifts: shifts, ascending: ascending) }
                 else if shifts.isEmpty { EmptyCard() } else { ShiftCards(shifts: shifts) }
             }.padding(20)
@@ -392,7 +392,7 @@ struct UpcomingGroupingControl: View {
             Toggle("Group by events", isOn: Binding(get: { store.data.settings.groupUpcomingByEvent ?? false }, set: { value in
                 store.updatePreferences { $0.groupUpcomingByEvent = value }
             })).font(.subheadline.weight(.semibold)).frame(minHeight: 44).accessibilityIdentifier("upcoming.groupEvents")
-            Text("See one card per event, or switch off to browse individual shifts.").font(.caption).foregroundStyle(Palette.muted)
+            Text("See one card per event, or switch off to browse individual shifts.").font(.footnote).foregroundStyle(Palette.muted)
         }
     }
 }
@@ -426,18 +426,18 @@ struct UpcomingEventCard: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(group.event).font(.appHeadline).foregroundStyle(Palette.ink)
-                    Text("\(group.shifts.count) upcoming \(group.shifts.count == 1 ? "shift" : "shifts")").font(.caption).foregroundStyle(Palette.muted)
+                    Text("\(group.shifts.count) upcoming \(group.shifts.count == 1 ? "shift" : "shifts")").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 Spacer(minLength: 0)
                 if navigates { Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
             }
-            Label(next.whenLabel, systemImage: "calendar").font(.caption).foregroundStyle(Palette.muted)
+            Label(next.whenLabel, systemImage: "calendar").font(.footnote).foregroundStyle(Palette.muted)
             if !locations.isEmpty {
-                Label(locations.count == 1 ? locations[0] : "\(locations.count) locations", systemImage: "mappin.and.ellipse").font(.caption).foregroundStyle(Palette.muted).lineLimit(2)
+                Label(locations.count == 1 ? locations[0] : "\(locations.count) locations", systemImage: "mappin.and.ellipse").font(.footnote).foregroundStyle(Palette.muted).lineLimit(2)
             }
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Scheduled work pay").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Scheduled work pay").font(.footnote).foregroundStyle(Palette.muted)
                     Text(money(group.scheduledPay, group.currency)).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
                 }
                 Spacer()
@@ -460,7 +460,7 @@ struct UpcomingEventDetail: View {
             VStack(alignment: .leading, spacing: 18) {
                 if let summary = UpcomingEvents.groups(shifts, now: Date()).first {
                     UpcomingEventCard(group: summary)
-                    Text("Upcoming shifts in the selected date range. Completed work and claims are excluded from scheduled work pay.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Upcoming shifts in the selected date range. Completed work and claims are excluded from scheduled work pay.").font(.footnote).foregroundStyle(Palette.muted)
                     ShiftCards(shifts: shifts)
                     NavigationLink { EventDetailView(event: event, currency: group.currency) } label: {
                         Label("View all event earnings", systemImage: "chart.bar.xaxis").frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())

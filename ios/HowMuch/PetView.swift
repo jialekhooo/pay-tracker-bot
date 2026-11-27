@@ -667,7 +667,7 @@ struct PetStage: View {
                 .offset(y: (hop ? -size * 0.12 : size * 0.06) - (wide ? size * 0.16 : 0))
             ForEach(Array(hearts.enumerated()), id: \.element) { index, _ in FloatingHeart(offset: CGFloat(index % 3 - 1) * size * 0.25, size: size) }
             if let line {
-                Text(line).scaledFont(max(11, size * 0.09), relativeTo: .caption, weight: .semibold, design: .rounded, limit: 1.5).foregroundStyle(PetPalette.outline)
+                Text(line).scaledFont(max(11, size * 0.09), relativeTo: .footnote, weight: .semibold, design: .rounded, limit: 1.5).foregroundStyle(PetPalette.outline)
                     .padding(.horizontal, 10).padding(.vertical, 6).background(.white.opacity(0.92), in: Capsule())
                     .frame(maxHeight: .infinity, alignment: .top).padding(.top, 8)
                     .transition(.scale.combined(with: .opacity))
@@ -767,7 +767,7 @@ struct PetCard: View {
                     PetSprite(stage: pet.stage, mood: pet.mood, outfit: petOutfit(closet, pet).filter { $0.key != .background })
                         .frame(width: 150, height: 150).frame(maxWidth: .infinity).padding(.top, 10)
                     if pet.streakWeeks > 0 {
-                        Label("\(pet.streakWeeks) wk", systemImage: "flame.fill").font(.caption.weight(.bold)).foregroundStyle(.orange)
+                        Label("\(pet.streakWeeks) wk", systemImage: "flame.fill").font(.footnote.weight(.bold)).foregroundStyle(.orange)
                             .padding(.horizontal, 10).padding(.vertical, 6).background(.white.opacity(0.88), in: Capsule()).padding(12)
                             .accessibilityLabel("\(pet.streakWeeks)-week streak")
                     }
@@ -783,7 +783,7 @@ struct PetCard: View {
                     let titles = VStack(alignment: .leading, spacing: 2) {
                         Text(name).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink)
                         Text(pet.stage == .egg ? "Work shifts to hatch me" : "\(pet.stage.title) · Lv \(pet.level) · \(pet.mood.label)")
-                            .font(.caption).foregroundStyle(Palette.muted)
+                            .font(.footnote).foregroundStyle(Palette.muted)
                     }
                     let coins = HStack { CoinLabel(amount: balance); Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted) }
                     if typeSize.isAccessibilitySize {
@@ -792,9 +792,9 @@ struct PetCard: View {
                         HStack { titles; Spacer(); coins }
                     }
                     ProgressView(value: pet.progress).tint(PetPalette.leaf)
-                    if let line = nextStageLine(pet) { Text(line).font(.caption2).foregroundStyle(Palette.muted) }
+                    if let line = nextStageLine(pet) { Text(line).font(.caption).foregroundStyle(Palette.muted) }
                     if pet.mood == .worried || pet.mood == .hungry || pet.mood == .sad {
-                        Text(pet.message(name: name, currency: store.data.rules.currency)).font(.caption).foregroundStyle(Palette.muted)
+                        Text(pet.message(name: name, currency: store.data.rules.currency)).font(.footnote).foregroundStyle(Palette.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -900,7 +900,7 @@ struct PetDetailView: View {
                             .background(Palette.accent, in: RoundedRectangle(cornerRadius: 11))
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Friends").font(.appHeadline).foregroundStyle(Palette.ink)
-                            Text("Say hi and send \(displayName) to visit. You both earn coins.").font(.caption).foregroundStyle(Palette.muted)
+                            Text("Say hi and send \(displayName) to visit. You both earn coins.").font(.footnote).foregroundStyle(Palette.muted)
                         }
                         Spacer()
                         Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
@@ -1031,7 +1031,7 @@ struct PetDetailView: View {
                 Text("\(pet.xp) XP").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
             }
             ProgressView(value: pet.progress).tint(PetPalette.leaf)
-            if let line = nextStageLine(pet) { Text(line).font(.caption).foregroundStyle(Palette.muted) }
+            if let line = nextStageLine(pet) { Text(line).font(.footnote).foregroundStyle(Palette.muted) }
             let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
             layout {
                 tile("Streak", "\(pet.streakWeeks) wk", "flame.fill", .orange)
@@ -1045,7 +1045,7 @@ struct PetDetailView: View {
         VStack(spacing: 4) {
             Image(systemName: symbol).font(.callout).foregroundStyle(tint)
             Text(value).font(.system(.headline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).lineLimit(1)
-            Text(title).font(.caption2).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            Text(title).font(.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 10)
         .background(Palette.mint.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
@@ -1063,10 +1063,10 @@ struct PetDetailView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(mission.title).font(.subheadline).strikethrough(mission.done, color: Palette.muted)
                                 .foregroundStyle(mission.done ? Palette.muted : Palette.ink)
-                            if let detail = mission.detail { Text(detail).font(.caption).foregroundStyle(Palette.muted) }
+                            if let detail = mission.detail { Text(detail).font(.footnote).foregroundStyle(Palette.muted) }
                         }
                         Spacer()
-                        CoinLabel(amount: mission.reward, font: .caption.weight(.bold))
+                        CoinLabel(amount: mission.reward, font: .footnote.weight(.bold))
                     }
                     .accessibilityElement(children: .combine)
                 }
@@ -1079,7 +1079,7 @@ struct PetDetailView: View {
             SectionHeading(title: "Shop & wardrobe", detail: "Tap to try on or wear")
             if pet.stage == .egg {
                 Label("Starter items are for sale now. The rest of the shop opens when \(displayName) hatches.", systemImage: "sparkles")
-                    .font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("pet.shop.starter")
+                    .font(.footnote).foregroundStyle(Palette.muted).accessibilityIdentifier("pet.shop.starter")
             }
             Button { showingStore = true } label: {
                 HStack(spacing: 12) {
@@ -1087,7 +1087,7 @@ struct PetDetailView: View {
                         .background(PetPalette.gold, in: RoundedRectangle(cornerRadius: 11))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Item packs and coins").font(.appHeadline).foregroundStyle(Palette.ink)
-                        Text("Special outfits for \(displayName), and coins to spend in the shop.").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Special outfits for \(displayName), and coins to spend in the shop.").font(.footnote).foregroundStyle(Palette.muted)
                     }
                     Spacer()
                     Image(systemName: "chevron.right").font(.chevron).foregroundStyle(Palette.muted)
@@ -1117,15 +1117,15 @@ struct PetDetailView: View {
                     if locked { Image(systemName: "lock.fill").font(.title2).foregroundStyle(Palette.muted) }
                 }
                 .frame(height: 96).clipShape(RoundedRectangle(cornerRadius: 14))
-                Text(item.name).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(item.name).font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
                 Group {
                     if wearing { Label("Wearing", systemImage: "checkmark").foregroundStyle(PetPalette.leaf) }
                     else if owned { Text("Owned · tap to wear").foregroundStyle(Palette.muted) }
                     else if locked { Text("Unlocks at \(item.stage.title)").foregroundStyle(Palette.muted) }
-                    else if let price = item.price { CoinLabel(amount: price, font: .caption.weight(.bold)) }
+                    else if let price = item.price { CoinLabel(amount: price, font: .footnote.weight(.bold)) }
                     else if let pack = item.pack { Label(pack.name, systemImage: "bag").foregroundStyle(Palette.teal) }
                     else { Label(item.requirement, systemImage: "rosette").foregroundStyle(Palette.muted) }
-                }.font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                }.font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
             }
             .padding(10).frame(maxWidth: .infinity)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
@@ -1159,9 +1159,9 @@ struct PetDetailView: View {
                 .foregroundStyle(achievement.earned ? .white : Palette.muted)
                 .frame(width: 38, height: 38).background(achievement.earned ? Palette.accent : Palette.mint, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
-                Text(achievement.title).font(.caption.weight(.bold)).foregroundStyle(Palette.ink)
+                Text(achievement.title).font(.footnote.weight(.bold)).foregroundStyle(Palette.ink)
                 if !achievement.earned { ProgressView(value: achievement.progress).tint(Palette.teal) }
-                Text(achievement.detail).font(.caption2).foregroundStyle(Palette.muted).lineLimit(2)
+                Text(achievement.detail).font(.caption).foregroundStyle(Palette.muted).lineLimit(2)
             }
             Spacer(minLength: 0)
         }
@@ -1276,7 +1276,7 @@ struct PetTryOnView<Actions: View>: View {
                     Text(detail).font(.subheadline).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 }
                 if let stageNote, !showingNow {
-                    Text(stageNote).font(.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    Text(stageNote).font(.footnote).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 }
                 actions()
             }
@@ -1341,7 +1341,7 @@ private struct PetItemOffer: View {
     }
 
     private func note(_ text: String) -> some View {
-        Text(text).font(.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        Text(text).font(.footnote).foregroundStyle(Palette.muted).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -1364,7 +1364,7 @@ struct PetCodesView: View {
             Section {
                 HStack(spacing: 6) { ForEach([50, 100, 200, 500, 1000], id: \.self) { coinChip($0) } }.padding(.vertical, 4)
                 Text("Pick an amount of coins, up to 12 items, or both. Items marked ✦ are specials that only a code can unlock.")
-                    .font(.caption).foregroundStyle(Palette.muted)
+                    .font(.footnote).foregroundStyle(Palette.muted)
             } header: { FormHeader("What the code gives · \(coins > 0 ? "\(coins) coins, " : "")\(counted(selected.count, "item"))") }
             ForEach(PetSlot.allCases, id: \.self) { slot in
                 Section(slot.title) {
@@ -1381,29 +1381,29 @@ struct PetCodesView: View {
                     .accessibilityIdentifier("code.custom")
                 Button(busy ? "Making…" : "Make code") { Task { await make() } }.primaryButton().disabled(busy || (selected.isEmpty && coins == 0))
                     .listRowBackground(Color.clear).listRowInsets(EdgeInsets()).accessibilityIdentifier("code.make")
-                if !message.isEmpty { Text(message).font(.caption).foregroundStyle(.orange) }
+                if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(.orange) }
             }
             if let made {
                 Section(styled: "New code") {
                     Text(made.code).font(.system(.title2, design: .monospaced, weight: .bold)).textSelection(.enabled).accessibilityIdentifier("code.new")
-                    Text(made.rewards).font(.caption).foregroundStyle(Palette.muted)
+                    Text(made.rewards).font(.footnote).foregroundStyle(Palette.muted)
                     Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = made.code }.rowAction()
                     ShareLink(item: made.shareText) { Label("Share code", systemImage: "square.and.arrow.up") }
                 }
             }
             Section(styled: "Your codes") {
-                if codes.isEmpty { Text("No codes yet.").font(.caption).foregroundStyle(Palette.muted) }
+                if codes.isEmpty { Text("No codes yet.").font(.footnote).foregroundStyle(Palette.muted) }
                 ForEach(codes) { code in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             // No text selection here: its press-and-drag gesture swallows the swipe that revokes a code.
                             Text(code.code).font(.system(.subheadline, design: .monospaced, weight: .semibold))
                             Spacer()
-                            Text(code.disabled ? "Revoked" : "\(code.uses)/\(code.maxUses) used").font(.caption.weight(.semibold))
+                            Text(code.disabled ? "Revoked" : "\(code.uses)/\(code.maxUses) used").font(.footnote.weight(.semibold))
                                 .foregroundStyle(code.disabled ? Palette.muted : Palette.teal).accessibilityIdentifier("code.status." + code.code)
                         }
-                        Text([code.label, code.rewards].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(Palette.muted)
-                        if code.expires > 0 { Text("Expires " + Date(timeIntervalSince1970: TimeInterval(code.expires)).formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(Palette.muted) }
+                        Text([code.label, code.rewards].filter { !$0.isEmpty }.joined(separator: " · ")).font(.footnote).foregroundStyle(Palette.muted)
+                        if code.expires > 0 { Text("Expires " + Date(timeIntervalSince1970: TimeInterval(code.expires)).formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(Palette.muted) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     .accessibilityElement(children: .contain).accessibilityIdentifier("code.row." + code.code)
@@ -1443,7 +1443,7 @@ struct PetCodesView: View {
             HStack(spacing: 6) {
                 Image(systemName: chosen ? "checkmark.circle.fill" : "circle").font(.footnote)
                 Text(item.name).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
-                if item.unlock == .code || item.pack != nil { Image(systemName: "sparkles").font(.caption2).foregroundStyle(PetPalette.goldDark) }
+                if item.unlock == .code || item.pack != nil { Image(systemName: "sparkles").font(.caption).foregroundStyle(PetPalette.goldDark) }
                 Spacer(minLength: 0)
             }
             .foregroundStyle(chosen ? Color.white : Palette.ink)
@@ -1680,12 +1680,12 @@ private struct FriendBoardRow: View {
             FriendPennyThumb(card: entry.card, size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.isYou ? "\(entry.card.petName) (you)" : entry.card.petName).font(.subheadline.weight(.semibold))
-                Text(entry.isYou ? "Lv \(entry.card.level)" : "\(entry.card.owner)'s pet · Lv \(entry.card.level)").font(.caption).foregroundStyle(Palette.muted)
+                Text(entry.isYou ? "Lv \(entry.card.level)" : "\(entry.card.owner)'s pet · Lv \(entry.card.level)").font(.footnote).foregroundStyle(Palette.muted)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 0) {
                 Text("\(entry.card.streakWeeks) wk").font(.subheadline.weight(.bold)).foregroundStyle(entry.card.streakWeeks > 0 ? .orange : Palette.muted)
-                Text("streak").font(.caption2).foregroundStyle(Palette.muted)
+                Text("streak").font(.caption).foregroundStyle(Palette.muted)
             }
         }
         .listRowBackground(entry.isYou ? Palette.mint : nil)
@@ -1735,7 +1735,7 @@ private struct PlaydatePet: View {
                     .accessibilityHidden(true)
             }
             if let line {
-                Text(line).scaledFont(max(11, size * 0.11), relativeTo: .caption, weight: .semibold, design: .rounded, limit: 1.5).foregroundStyle(PetPalette.outline)
+                Text(line).scaledFont(max(11, size * 0.11), relativeTo: .footnote, weight: .semibold, design: .rounded, limit: 1.5).foregroundStyle(PetPalette.outline)
                     .lineLimit(1).fixedSize()
                     .padding(.horizontal, 8).padding(.vertical, 5).background(.white.opacity(0.92), in: Capsule())
                     .offset(y: -size * 0.62)
@@ -1828,7 +1828,7 @@ struct PetVisitsPanel: View {
                 if showsScene { PetPlaydate(home: store.petCard, visitors: guests.map { ($0.card, $0.givenTreat) }) }
                 ForEach(guests) { guestRow($0) }
             }
-            if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("visit.message") }
+            if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(Palette.muted).accessibilityIdentifier("visit.message") }
         }
         .sensoryFeedback(.success, trigger: treated)
     }
@@ -1944,7 +1944,7 @@ struct FriendsView: View {
                     .font(.system(.body, design: .monospaced)).accessibilityIdentifier("friends.codeField")
                 Button(busy ? "Adding…" : "Add friend", systemImage: "person.badge.plus") { Task { await add(code) } }
                     .disabled(busy || code.trimmingCharacters(in: .whitespaces).count < 4).accessibilityIdentifier("friends.add")
-                if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.warning).accessibilityIdentifier("friends.message") }
+                if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(Palette.warning).accessibilityIdentifier("friends.message") }
             }
 
             if let incoming = overview?.incoming, !incoming.isEmpty {
@@ -1954,7 +1954,7 @@ struct FriendsView: View {
                             FriendPennyThumb(card: person.card, size: 44)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(person.card.owner).font(.subheadline.weight(.semibold))
-                                Text("\(person.card.petName) · Lv \(person.card.level)").font(.caption).foregroundStyle(Palette.muted)
+                                Text("\(person.card.petName) · Lv \(person.card.level)").font(.footnote).foregroundStyle(Palette.muted)
                             }
                             Spacer()
                             Button { Task { await add(person.code) } } label: { Text("Accept").foregroundStyle(.white) }.buttonStyle(.borderedProminent).tint(Palette.accent)
@@ -1973,7 +1973,7 @@ struct FriendsView: View {
                                 FriendPennyThumb(card: friend.card)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(friend.card.petName).font(.subheadline.weight(.semibold))
-                                    Text("\(friend.card.owner)'s pet · Lv \(friend.card.level)").font(.caption).foregroundStyle(Palette.muted)
+                                    Text("\(friend.card.owner)'s pet · Lv \(friend.card.level)").font(.footnote).foregroundStyle(Palette.muted)
                                 }
                                 Spacer()
                                 if overview?.away?.code == friend.code || overview?.guests?.contains(where: { $0.code == friend.code }) == true {
@@ -2092,11 +2092,11 @@ struct FriendPetView: View {
                     Task { await sayHi() }
                 }
                 .primaryButton().disabled(friend.saidHiToday || busy).accessibilityIdentifier("friend.hello")
-                Text(message.isEmpty ? "Once a day. You both get 2 coins." : message).font(.caption).foregroundStyle(Palette.muted)
+                Text(message.isEmpty ? "Once a day. You both get 2 coins." : message).font(.footnote).foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center).accessibilityIdentifier("friend.helloMessage")
                 Button(visitTitle, systemImage: myPetIsHere ? "house.fill" : "pawprint.fill") { Task { await toggleVisit() } }
                     .buttonStyle(VisitButtonStyle()).disabled(!canVisit || busy).accessibilityIdentifier("friend.visit")
-                Text(visitMessage.isEmpty ? visitHint : visitMessage).font(.caption).foregroundStyle(Palette.muted)
+                Text(visitMessage.isEmpty ? visitHint : visitMessage).font(.footnote).foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center).accessibilityIdentifier("friend.visitMessage")
                 Button("Remove friend", role: .destructive) { confirmingRemove = true }.font(.subheadline).foregroundStyle(.red).padding(.top, 20).disabled(busy)
             }.padding(20)
@@ -2142,7 +2142,7 @@ struct FriendPetView: View {
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(spacing: 2) {
             Text(value).font(.headline).foregroundStyle(Palette.ink)
-            Text(title).font(.caption).foregroundStyle(Palette.muted)
+            Text(title).font(.footnote).foregroundStyle(Palette.muted)
         }.frame(maxWidth: .infinity).padding(.vertical, 10).background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
     }
 

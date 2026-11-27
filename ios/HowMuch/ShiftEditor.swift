@@ -92,7 +92,7 @@ struct ShiftEditor: View {
                         PasteJobCard(result: pasted) { readMessage($0) }
                         if aiReading {
                             Label { Text("Reading with Apple Intelligence…") } icon: { ProgressView().controlSize(.small) }
-                                .font(.caption).foregroundStyle(Palette.muted).accessibilityIdentifier("paste.aiReading")
+                                .font(.footnote).foregroundStyle(Palette.muted).accessibilityIdentifier("paste.aiReading")
                         }
                     }
                     workCard
@@ -105,7 +105,7 @@ struct ShiftEditor: View {
                     if let preview { payoutCard(preview) }
                     if existing?.sourceID != nil {
                         Label("Your imported payout stays fixed. Choose Hourly and enter a rate to calculate pay from your hours.", systemImage: "square.and.arrow.down")
-                            .font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+                            .font(.footnote).foregroundStyle(Palette.muted).padding(.horizontal, 4)
                     }
                 }.padding(20)
             }
@@ -155,22 +155,22 @@ struct ShiftEditor: View {
             if events.count >= FreePlan.eventLimit {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("You're using all \(FreePlan.eventLimit) free events. Choose a previous event, or get HowMuch Pro for unlimited events.")
-                        .font(.caption).foregroundStyle(Palette.warning).fixedSize(horizontal: false, vertical: true)
-                    Button("See HowMuch Pro") { showingPlans = true }.font(.caption.weight(.semibold)).frame(minHeight: 44)
+                        .font(.footnote).foregroundStyle(Palette.warning).fixedSize(horizontal: false, vertical: true)
+                    Button("See HowMuch Pro") { showingPlans = true }.font(.footnote.weight(.semibold)).frame(minHeight: 44)
                 }.accessibilityIdentifier("shift.eventLimit")
             } else {
-                Text("New event · \(events.count + 1) of \(FreePlan.eventLimit) on the free plan").font(.caption).foregroundStyle(Palette.muted)
+                Text("New event · \(events.count + 1) of \(FreePlan.eventLimit) on the free plan").font(.footnote).foregroundStyle(Palette.muted)
                     .accessibilityIdentifier("shift.eventCount")
             }
         }
     }
 
     private var workCard: some View {
-        Card {
+        Card(spacing: 8) {
             editorHeading("WORK DETAILS", symbol: "briefcase")
             if let existing, !duplicating {
                 let count = store.data.shifts.filter { $0.event.caseInsensitiveCompare(existing.event) == .orderedSame }.count
-                Text("Name and location changes apply to all \(count) shifts in this event. Schedule and pay changes apply only to this shift.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Name and location changes apply to all \(count) shifts in this event. Schedule and pay changes apply only to this shift.").font(.footnote).foregroundStyle(Palette.muted)
             }
             TextField("Event name", text: $event)
                 .font(.system(.title3, design: .rounded, weight: .semibold)).frame(minHeight: 48)
@@ -179,12 +179,18 @@ struct ShiftEditor: View {
             HStack(spacing: 12) {
                 Image(systemName: "mappin.and.ellipse").foregroundStyle(Palette.teal).frame(width: 20)
                 TextField("Location (optional)", text: $location)
+                // Search Apple Maps from the end of the field, instead of a full-width button under it.
+                Button { findingLocation = true } label: {
+                    Label("Find in Maps", systemImage: "map").font(.footnote.weight(.semibold)).labelStyle(.titleAndIcon)
+                        .padding(.horizontal, 10).padding(.vertical, 6).background(Palette.mint, in: Capsule())
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).foregroundStyle(Palette.teal)
+                    .accessibilityLabel("Find a place in Apple Maps").accessibilityIdentifier("shift.findLocation")
             }.font(.subheadline).frame(minHeight: 44)
-            Button("Find a place in Apple Maps", systemImage: "map") { findingLocation = true }.glassAction().accessibilityIdentifier("shift.findLocation")
             Button { choosingPayer = true } label: {
-                HStack { Text("Paid by").foregroundStyle(Palette.muted); Spacer(); Text(store.data.settings.savedPayers?.first { $0.id == payerID }?.displayName ?? "Choose payer"); Image(systemName: "chevron.down").font(.caption) }.frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
+                HStack { Text("Paid by").foregroundStyle(Palette.muted); Spacer(); Text(store.data.settings.savedPayers?.first { $0.id == payerID }?.displayName ?? "Choose payer"); Image(systemName: "chevron.down").font(.footnote) }.frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
             }.buttonStyle(.plain).foregroundStyle(Palette.teal).accessibilityIdentifier("shift.payer")
-            Text("Choosing a payer applies to every shift in this event.").font(.caption).foregroundStyle(Palette.muted)
+            Text("Choosing a payer applies to every shift in this event.").font(.footnote).foregroundStyle(Palette.muted)
             if existing == nil && !store.data.shifts.isEmpty {
                 Menu {
                     ForEach(Array(Set(store.data.shifts.map(\.event))).sorted(), id: \.self) { name in
@@ -192,13 +198,13 @@ struct ShiftEditor: View {
                     }
                 } label: {
                     Label("Choose a previous event", systemImage: "clock.arrow.circlepath")
-                        .font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
                 }.foregroundStyle(Palette.teal)
             }
         }
     }
     private var briefCard: some View {
-        Card {
+        Card(spacing: 8) {
             editorHeading("JOB BRIEF", symbol: "list.clipboard")
             Toggle("Call time", isOn: Binding(get: { hasCall }, set: { hasCall = $0; if $0 { callTime = start } }))
                 .frame(minHeight: 44).accessibilityIdentifier("shift.hasCall")
@@ -211,7 +217,7 @@ struct ShiftEditor: View {
     }
 
     private var planningCard: some View {
-        Card {
+        Card(spacing: 8) {
             editorHeading("TEMPLATES & REPEAT", symbol: "square.stack.3d.up")
             if (existing == nil || duplicating) && !templateOnly {
                 if !(store.data.settings.jobTemplates ?? []).isEmpty {
@@ -221,18 +227,23 @@ struct ShiftEditor: View {
                         }
                     }.rowAction().accessibilityIdentifier("shift.templates")
                 }
-                Picker("Repeat", selection: $repeatDays) {
-                    Text("No repeat").tag(0); Text("Daily").tag(1); Text("Weekly").tag(7); Text("Fortnightly").tag(14)
-                }.accessibilityIdentifier("shift.repeat")
+                // A labelled row, like the other settings here, instead of a lone menu button.
+                HStack {
+                    Text("Repeat")
+                    Spacer()
+                    Picker("Repeat", selection: $repeatDays) {
+                        Text("No repeat").tag(0); Text("Daily").tag(1); Text("Weekly").tag(7); Text("Fortnightly").tag(14)
+                    }.labelsHidden().tint(Palette.teal).accessibilityIdentifier("shift.repeat")
+                }.frame(minHeight: 44)
                 if repeatDays > 0 {
                     Stepper("\(repeatCount) shifts, including the first", value: $repeatCount, in: 2...52).controlSize(.small).accessibilityIdentifier("shift.repeatCount")
-                    Text("All dates are created now with the same times and pay rules. You can edit or delete each shift afterwards.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("All dates are created now with the same times and pay rules. You can edit or delete each shift afterwards.").font(.footnote).foregroundStyle(Palette.muted)
                 }
             }
             if !templateOnly { Toggle("Save these settings as a template", isOn: $keepTemplate).accessibilityIdentifier("shift.saveTemplate") }
             if keepTemplate || templateOnly {
                 TextField("Template name (defaults to event name)", text: $templateName).accessibilityIdentifier("shift.templateName")
-                Text("Includes location, times, rate and breaks. Saving a name that already exists updates that template.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Includes location, times, rate and breaks. Saving a name that already exists updates that template.").font(.footnote).foregroundStyle(Palette.muted)
             }
         }
     }
@@ -276,29 +287,29 @@ struct ShiftEditor: View {
     }
     private var scheduleCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Card {
+            Card(spacing: 8) {
                 editorHeading("SCHEDULE", symbol: "calendar")
                 DatePicker("Date", selection: $day, displayedComponents: .date).frame(minHeight: 44)
                 Divider()
                 DatePicker("Start", selection: $start, displayedComponents: .hourAndMinute).frame(minHeight: 44)
                 DatePicker("End", selection: $end, displayedComponents: .hourAndMinute).frame(minHeight: 44)
                 if minute(end) <= minute(start) {
-                    Label("Ends the following day", systemImage: "moon").font(.caption).foregroundStyle(Palette.teal)
+                    Label("Ends the following day", systemImage: "moon").font(.footnote).foregroundStyle(Palette.teal)
                 }
             }
             if existing == nil || duplicating {
                 ForEach($extraDates) { $entry in
-                    Card {
+                    Card(spacing: 8) {
                         HStack {
                             editorHeading("ANOTHER DATE", symbol: "calendar.badge.plus")
                             Spacer()
-                            Button("Remove", role: .destructive) { extraDates.removeAll { $0.id == entry.id } }.font(.caption).frame(minHeight: 44)
+                            Button("Remove", role: .destructive) { extraDates.removeAll { $0.id == entry.id } }.font(.footnote).frame(minHeight: 44)
                         }
                         DatePicker("Date", selection: $entry.day, displayedComponents: .date).frame(minHeight: 44)
                         Divider()
                         DatePicker("Start", selection: $entry.start, displayedComponents: .hourAndMinute).frame(minHeight: 44)
                         DatePicker("End", selection: $entry.end, displayedComponents: .hourAndMinute).frame(minHeight: 44)
-                        if minute(entry.end) <= minute(entry.start) { Label("Ends the following day", systemImage: "moon").font(.caption).foregroundStyle(Palette.teal) }
+                        if minute(entry.end) <= minute(entry.start) { Label("Ends the following day", systemImage: "moon").font(.footnote).foregroundStyle(Palette.teal) }
                     }
                 }
                 Button("Add another date for this event", systemImage: "plus") {
@@ -309,15 +320,15 @@ struct ShiftEditor: View {
         }
     }
     private var payCard: some View {
-        Card {
+        Card(spacing: 8) {
             editorHeading("YOUR PAY", symbol: "banknote")
             Picker("Pay mode", selection: $fixed) { Text("Hourly").tag(false); Text("Lump sum").tag(true) }.pickerStyle(.segmented)
-            Text(fixed ? "Total payout" : "Hourly rate").font(.caption).foregroundStyle(Palette.muted)
+            Text(fixed ? "Total payout" : "Hourly rate").font(.footnote).foregroundStyle(Palette.muted)
             TextField(fixed ? "Total payout" : "Hourly rate", text: $amount)
                 .keyboardType(.decimalPad).amountFieldFont()
                 .accessibilityIdentifier("shift.amount")
             HStack {
-                Text("Currency").font(.subheadline).foregroundStyle(Palette.muted)
+                Text("Currency").font(.subheadline)
                 Spacer()
                 TextField("Currency", text: $currency).textInputAutocapitalization(.characters).autocorrectionDisabled()
                     .multilineTextAlignment(.trailing).frame(width: 90, height: 44).font(.subheadline.weight(.semibold))
@@ -345,11 +356,11 @@ struct ShiftEditor: View {
                     .accessibilityIdentifier("shift.extraNote")
             }
             Text("A bonus, allowance or tip on top of the pay. It counts in your earnings; claims stay separate.")
-                .font(.caption).foregroundStyle(Palette.muted)
+                .font(.footnote).foregroundStyle(Palette.muted)
         }
     }
     private var breakCard: some View {
-        Card {
+        Card(spacing: 8) {
             editorHeading("BREAKS", symbol: "cup.and.saucer")
             HStack {
                 Text("Break minutes").font(.subheadline)
@@ -360,15 +371,15 @@ struct ShiftEditor: View {
             Divider()
             Toggle("Paid break", isOn: $paidBreak).frame(minHeight: 44)
             Text(paidBreak ? "Break time is included in your paid hours." : "Break time is deducted from your paid hours.")
-                .font(.caption).foregroundStyle(Palette.muted)
+                .font(.footnote).foregroundStyle(Palette.muted)
         }
     }
     private var paymentCard: some View {
-        Card {
+        Card(spacing: 8) {
             editorHeading("PAYMENT", symbol: "calendar.badge.clock")
             Toggle("Payment due date", isOn: $hasDue).frame(minHeight: 44)
             if hasDue { DatePicker("Due", selection: $due, displayedComponents: .date).frame(minHeight: 44).accessibilityIdentifier("shift.due") }
-            else { Text("We'll suggest a Friday due date at least two weeks after the last event date.").font(.caption).foregroundStyle(Palette.muted) }
+            else { Text("We'll suggest a Friday due date at least two weeks after the last event date.").font(.footnote).foregroundStyle(Palette.muted) }
         }
     }
     private func payoutCard(_ preview: Shift) -> some View {
@@ -376,8 +387,8 @@ struct ShiftEditor: View {
             editorHeading(extraDates.isEmpty ? "ESTIMATED WORK PAYOUT" : "FIRST DATE · ESTIMATED PAYOUT", symbol: "wallet.bifold")
             Text(money(preview.total, preview.currency)).amountFont().foregroundStyle(Palette.ink)
                 .minimumScaleFactor(0.65).lineLimit(1).accessibilityIdentifier("shift.payoutPreview")
-            Text("\(PayEngine.rounded(preview.hours)) paid hours · Claims added separately").font(.caption).foregroundStyle(Palette.muted)
-            if !extraDates.isEmpty || repeatDays > 0 { Text("Saving adds \(extraDates.count + (repeatDays > 0 ? repeatCount : 1)) shifts. Each date uses its own scheduled hours.").font(.caption).foregroundStyle(Palette.muted) }
+            Text("\(PayEngine.rounded(preview.hours)) paid hours · Claims added separately").font(.footnote).foregroundStyle(Palette.muted)
+            if !extraDates.isEmpty || repeatDays > 0 { Text("Saving adds \(extraDates.count + (repeatDays > 0 ? repeatCount : 1)) shifts. Each date uses its own scheduled hours.").font(.footnote).foregroundStyle(Palette.muted) }
             if store.data.settings.blocked.contains(preview.day) {
                 Label("You marked this day as not available.", systemImage: "calendar.badge.exclamationmark").font(.subheadline).foregroundStyle(.orange)
                     .accessibilityIdentifier("shift.blockedDay")
@@ -388,7 +399,7 @@ struct ShiftEditor: View {
         }
     }
     private func editorHeading(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol).font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
+        Label(title, systemImage: symbol).font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted).padding(.bottom, 4)
     }
     private func editorNumber(_ title: String, text: Binding<String>) -> some View {
         HStack {
@@ -551,11 +562,11 @@ struct ClaimEditor: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Card {
                         Label("REIMBURSEMENT", systemImage: category.symbol).font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
-                        Text("Claim type").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Claim type").font(.footnote).foregroundStyle(Palette.muted)
                         HStack(spacing: 6) {
                             ForEach(ClaimCategory.allCases) { kind in
                                 Button { category = kind } label: {
-                                    Text(kind.title).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                                    Text(kind.title).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
                                         .frame(maxWidth: .infinity, minHeight: 44).contentShape(Capsule())
                                         .foregroundStyle(category == kind ? Color.white : Palette.teal)
                                         .glassChrome(in: Capsule(), tint: category == kind ? Palette.accent : nil)
@@ -563,15 +574,15 @@ struct ClaimEditor: View {
                                     .accessibilityAddTraits(category == kind ? .isSelected : [])
                             }
                         }
-                        Text(shift.currency).font(.caption.bold()).foregroundStyle(Palette.teal)
+                        Text(shift.currency).font(.footnote.bold()).foregroundStyle(Palette.teal)
                         TextField("Amount (\(shift.currency))", text: $amount)
                             .keyboardType(.decimalPad).amountFieldFont().foregroundStyle(Palette.ink)
                             .accessibilityIdentifier("claim.amount")
-                        Text("Added to your expected bank credit, separately from work earnings").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Added to your expected bank credit, separately from work earnings").font(.footnote).foregroundStyle(Palette.muted)
                     }
                     Card {
                         Text(shift.event).font(.appHeadline).foregroundStyle(Palette.ink)
-                        Text(displayDay(shift.day)).font(.caption).foregroundStyle(Palette.muted)
+                        Text(displayDay(shift.day)).font(.footnote).foregroundStyle(Palette.muted)
                         Divider()
                         DatePicker("Date", selection: $day, displayedComponents: .date).font(.subheadline)
                         Divider()
@@ -580,7 +591,7 @@ struct ClaimEditor: View {
                     }
                     ReceiptAttachmentEditor(receiptID: $receiptID, photoData: $receiptData, processing: $receiptProcessing,
                                             amount: $amount, category: $category, note: $note, useDay: { day = $0 })
-                    Label("Your claim stays attached to this shift and syncs with your HowMuch account.", systemImage: "checkmark.shield").font(.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+                    Label("Your claim stays attached to this shift and syncs with your HowMuch account.", systemImage: "checkmark.shield").font(.footnote).foregroundStyle(Palette.muted).padding(.horizontal, 4)
                 }.padding(20)
             }.scrollDismissesKeyboard(.interactively).detailStyle(existing == nil ? "Claim" : "Edit claim")
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -660,7 +671,7 @@ struct ReceiptAttachmentEditor: View {
     @State private var viewingReceipt = false
     var body: some View {
         Card {
-            Label("RECEIPT PHOTO", systemImage: "doc.viewfinder").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
+            Label("RECEIPT PHOTO", systemImage: "doc.viewfinder").font(.footnote.weight(.semibold)).foregroundStyle(Palette.teal)
             if let data = photoData ?? preview, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: 16)).accessibilityIdentifier("receipt.preview")
             }
@@ -681,8 +692,8 @@ struct ReceiptAttachmentEditor: View {
             if let total = suggestion.amount { Button("Use suggested total: \(total)") { amount = NSDecimalNumber(decimal: total).stringValue }.rowAction().accessibilityIdentifier("receipt.useAmount") }
             if let day = suggestion.day, let date = TrackerCalendar.localDate(day) { Button("Use suggested date: " + displayDay(day)) { useDay(date) }.rowAction().accessibilityIdentifier("receipt.useDate") }
             if let kind = suggestedCategory, kind != category { Button("Use suggested type: \(kind.title)") { category = kind }.rowAction().accessibilityIdentifier("receipt.useCategory") }
-            if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.muted) }
-            Text("The detected total fills the amount automatically; check it before saving. Receipt copies are saved privately to your HowMuch account with the claim. Open View or save receipt to download a copy.").font(.caption).foregroundStyle(Palette.muted)
+            if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(Palette.muted) }
+            Text("The detected total fills the amount automatically; check it before saving. Receipt copies are saved privately to your HowMuch account with the claim. Open View or save receipt to download a copy.").font(.footnote).foregroundStyle(Palette.muted)
         }
         .sheet(isPresented: $viewingReceipt) { if let data = photoData ?? preview { ReceiptViewer(data: data) } }
         .task(id: receiptID) {
@@ -801,7 +812,7 @@ struct JobTemplatesView: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(template.name).font(.appHeadline)
                                 Text(template.shift.event).font(.subheadline)
-                                Text("\(Shift.clock(template.shift.startMinute))–\(Shift.clock(template.shift.endMinute)) · \(template.shift.location)").font(.caption).foregroundStyle(Palette.muted)
+                                Text("\(Shift.clock(template.shift.startMinute))–\(Shift.clock(template.shift.endMinute)) · \(template.shift.location)").font(.footnote).foregroundStyle(Palette.muted)
                             }
                             Spacer()
                             Menu {
@@ -842,7 +853,7 @@ struct ReceiptViewer: View {
                         ShareLink(item: savedURL) { Label("Share receipt copy", systemImage: "square.and.arrow.up") }.glassAction()
                     }
                     if let error { Text(error).foregroundStyle(.red) }
-                    Text("Receipt copies saved to Files stay on this iPhone until you remove them, including after signing out.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Receipt copies saved to Files stay on this iPhone until you remove them, including after signing out.").font(.footnote).foregroundStyle(Palette.muted)
                 }.padding(20)
             }.detailStyle("Receipt")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }

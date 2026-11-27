@@ -23,22 +23,22 @@ private struct AccountWidgetPreviews: View {
                 Card {
                     Label("Your work, at a glance", systemImage: "rectangle.on.rectangle").font(.appHeadline)
                     Text("Touch and hold your Home Screen, tap Edit → Add Widget, then search HowMuch. Next Shift is also available on your Lock Screen.").font(.subheadline)
-                    Text("Touch and hold an installed widget → Edit Widget to choose a currency and whether to show pay or location. Pay is hidden by default.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Touch and hold an installed widget → Edit Widget to choose a currency and whether to show pay or location. Pay is hidden by default.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 Card {
                     Toggle("Preview pay amounts", isOn: binding(\.showPay, default: false)).accessibilityIdentifier("widgets.previewPay")
                     Toggle("Preview locations", isOn: binding(\.showLocation, default: true)).accessibilityIdentifier("widgets.previewLocation")
-                    Text("Preview choices are saved to your account. Each installed widget has its own options, set on that iPhone.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Preview choices are saved to your account. Each installed widget has its own options, set on that iPhone.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 preview("Work Calendar", .calendar, height: 172)
                 preview("Next Shift", .nextShift, height: 158)
                 preview("Upcoming Events", .events, height: 165)
                 preview("This Month", .month, height: 158)
                 Card {
-                    Text(store.widgetMessage).font(.caption).accessibilityIdentifier("widgets.status")
+                    Text(store.widgetMessage).font(.footnote).accessibilityIdentifier("widgets.status")
                     Button("Refresh widget data", systemImage: "arrow.clockwise") { store.refreshWidgets() }.rowAction().accessibilityIdentifier("widgets.refresh")
-                    Text("Widgets use the last data saved on this iPhone. iOS controls refresh timing. Open HowMuch after edits on another device to sync. Signing out clears shared widget data; iOS may take time to replace an already displayed snapshot.").font(.caption).foregroundStyle(Palette.muted)
-                    Text("Only shift details and work-pay summaries are shared with the widget extension. Mail, account tokens, profile photos and claim notes are excluded.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Widgets use the last data saved on this iPhone. iOS controls refresh timing. Open HowMuch after edits on another device to sync. Signing out clears shared widget data; iOS may take time to replace an already displayed snapshot.").font(.footnote).foregroundStyle(Palette.muted)
+                    Text("Only shift details and work-pay summaries are shared with the widget extension. Mail, account tokens, profile photos and claim notes are excluded.").font(.footnote).foregroundStyle(Palette.muted)
                 }
             }.padding(20)
         }.detailStyle("Widgets")

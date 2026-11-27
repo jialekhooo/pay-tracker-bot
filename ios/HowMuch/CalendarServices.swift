@@ -74,19 +74,19 @@ struct CalendarSettingsView: View {
                     Button { openURL(Self.google(url)) } label: { Label("Add to Google Calendar", systemImage: "globe") }
                         .accessibilityIdentifier("calendar.subscribeGoogle")
                     ShareLink(item: url) { Label("Copy or share link", systemImage: "link") }
-                    Text("Calendars check for changes about every hour; Google Calendar can take up to a day.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Calendars check for changes about every hour; Google Calendar can take up to a day.").font(.footnote).foregroundStyle(Palette.muted)
                 } else {
                     Button { rotateLink = true } label: { Label("Create my live calendar link", systemImage: "plus.circle.fill") }
                         .rowAction().disabled(auth.isDemo).accessibilityIdentifier("calendar.createLink")
-                    if auth.isDemo { Text("Sign in to your own Apple account to create a live calendar link.").font(.caption).foregroundStyle(Palette.muted) }
+                    if auth.isDemo { Text("Sign in to your own Apple account to create a live calendar link.").font(.footnote).foregroundStyle(Palette.muted) }
                 }
-                if !linkMessage.isEmpty { Text(linkMessage).font(.caption).foregroundStyle(Palette.muted) }
+                if !linkMessage.isEmpty { Text(linkMessage).font(.footnote).foregroundStyle(Palette.muted) }
             }
             if link != nil {
                 Section(styled: "Using TimeTree?") {
                     step(1, "Subscribe in Apple Calendar", "Tap Subscribe in Apple Calendar above, then Subscribe. A calendar called HowMuch shifts appears on your iPhone.")
                     step(2, "Show it in TimeTree", "TimeTree can show the calendars on your iPhone. In TimeTree's calendar settings, turn on your iPhone's calendars and pick HowMuch shifts.")
-                    Text("TimeTree closed its API to other apps in 2023, so this is the way to see your shifts there.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("TimeTree closed its API to other apps in 2023, so this is the way to see your shifts there.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 Section {
                     Button("Replace link", role: .destructive) { rotateLink = true }.disabled(auth.isDemo)
@@ -102,7 +102,7 @@ struct CalendarSettingsView: View {
                     }
                     document = TextFile(CalendarExport.encode(shifts)); export = true
                 }.rowAction().accessibilityIdentifier("calendar.exportICS")
-                Text("A file you open once; it won't update. To add a single shift, tap it and choose Add to Calendar.").font(.caption).foregroundStyle(Palette.muted)
+                Text("A file you open once; it won't update. To add a single shift, tap it and choose Add to Calendar.").font(.footnote).foregroundStyle(Palette.muted)
             }
         }.detailStyle("Calendar sync")
             .fileExporter(isPresented: $export, document: document, contentType: .calendarEvent, defaultFilename: "howmuch-shifts.ics") { result in if case .failure(let error) = result { store.error = error.localizedDescription } }
@@ -149,7 +149,7 @@ struct CalendarSettingsView: View {
             Text("\(number)").font(.subheadline.weight(.bold)).foregroundStyle(.white).frame(width: 26, height: 26).background(Palette.accent, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.caption).foregroundStyle(Palette.muted)
+                Text(detail).font(.footnote).foregroundStyle(Palette.muted)
             }
         }.padding(.vertical, 4)
     }

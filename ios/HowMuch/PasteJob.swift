@@ -12,20 +12,23 @@ struct PasteJobCard: View {
         Card {
             Label("PASTE A JOB MESSAGE", systemImage: "text.bubble").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Palette.muted)
             Text("Copy a job offer from WhatsApp or Telegram and paste it here. The dates, times, location and pay are filled in below for you to check.")
-                .font(.caption).foregroundStyle(Palette.muted)
+                .font(.footnote).foregroundStyle(Palette.muted)
             if AppleIntelligence.isAvailable {
                 Label("Apple Intelligence reads unusual wording, on your iPhone", systemImage: "apple.intelligence")
-                    .font(.caption2.weight(.medium)).foregroundStyle(Palette.teal)
+                    .font(.caption.weight(.medium)).foregroundStyle(Palette.teal)
             }
             HStack(spacing: 10) {
                 PasteButton(payloadType: String.self) { strings in
                     let text = strings.joined(separator: "\n")
                     DispatchQueue.main.async { onText(text) }
                 }
-                .buttonBorderShape(.roundedRectangle(radius: 16)).controlSize(.large).tint(Palette.accent).labelStyle(.titleAndIcon)
+                .buttonBorderShape(.capsule).tint(Palette.accent).labelStyle(.titleAndIcon)
                 .accessibilityIdentifier("paste.clipboard")
+                // The same shape and height as Paste, so the two read as a pair.
                 Button("Type or edit", systemImage: "keyboard") { typing = true }
-                    .glassAction().accessibilityIdentifier("paste.type")
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(Palette.teal).foregroundStyle(Palette.teal)
+                    .accessibilityIdentifier("paste.type")
+                Spacer(minLength: 0)
             }
             if let result, !result.dates.isEmpty { summary(result) }
         }
@@ -39,11 +42,11 @@ struct PasteJobCard: View {
                 .font(.subheadline.weight(.medium)).foregroundStyle(Palette.teal)
                 .accessibilityIdentifier("paste.summary")
             if job.rate == nil && job.fixedPay == nil {
-                Text("No pay was found in the message, so your usual rate is used.").font(.caption).foregroundStyle(Palette.muted)
+                Text("No pay was found in the message, so your usual rate is used.").font(.footnote).foregroundStyle(Palette.muted)
             }
-            ForEach(job.notes, id: \.self) { Text($0).font(.caption).foregroundStyle(Palette.muted) }
+            ForEach(job.notes, id: \.self) { Text($0).font(.footnote).foregroundStyle(Palette.muted) }
             if !job.skipped.isEmpty {
-                Text("Not used: " + job.skipped.prefix(4).joined(separator: " · ")).font(.caption).foregroundStyle(.orange)
+                Text("Not used: " + job.skipped.prefix(4).joined(separator: " · ")).font(.footnote).foregroundStyle(.orange)
             }
         }.padding(.top, 4)
     }
@@ -60,7 +63,7 @@ struct JobMessageEntry: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Paste or type the job details. One date per line works best, for example “13-14 Nov 0800-2000hrs”.")
-                    .font(.caption).foregroundStyle(Palette.muted)
+                    .font(.footnote).foregroundStyle(Palette.muted)
                 TextEditor(text: $text)
                     .focused($focused).scrollContentBackground(.hidden).padding(10)
                     .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))

@@ -48,7 +48,7 @@ struct PaymentDetectionView: View {
                     Toggle("Mark matching pay as paid", isOn: Binding(get: { payIn?.notificationsAuto ?? false },
                                                                        set: { enabled in Task { await setPayIn(enabled) } }))
                         .disabled(payIn == nil || busy).accessibilityIdentifier("payin.notifications.auto")
-                    Text("When your bank app says money came in, a Shortcuts automation passes it to HowMuch. Pay from a saved payer that exactly matches an event's unpaid total is marked paid; anything else waits below for you to check.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("When your bank app says money came in, a Shortcuts automation passes it to HowMuch. Pay from a saved payer that exactly matches an event's unpaid total is marked paid; anything else waits below for you to check.").font(.footnote).foregroundStyle(Palette.muted)
                   }
                 }
                 Section(styled: "Email forwarding") {
@@ -73,7 +73,7 @@ struct PaymentDetectionView: View {
                                 if let link = confirmation.link.flatMap(URL.init(string:)), link.host?.hasSuffix("google.com") == true {
                                     Link(destination: link) { Label("Confirm forwarding in Gmail", systemImage: "arrow.up.right.square") }
                                 }
-                                Text("Enter the code in Gmail's forwarding settings, or open the link. Then add a filter to forward DBS alerts.").font(.caption).foregroundStyle(Palette.muted)
+                                Text("Enter the code in Gmail's forwarding settings, or open the link. Then add a filter to forward DBS alerts.").font(.footnote).foregroundStyle(Palette.muted)
                                 Button { Task { await forwardingConfirmed() } } label: { Label("I've confirmed it", systemImage: "checkmark.circle") }
                                     .disabled(busy).accessibilityIdentifier("payin.forwarding.confirmed")
                             }.padding(.vertical, 4)
@@ -81,15 +81,15 @@ struct PaymentDetectionView: View {
                         NavigationLink { EmailForwardingGuide(address: address) } label: { Label("How to forward bank emails", systemImage: "envelope.arrow.triangle.branch") }
                         Button("Get a new address", systemImage: "arrow.triangle.2.circlepath") { replacingAddress = true }
                             .disabled(busy).accessibilityIdentifier("payin.forwarding.rotate")
-                        Text("Forward DBS \u{201C}You\u{2019}ve received a transfer\u{201D} alerts to this private address, by hand or with a mail rule. Forwarded emails always wait for you to check them below.").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Forward DBS \u{201C}You\u{2019}ve received a transfer\u{201D} alerts to this private address, by hand or with a mail rule. Forwarded emails always wait for you to check them below.").font(.footnote).foregroundStyle(Palette.muted)
                     } else {
                         Text("Coming soon: a private address you can forward bank alert emails to.").font(.subheadline).foregroundStyle(Palette.muted)
                     }
                 }
                 Section(styled: "Connect your email") {
                     Label(status.connected ? "\(status.providerName) connected" : "No email connected", systemImage: status.connected ? "checkmark.shield" : "envelope")
-                    if let email = status.email { Text(email).font(.caption).foregroundStyle(Palette.muted) }
-                    if !status.available { Text("Email connection is not available yet for this app. Manual payment tracking remains available.").font(.caption).foregroundStyle(Palette.muted) }
+                    if let email = status.email { Text(email).font(.footnote).foregroundStyle(Palette.muted) }
+                    if !status.available { Text("Email connection is not available yet for this app. Manual payment tracking remains available.").font(.footnote).foregroundStyle(Palette.muted) }
                     if status.connected {
                         Button("Check payments now") { Task { await action("/scan") } }.rowAction().accessibilityIdentifier("payment.scan").disabled(!status.available || busy)
                         Button("Disconnect email", role: .destructive) { disconnect = true }.rowAction().accessibilityIdentifier("payment.disconnect")
@@ -101,23 +101,23 @@ struct PaymentDetectionView: View {
                             // Gmail with an app password: works for everyone without Google's app verification.
                             Button("Connect Gmail") { mailboxSheet = .gmail }.rowAction().accessibilityIdentifier("payment.connect.gmail").disabled(busy)
                         } else {
-                            Text("Using Gmail? Forward your bank's emails to your HowMuch address above.").font(.caption).foregroundStyle(Palette.muted)
+                            Text("Using Gmail? Forward your bank's emails to your HowMuch address above.").font(.footnote).foregroundStyle(Palette.muted)
                         }
                         Button("Connect Outlook / Hotmail") { Task { await connect(provider: "microsoft") } }.rowAction().accessibilityIdentifier("payment.connect.microsoft").disabled(!(status.providers?["microsoft"] ?? false) || busy)
-                        if !(status.providers?["microsoft"] ?? false) { Text("Outlook sign-in is awaiting Microsoft setup.").font(.caption).foregroundStyle(Palette.muted) }
+                        if !(status.providers?["microsoft"] ?? false) { Text("Outlook sign-in is awaiting Microsoft setup.").font(.footnote).foregroundStyle(Palette.muted) }
                         Button("Connect iCloud / me.com") { mailboxSheet = .icloud }.rowAction().accessibilityIdentifier("payment.connect.icloud").disabled(!(status.providers?["icloud"] ?? false) || busy)
-                        Text("Choose the mailbox that receives your DBS alerts. One email connection per HowMuch account.").font(.caption).foregroundStyle(Palette.muted)
+                        Text("Choose the mailbox that receives your DBS alerts. One email connection per HowMuch account.").font(.footnote).foregroundStyle(Palette.muted)
                     }
-                    Text("HowMuch checks DBS alerts against your unpaid jobs and exact company rules. It never sends or deletes emails. New Outlook, iCloud and Gmail app-password matches need your bank confirmation before marking paid.").font(.caption).foregroundStyle(Palette.muted)
-                    if !status.error.isEmpty { Text(status.error).font(.caption).foregroundStyle(.orange) }
+                    Text("HowMuch checks DBS alerts against your unpaid jobs and exact company rules. It never sends or deletes emails. New Outlook, iCloud and Gmail app-password matches need your bank confirmation before marking paid.").font(.footnote).foregroundStyle(Palette.muted)
+                    if !status.error.isEmpty { Text(status.error).font(.footnote).foregroundStyle(.orange) }
                 }
                 Section(styled: "Automatic marking") {
                     Toggle("Mark exact verified matches paid", isOn: Binding(get: { status.autoEnabled }, set: { enabled in Task { await action("", method: "PATCH", body: ["auto_enabled": enabled]) } })).disabled(!status.connected || !status.available || status.provider != nil && status.provider != "gmail" || busy)
-                    Text("Automatic marking is supported for verified alerts from Gmail connected with Google sign-in. Outlook, iCloud and Gmail app-password alerts need confirmation against your bank transaction. You can undo applied payments below.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Automatic marking is supported for verified alerts from Gmail connected with Google sign-in. Outlook, iCloud and Gmail app-password alerts need confirmation against your bank transaction. You can undo applied payments below.").font(.footnote).foregroundStyle(Palette.muted)
                 }
                 Section(styled: "Saved payers") {
                     NavigationLink("Manage saved payers") { PayersSettingsView() }.accessibilityIdentifier("payment.payers")
-                    Text("Save companies once in Settings → Payers. Choose ‘Paid by’ when adding/editing an event or from Earnings. Every saved bank name for the selected company is used for exact matching.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Save companies once in Settings → Payers. Choose ‘Paid by’ when adding/editing an event or from Earnings. Every saved bank name for the selected company is used for exact matching.").font(.footnote).foregroundStyle(Palette.muted)
                     ForEach(payerGroups(status.rules)) { group in
                         DisclosureGroup {
                             ForEach(group.events, id: \.self) { event in
@@ -127,7 +127,7 @@ struct PaymentDetectionView: View {
                             HStack(spacing: 12) {
                                 Text(group.name).font(.subheadline.weight(.semibold))
                                 Spacer()
-                                Text("\(group.events.count) \(group.events.count == 1 ? "event" : "events")").font(.caption).foregroundStyle(Palette.muted)
+                                Text("\(group.events.count) \(group.events.count == 1 ? "event" : "events")").font(.footnote).foregroundStyle(Palette.muted)
                             }.frame(minHeight: 44).contentShape(Rectangle())
                         }.accessibilityIdentifier("payment.payerGroup." + group.id)
                     }
@@ -138,26 +138,26 @@ struct PaymentDetectionView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("\(receipt.currency) \(receipt.amount ?? "—")").font(.appHeadline)
                             Text(displayPayer(receipt.payer)).font(.subheadline)
-                            Text(receipt.status.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption).foregroundStyle(Palette.teal)
-                            Text(receipt.reason).font(.caption).foregroundStyle(Palette.muted)
+                            Text(receipt.status.replacingOccurrences(of: "_", with: " ").capitalized).font(.footnote).foregroundStyle(Palette.teal)
+                            Text(receipt.reason).font(.footnote).foregroundStyle(Palette.muted)
                             if receipt.status == "review" {
                                 ForEach(receipt.candidates, id: \.event) { candidate in
                                     Button(candidate.label) { if receipt.trusted == false { pendingReceipt = receipt; pendingEvent = candidate.event; confirmBank = true }
                                         else if candidate.kind == "short" { pendingShort = (receipt.id, candidate.event, candidate.shortfall ?? "") }
-                                        else { Task { await action("/receipts/\(receipt.id)/confirm", body: ["event": candidate.event]) } } }.font(.caption).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).confirm")
+                                        else { Task { await action("/receipts/\(receipt.id)/confirm", body: ["event": candidate.event]) } } }.font(.footnote).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).confirm")
                                 }
                                 // Destructive and confirmed: a dismissed payment isn't matched to any job.
-                                Button("Dismiss alert", role: .destructive) { pendingDismiss = "/receipts/\(receipt.id)/dismiss" }.font(.caption).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).dismiss")
+                                Button("Dismiss alert", role: .destructive) { pendingDismiss = "/receipts/\(receipt.id)/dismiss" }.font(.footnote).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).dismiss")
                             }
                             if ["confirmed_paid", "auto_paid"].contains(receipt.status) {
-                                Button("Undo marking paid", systemImage: "arrow.uturn.backward") { Task { await action("/receipts/\(receipt.id)/undo") } }.font(.caption).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).undo")
+                                Button("Undo marking paid", systemImage: "arrow.uturn.backward") { Task { await action("/receipts/\(receipt.id)/undo") } }.font(.footnote).rowAction().disabled(busy).accessibilityIdentifier("payment.receipt.\(receipt.id).undo")
                             }
                         }.padding(.vertical, 7)
                     }
                 }
             } else if busy { Section { ProgressView("Checking your account…") } }
             else { Section { Label("Pay-in tracking couldn’t be loaded. Refresh to try again.", systemImage: "wifi.exclamationmark") } }
-            if !message.isEmpty { Section { Text(message).font(.caption).foregroundStyle(Palette.muted) } }
+            if !message.isEmpty { Section { Text(message).font(.footnote).foregroundStyle(Palette.muted) } }
             if !previewOnly { Button("Refresh") { Task { await load() } }.rowAction().disabled(busy) }
             if busy, status != nil { Section { ProgressView("Updating…") } }
         }.detailStyle("Pay-in tracking")
@@ -220,17 +220,17 @@ struct PaymentDetectionView: View {
                     SecureField(gmail ? "App password (16 letters)" : "App-specific password", text: $iCloudPassword).textContentType(.none).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("payment.icloud.password")
                     if gmail {
                         Link("Create an app password at Google", destination: URL(string: "https://myaccount.google.com/apppasswords")!)
-                        Text("Turn on 2-Step Verification for your Google Account, then create an app password named HowMuch and paste the 16 letters here. Never use your main Google password. If Gmail says IMAP is off, turn it on in Gmail → Settings → Forwarding and POP/IMAP.").font(.caption)
+                        Text("Turn on 2-Step Verification for your Google Account, then create an app password named HowMuch and paste the 16 letters here. Never use your main Google password. If Gmail says IMAP is off, turn it on in Gmail → Settings → Forwarding and POP/IMAP.").font(.footnote)
                     } else {
                         Link("Create an app-specific password at Apple", destination: URL(string: "https://account.apple.com")!)
-                        Text("In Apple Account → Sign-In and Security → App-Specific Passwords, create one for HowMuch. Use that password here, never your main Apple Account password.").font(.caption)
+                        Text("In Apple Account → Sign-In and Security → App-Specific Passwords, create one for HowMuch. Use that password here, never your main Apple Account password.").font(.footnote)
                     }
                 }
                 Section {
                     Toggle("Allow HowMuch to check my DBS emails", isOn: $iCloudConsent).accessibilityIdentifier("payment.icloud.consent")
-                    Text("Your app password is sent securely to HowMuch and stored encrypted to check your inbox while the app is closed. HowMuch reads mail without changing it. \(gmail ? "Google" : "Apple")'s app password can permit broader mail access; you can revoke it at \(gmail ? "Google" : "Apple") anytime. Detected payments require bank confirmation.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("Your app password is sent securely to HowMuch and stored encrypted to check your inbox while the app is closed. HowMuch reads mail without changing it. \(gmail ? "Google" : "Apple")'s app password can permit broader mail access; you can revoke it at \(gmail ? "Google" : "Apple") anytime. Detected payments require bank confirmation.").font(.footnote).foregroundStyle(Palette.muted)
                     Button(busy ? "Connecting…" : "Connect \(name)") { Task { await connectMailbox(mailbox) } }.rowAction().disabled(busy || !iCloudConsent || iCloudEmail.isEmpty || iCloudPassword.isEmpty).accessibilityIdentifier("payment.icloud.save")
-                    if !message.isEmpty { Text(message).font(.caption).foregroundStyle(Palette.muted) }
+                    if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(Palette.muted) }
                 }
             }.scrollDismissesKeyboard(.interactively).navigationTitle("Connect \(name)").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { mailboxSheet = nil }.disabled(busy) } }.interactiveDismissDisabled(busy)
         }
@@ -263,7 +263,7 @@ struct PaymentDetectionView: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Automation linked · last ran \(entry.date.formatted(.relative(presentation: .named)))").font(.subheadline.weight(.semibold))
-                    Text(entry.result).font(.caption).foregroundStyle(Palette.muted)
+                    Text(entry.result).font(.footnote).foregroundStyle(Palette.muted)
                 }
             } icon: { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
                 .accessibilityIdentifier("payin.notifications.lastRun")
@@ -271,7 +271,7 @@ struct PaymentDetectionView: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Not linked yet").font(.subheadline.weight(.semibold))
-                    Text("The automation hasn't sent HowMuch a notification on this iPhone. Set it up, or wait for your next bank alert.").font(.caption).foregroundStyle(Palette.muted)
+                    Text("The automation hasn't sent HowMuch a notification on this iPhone. Set it up, or wait for your next bank alert.").font(.footnote).foregroundStyle(Palette.muted)
                 }
             } icon: { Image(systemName: "exclamationmark.circle").foregroundStyle(.orange) }
                 .accessibilityIdentifier("payin.notifications.lastRun")
@@ -380,7 +380,7 @@ struct EmailForwardingGuide: View {
             Section(styled: "Your private address") {
                 Text(address).font(.callout.monospaced()).textSelection(.enabled)
                 Button("Copy address", systemImage: "doc.on.doc") { UIPasteboard.general.string = address }.rowAction()
-                Text("Only forward bank alerts here. Anyone with this address could send you emails to check, so forwarded payments always wait for your OK.").font(.caption).foregroundStyle(Palette.muted)
+                Text("Only forward bank alerts here. Anyone with this address could send you emails to check, so forwarded payments always wait for your OK.").font(.footnote).foregroundStyle(Palette.muted)
             }
             Section(styled: "Forward one email") {
                 Text("Open a DBS \u{201C}You\u{2019}ve received a transfer\u{201D} email, tap Forward, and send it to your address. It appears in Pay-in tracking within a minute.").font(.subheadline)

@@ -135,7 +135,7 @@ struct ProFeatureRow: View {
                 .background(Palette.mint, in: RoundedRectangle(cornerRadius: 9)).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(feature.title).font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(Palette.ink)
-                Text(feature.detail).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                Text(feature.detail).font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
         }.accessibilityElement(children: .combine)
     }
@@ -173,10 +173,10 @@ struct ProPaywall: View {
                 .primaryButton().disabled(pro.products[plan] == nil || pro.busy != nil)
                 .accessibilityIdentifier("pro.buy")
                 if pro.products[plan] != nil {
-                    Text(terms).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    Text(terms).font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 if let message = pro.message {
-                    Text(message).font(.caption).foregroundStyle(Palette.warning).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("pro.message")
+                    Text(message).font(.footnote).foregroundStyle(Palette.warning).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("pro.message")
                 }
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 16) { links }
@@ -187,7 +187,7 @@ struct ProPaywall: View {
                     Card {
                         Toggle("Test as a new user", isOn: $pro.testAsNewUser).font(.subheadline.weight(.semibold))
                             .accessibilityIdentifier("pro.paywall.testAsNewUser")
-                        Text("TestFlight only. Turn this off to see HowMuch with your own Pro again.").font(.caption).foregroundStyle(Palette.muted)
+                        Text("TestFlight only. Turn this off to see HowMuch with your own Pro again.").font(.footnote).foregroundStyle(Palette.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -200,9 +200,9 @@ struct ProPaywall: View {
 
     @ViewBuilder private var links: some View {
         Button(pro.busy == "restore" ? "Restoring…" : "Restore purchases") { Task { await pro.restore() } }
-            .font(.caption.weight(.semibold)).frame(minHeight: 44).disabled(pro.busy != nil).accessibilityIdentifier("pro.restore")
-        Button("Terms of Use") { openURL(ProLinks.terms) }.font(.caption.weight(.semibold)).frame(minHeight: 44)
-        Button("Privacy Policy") { openURL(ProLinks.privacy) }.font(.caption.weight(.semibold)).frame(minHeight: 44)
+            .font(.footnote.weight(.semibold)).frame(minHeight: 44).disabled(pro.busy != nil).accessibilityIdentifier("pro.restore")
+        Button("Terms of Use") { openURL(ProLinks.terms) }.font(.footnote.weight(.semibold)).frame(minHeight: 44)
+        Button("Privacy Policy") { openURL(ProLinks.privacy) }.font(.footnote.weight(.semibold)).frame(minHeight: 44)
     }
 
     private func planButton(_ id: String) -> some View {
@@ -218,7 +218,7 @@ struct ProPaywall: View {
                         Text(name).font(.appHeadline).foregroundStyle(Palette.ink)
                         if id == StoreCatalog.yearly { Text("BEST VALUE").font(.caption2.weight(.bold)).foregroundStyle(Palette.accent).padding(.horizontal, 6).padding(.vertical, 2).background(Palette.mint, in: Capsule()).fixedSize() }
                     }
-                    if let note { Text(note).font(.caption).foregroundStyle(Palette.muted) }
+                    if let note { Text(note).font(.footnote).foregroundStyle(Palette.muted) }
                 }
                 Spacer(minLength: 8)
                 Text((pro.price(id) ?? "–") + period).font(.system(.subheadline, design: .rounded, weight: .bold)).foregroundStyle(Palette.ink).monospacedDigit()
@@ -269,12 +269,12 @@ struct PennyStoreView: View {
                 SectionHeading(title: "Coins", detail: "For the shop")
                 VStack(spacing: 10) { ForEach(StoreCatalog.coinOrder, id: \.self) { coinRow($0) } }
                 Text("Coins are also free: \(petName) earns them for every shift you work and get paid for, for missions, badges and saying hi to friends.")
-                    .font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    .font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 if let message = purchases.message {
-                    Text(message).font(.caption).foregroundStyle(Palette.warning).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("store.message")
+                    Text(message).font(.footnote).foregroundStyle(Palette.warning).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("store.message")
                 }
                 Button(purchases.busy == "restore" ? "Restoring…" : "Restore purchases") { Task { await purchases.restore() } }
-                    .font(.caption.weight(.semibold)).frame(minHeight: 44).disabled(purchases.busy != nil)
+                    .font(.footnote.weight(.semibold)).frame(minHeight: 44).disabled(purchases.busy != nil)
             }
             .padding(20).readableWidth()
         }
@@ -303,7 +303,7 @@ struct PennyStoreView: View {
                 .primaryButton().disabled(purchases.products[id] == nil || purchases.busy != nil).accessibilityIdentifier("store.tryOn.buy.\(pack.id)")
             }
             if let message = purchases.message {
-                Text(message).font(.caption).foregroundStyle(Palette.warning).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                Text(message).font(.footnote).foregroundStyle(Palette.warning).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -322,7 +322,7 @@ struct PennyStoreView: View {
                 .frame(width: 96, height: 96).clipShape(RoundedRectangle(cornerRadius: 14)).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(pack.name).font(.appHeadline).foregroundStyle(Palette.ink)
-                    Text(pack.detail).font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    Text(pack.detail).font(.footnote).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Button { trying = id } label: { Label("Try it on \(petName)", systemImage: "sparkles") }
