@@ -54,7 +54,7 @@ The old howmuch-ios.fly.dev pages still 301 to the same pages.
 
 ## Screenshots
 
-**Current set (build 67, 8 Nov 2026):** `output/app-store/demo-cards/6.9in-1320x2868/`. These are seven framed cards built from real captures (Overview, paste a job, Calendar, Earnings, Penny, Friends, Dark Mode). Upload them in file-name order. To redo them after UI changes, run the `testStoreScreenshots` UI test, then `ios/scripts/make_store_cards.py` (instructions are in the script).
+**Current set (build 90, 28 Nov 2026):** iPhone: `output/app-store/demo-cards/build90/6.3in-1206x2622/`, the seven framed cards (Overview, paste a job, Calendar, Earnings, Penny, Friends, Dark Mode) in the 6.3" medium-display slot, in file-name order; 6.9" and 6.5" sizes are next to it. iPad: `output/app-store/ipad-13-build90/`, nine plain 13" captures (2064 × 2752) in the iPad 13" slot. To redo them after UI changes, run the `testStoreScreenshots` UI test on a Pro Max and a 13" iPad simulator, then `ios/scripts/make_store_cards.py` for the iPhone cards (instructions are in the script). Run the test with normal simulator signing, not `CODE_SIGNING_ALLOWED=NO`: without the app-group entitlement the paste-a-job screen never opens and the capture shows Overview.
 
 **App previews:** `output/app-store/demo-cards/previews-886x1920/`. These are three silent recordings of the real app, made from the `testStorePreview1/2/3` UI tests; the README in `demo-cards` explains how they were made. They go in the same medium-display slot as the 6.3" screenshots (`demo-cards/6.3in-1206x2622`, the size App Store Connect asks for).
 
