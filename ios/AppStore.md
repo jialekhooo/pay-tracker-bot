@@ -10,14 +10,14 @@ Everything App Store Connect asks for, ready to paste. App record: `6830079731`
 **Subtitle** (30): `Track shifts, pay and payouts` (29)
 
 **Promotional text** (170, can change without review):
-> Paste a job message from WhatsApp and HowMuch fills in every date, time and rate. See your pay live on the Lock Screen while you work.
+> Now easier to read, with a cleaner look. Paste a job message and HowMuch fills in every date, time and rate, while Penny, your pay pet, grows as you get paid.
 
 **Description**:
 > HowMuch keeps track of the shifts you work and the money you're owed — built for event crew, promoters, part-timers and anyone paid by the shift.
 >
 > ADD JOBS IN SECONDS
 > • Paste a job offer from WhatsApp or Telegram, or share it straight to HowMuch. Dates, times, venue and pay are filled in for you to check.
-> • Multi-day jobs, overnight shifts, breaks, hourly or fixed pay, and overtime.
+> • Multi-day jobs, overnight shifts, breaks, hourly or fixed pay, overtime, and extras like bonuses or allowances.
 > • Add a job from Siri, Spotlight or Control Center.
 >
 > KNOW WHAT YOU'VE EARNED
@@ -31,10 +31,21 @@ Everything App Store Connect asks for, ready to paste. App record: `6830079731`
 > • Staying late? Tap +30 min and the pay updates, overtime included.
 > • Reminders before each shift, and a time-to-leave alert with directions.
 >
+> MEET PENNY
+> • Penny, your pay pet, grows as you work and get paid, with weekly missions, streaks, coins and a shop of outfits and scenes.
+> • Add friends by code or invite link, visit their pets and say hi once a day. You both earn coins. Friends only ever see your pet, never your shifts or pay.
+>
 > STAY ORGANISED
 > • Work calendar, widgets for your next shift and this month, and Apple Calendar export.
 > • Keep cab and meal claims with receipt photos alongside each job.
 > • CSV import and export, and full backups.
+> • Light and Dark Mode, and an optional Face ID lock.
+>
+> HOWMUCH PRO
+> Tracking shifts in up to 5 events, earnings, the calendar and Penny are free. HowMuch Pro adds unlimited events, pay-in tracking, reminders and the Lock Screen shift card, calendar sync and exports, and insights and widgets. Pro is a monthly or yearly subscription (each with a 1-week free trial for new subscribers) or a one-time lifetime purchase. Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period, and can be managed or cancelled in your Apple Account settings. Penny's item packs and coin bundles are optional in-app purchases.
+>
+> Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+> Privacy Policy: https://howmuch-ios.fly.dev/privacy
 >
 > Your records belong to your Apple account and sync across your devices. No ads, no tracking.
 
@@ -129,6 +140,17 @@ Already answered in the build (`ITSAppUsesNonExemptEncryption = NO`): only stand
 - [x] Support and privacy pages rewritten for launch with a contact email (deploy the API to publish them).
 - [ ] Upload build 34 (no "iOS beta" label, no Payment detection) and wait for processing.
 - [ ] Check on a real iPhone: sign-in, add/edit/delete a shift, Live Activity, Delete account.
+
+## Version 1.5 — What's New
+
+Submitted with build 90 (28 Nov 2026). What's New, as saved in App Store Connect:
+> • A fresh, easier-to-read look: dates, places and notes use slightly larger text across the app.
+> • Cleaner screens: slimmer filters, shorter event cards in Earnings, and a tidier calendar.
+> • Adding a shift is simpler: search Apple Maps right from the location field, with clearer Repeat and Paste buttons.
+> • Try before you buy: tap any item in your pet's shop to see your pet wearing it, and switch between Try on and Now to compare.
+> • Buying an item with coins now asks you to confirm first and shows how many coins you'll have left.
+> • Item packs in Penny's store can be tried on before you buy.
+> • Small fixes and improvements.
 
 ## Version 1.1 — review notes and privacy changes
 
