@@ -251,8 +251,14 @@ footer{margin-top:72px}
 @media (max-width:820px){
  .screens{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:18px;padding:8px 18px 16px;margin:0 -18px}
  .screens li{flex:0 0 min(62vw,240px);scroll-snap-align:center}
- .hero{grid-template-columns:1fr;gap:28px;margin-top:28px}
- .stage{max-width:380px;width:100%;margin:0 auto}
+ .hero{grid-template-columns:1fr;gap:22px;margin:24px 0 8px}
+ /* Penny's scene becomes a short, wide banner under the text instead of a big square. */
+ .stage{aspect-ratio:auto;height:190px;border-radius:24px}
+ .stage .window{left:7%;top:16%;width:auto;height:30%;aspect-ratio:1}
+ .stage .penny{left:calc(32% - 46px);bottom:13%;width:auto;height:64%}
+ .stage .bubble{left:auto;right:7%;top:20%;transform:rotate(-3deg)}
+ .stage .coin{width:auto;height:15%}
+ .stage .c1{left:7%;bottom:22%}.stage .c2{right:16%;bottom:24%}.stage .c3{display:none}
  .features{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:620px){
@@ -260,6 +266,15 @@ footer{margin-top:72px}
  .brand{font-size:20px}
  .top nav{order:3;width:100%}.links{justify-content:space-between;gap:0}.links a{padding:6px 8px;font-size:15px}
  .features,.plans,.short,.contact,.faq{grid-template-columns:1fr}
+ h1{font-size:40px;margin-bottom:10px}
+ .kicker{font-size:12px;margin-bottom:6px}
+ .lede{font-size:17px}
+ .date{margin-top:8px}
+ .actions{margin-top:18px;gap:10px}
+ .actions{gap:8px}
+ .actions .btn{padding:11px 13px;font-size:14.5px;border-radius:14px}
+ .actions .btn .px{display:none}
+ .stage{height:160px}
  .card,section{padding:22px 18px;border-radius:20px}
  nav.toc ol{columns:1}
  thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
