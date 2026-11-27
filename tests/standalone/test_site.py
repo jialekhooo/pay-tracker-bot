@@ -28,6 +28,9 @@ def test_every_page_is_self_contained_and_links_to_the_others():
         # The only images are the home page's own screenshots, served by HowMuch.
         assert all(src.startswith('/screens/') for src in re.findall(r'src="([^"]+)"', html)), path
         assert html.count('<h1') == 1, path
+        # Every page, home included, shows the support address in the footer, and no other address.
+        assert f'href="mailto:{site.CONTACT}?subject=HowMuch%20support">{site.CONTACT}</a>' in html, path
+        assert set(re.findall(r'[\w.+-]+@[\w-]+\.[\w.]+', html)) == {site.CONTACT}, path
         assert f'href="{path}" aria-current=page' in html, path
         for href in ('/', '/support', '/privacy', '/terms'):
             assert f'href="{href}"' in html, (path, href)

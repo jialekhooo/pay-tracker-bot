@@ -332,7 +332,7 @@ def page(path: str, title: str, description: str, body: str) -> str:
 <footer>
  <div class="ground"></div>
  <div class="top">{bar("Footer")}</div>
- <p class="legal">HowMuch by Jia Le Khoo &middot; <a href="/terms">Terms of Use</a></p>
+ <p class="legal">HowMuch by Jia Le Khoo &middot; <a href="mailto:{CONTACT}?subject=HowMuch%20support">{CONTACT}</a> &middot; <a href="/terms">Terms of Use</a></p>
 </footer>
 </main></body>
 </html>
