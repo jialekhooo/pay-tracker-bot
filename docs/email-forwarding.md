@@ -2,6 +2,8 @@
 
 Live setup (5 Nov 2026): domain `howmuch.jialekhoo.com`, Worker `howmuch-inbound-email` on the jialexkhoo@gmail.com Cloudflare account, rule `pay@howmuch.jialekhoo.com`. The jialekhoo.com zone also routes `smartspend.jialekhoo.com` (catch-all → `smartspend-inbound`) for a separate app.
 
+Support mail (27 Nov 2026): `support@jialekhoo.com` → Send to an email → jialexkhoo@gmail.com (verified destination). The apex `jialekhoo.com` got Cloudflare's three MX records for this; the `howmuch.` and `smartspend.` rules are unchanged. The website (`howmuch_api/site.py` CONTACT) lists this address.
+
 Each HowMuch account gets a private address, `pay+<16 hex>@<inbound domain>`, shown in
 Settings → Pay-in tracking once forwarding is switched on. People forward DBS
 "You've received a transfer" alerts there by hand or with a Gmail filter. The server reads the

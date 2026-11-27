@@ -8,7 +8,7 @@ from __future__ import annotations
 from html import escape
 from pathlib import Path
 
-CONTACT = 'jialexkhoo@gmail.com'
+CONTACT = 'support@jialekhoo.com'
 TELEGRAM = 'jialekhoo'
 APP_STORE = 'https://apps.apple.com/app/id6830079731'
 TERMS = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
