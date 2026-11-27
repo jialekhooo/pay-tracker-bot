@@ -219,9 +219,13 @@ final class HowMuchUITests: XCTestCase {
             XCTAssertTrue(app.staticTexts["paste.summary"].waitForExistence(timeout: 5)); pause(2.5)
             app.swipeUp(velocity: .slow); pause(2)
             app.swipeUp(velocity: .slow); pause(2)
-            app.buttons["Save"].tap(); pause(1.5)
-            app.buttons["nav.calendar"].tap(); pause(2.5)
-            app.buttons["nav.earnings"].tap(); pause(2.5)
+            // While the screen is being recorded the simulator runs behind, so each step waits for its screen
+            // before the next tap; a tap sent while Add shift is still closing is lost.
+            app.buttons["Save"].tap()
+            let closed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.buttons["paste.type"])
+            wait(for: [closed], timeout: 10); pause(1.5)
+            app.buttons["nav.calendar"].tap(); XCTAssertTrue(app.buttons["calendar.today"].waitForExistence(timeout: 10)); pause(2.5)
+            app.buttons["nav.earnings"].tap(); XCTAssertTrue(app.buttons["Day"].waitForExistence(timeout: 10)); pause(2.5)
         }
     }
     @MainActor
@@ -253,7 +257,8 @@ final class HowMuchUITests: XCTestCase {
             let caption = app.staticTexts["settings.appearanceCaption"]; reveal(caption, in: app); pause(0.8)
             app.buttons["Dark"].tap(); pause(2)
             app.buttons["nav.overview"].tap(); pause(2.5)
-            app.buttons["nav.calendar"].tap(); pause(2)
+            // Wait for the calendar to show (the simulator runs behind while recording) before the clip ends.
+            app.buttons["nav.calendar"].tap(); XCTAssertTrue(app.buttons["calendar.today"].waitForExistence(timeout: 10)); pause(2.5)
         }
         // Leave the simulator as it was.
         let app = XCUIApplication(); app.buttons["nav.settings"].tap()
