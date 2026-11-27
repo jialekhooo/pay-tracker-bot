@@ -45,7 +45,7 @@ Everything App Store Connect asks for, ready to paste. App record: `6830079731`
 > Tracking shifts in up to 5 events, earnings, the calendar and Penny are free. HowMuch Pro adds unlimited events, pay-in tracking, reminders and the Lock Screen shift card, calendar sync and exports, and insights and widgets. Pro is a monthly or yearly subscription (each with a 1-week free trial for new subscribers) or a one-time lifetime purchase. Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period, and can be managed or cancelled in your Apple Account settings. Penny's item packs and coin bundles are optional in-app purchases.
 >
 > Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
-> Privacy Policy: https://howmuch-ios.fly.dev/privacy
+> Privacy Policy: https://howmuch.jialekhoo.com/privacy
 >
 > Your records belong to your Apple account and sync across your devices. No ads, no tracking.
 
