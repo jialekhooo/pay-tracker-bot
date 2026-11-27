@@ -213,6 +213,10 @@ section>:last-child,section>:last-child>:last-child{margin-bottom:0}
 .sticker{position:absolute;top:-16px;right:18px;transform:rotate(5deg);background:var(--teal);color:var(--bg);border:2.5px solid var(--edge);
  border-radius:10px;padding:3px 12px;font-weight:800;font-size:14px;letter-spacing:.08em;box-shadow:0 3px 0 var(--shadow)}
 
+/* Support */
+.faq{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;align-items:start;margin-top:22px}
+.faq section{margin-top:0}
+
 /* Pages */
 .pagehead{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:40px auto 8px}
 .pagehead .px{width:110px;height:auto;flex:none;animation:hop 2.6s ease-in-out infinite}
@@ -259,7 +263,7 @@ footer{margin-top:72px}
  body{font-size:16px}.wrap{padding:14px 16px 32px}
  .brand{font-size:20px}
  .top nav{order:3;width:100%}.links{justify-content:space-between;gap:0}.links a{padding:6px 8px;font-size:15px}
- .features,.plans,.short,.contact{grid-template-columns:1fr}
+ .features,.plans,.short,.contact,.faq{grid-template-columns:1fr}
  .card,section{padding:22px 18px;border-radius:20px}
  .pagehead .px{width:72px}
  nav.toc ol{columns:1}
@@ -309,6 +313,16 @@ def page(path: str, title: str, description: str, body: str) -> str:
 """
 
 
+def stage(bubble: str, label: str) -> str:
+    """Penny in her room among gold coins, saying something: the big picture beside a page's heading."""
+    return f"""<div class="stage" role="img" aria-label="{escape(label)}">
+  <div class="window"></div>
+  {coin('coin c1')}{coin('coin c2')}{coin('coin c3')}
+  <div class="bubble">{bubble}</div>
+  {penny('penny')}
+ </div>"""
+
+
 def page_head(title: str, lede: str, extra: str = '') -> str:
     """The heading of an inner page, with Penny beside it."""
     return f"""<header class="pagehead narrow">
@@ -329,12 +343,7 @@ HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay y
   <p class="lede">HowMuch keeps track of the shifts you work and the money you&rsquo;re owed. It&rsquo;s built for event crew, promoters, part-timers and anyone paid by the shift.</p>
   <div class="actions"><a class="btn primary" href="{APP_STORE}">{coin()} Download on the App Store</a><a class="btn" href="/support">Get help</a></div>
  </div>
- <div class="stage" role="img" aria-label="Penny, the HowMuch pet, hopping among gold coins and saying Ka-ching!">
-  <div class="window"></div>
-  {coin('coin c1')}{coin('coin c2')}{coin('coin c3')}
-  <div class="bubble">Ka-ching!</div>
-  {penny('penny')}
- </div>
+ {stage('Ka-ching!', 'Penny, the HowMuch pet, hopping among gold coins and saying Ka-ching!')}
 </div>
 
 <section aria-labelledby="inside">
@@ -369,20 +378,25 @@ HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay y
 """)
 
 
-SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us on Telegram or by email, and answers about getting started, syncing, HowMuch Pro, Pay-in tracking and deleting your account.', page_head(
-    'Support', 'Message us on Telegram or by email, or find answers to common questions below.') + f"""
-<div class="narrow">
+SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us on Telegram or by email, and answers about getting started, syncing, HowMuch Pro, Pay-in tracking and deleting your account.', f"""
+<div class="hero">
+ <div>
+  <span class="kicker">We&rsquo;re here to help</span>
+  <h1>Support</h1>
+  <p class="lede">Message us on Telegram or by email, or find answers to common questions below.</p>
+  <div class="actions"><a class="btn primary" href="https://t.me/{TELEGRAM}">Message @{TELEGRAM}</a><a class="btn" href="mailto:{CONTACT}?subject=HowMuch%20support">Email us</a></div>
+ </div>
+ {stage('Happy to help!', 'Penny, the HowMuch pet, among gold coins saying Happy to help!')}
+</div>
+
 <section aria-labelledby="contact">
  <div class="head">{icon('chat')}<h2 id="contact">Contact us</h2></div>
  <p>For any issue, message <a href="https://t.me/{TELEGRAM}">@{TELEGRAM}</a> on Telegram or email <a href="mailto:{CONTACT}?subject=HowMuch%20support">{CONTACT}</a>. We reply within 7 days, usually sooner.</p>
- <div class="contact">
-  <a class="btn primary" href="https://t.me/{TELEGRAM}">Telegram<small>@{TELEGRAM}</small></a>
-  <a class="btn" href="mailto:{CONTACT}?subject=HowMuch%20support">Email<small>{CONTACT}</small></a>
- </div>
  <p>It helps to include the app version (at the bottom of Settings), your iPhone model and iOS version, and the steps that led to the problem. A screenshot helps too.</p>
  <p class="note">Please never send passwords, app passwords or full bank statements. We will never ask for them.</p>
 </section>
 
+<div class="faq">
 <section aria-labelledby="start">
  <div class="head">{icon('paste')}<h2 id="start">Getting started</h2></div>
  <details><summary>How do I add a shift?</summary>
