@@ -65,6 +65,12 @@ ICONS = {
     'shield': ['oooooooo', 'otttttto', 'ottwwtto', 'ottwwtto', '.otttto.', '.otttto.', '..otto..', '...oo...'],
     'chat': ['oooooooo', 'owwwwwwo', 'owtwtwto', 'owwwwwwo', 'oooowooo', '...owo..', '...oo...'],
     'mail': ['oooooooo', 'ootwwtoo', 'owotwtwo', 'owwottwo', 'owwwwwwo', 'oooooooo'],
+    'store': ['.oooooo.', 'owwwwwwo', 'otttttto', 'owwwwwwo', 'otttttto', 'owwwwwwo', '.oooooo.'],
+    'toggle': ['.oooooo.', 'ottttwwo', 'ottttwwo', '.oooooo.', '........', '.oooooo.', 'owwmmmmo', '.oooooo.'],
+    'phone': ['.oooooo.', '.owwwwo.', '.owmmwo.', '.owmmwo.', '.owwwwo.', '.owwwwo.', '.oowwoo.', '.oooooo.'],
+    'people': ['..oo.oo.', '.oyyoyyo', '.oyyoyyo', '..oo.oo.', '.oooooo.', 'otttttto', 'otttttto', 'oooooooo'],
+    'never': ['..oooo..', '.orrrro.', 'orrrrrro', 'owwwwwwo', 'owwwwwwo', 'orrrrrro', '.orrrro.', '..oooo..'],
+    'lock': ['..oooo..', '.oo..oo.', '.o....o.', 'oooooooo', 'oyyyyyyo', 'oyyooyyo', 'oyyyyyyo', 'oooooooo'],
 }
 
 
