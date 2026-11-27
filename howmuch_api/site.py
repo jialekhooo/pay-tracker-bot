@@ -70,6 +70,8 @@ ICONS = {
     'phone': ['.oooooo.', '.owwwwo.', '.owmmwo.', '.owmmwo.', '.owwwwo.', '.owwwwo.', '.oowwoo.', '.oooooo.'],
     'people': ['..oo.oo.', '.oyyoyyo', '.oyyoyyo', '..oo.oo.', '.oooooo.', 'otttttto', 'otttttto', 'oooooooo'],
     'never': ['..oooo..', '.orrrro.', 'orrrrrro', 'owwwwwwo', 'owwwwwwo', 'orrrrrro', '.orrrro.', '..oooo..'],
+    'star': ['...oo...', '..oyyo..', 'oooyyooo', 'oyyyyyyo', '.oyyyyo.', '.oyyyyo.', 'oyyooyyo', 'ooo..ooo'],
+    'coin': COIN,
     'lock': ['..oooo..', '.oo..oo.', '.o....o.', 'oooooooo', 'oyyyyyyo', 'oyyooyyo', 'oyyyyyyo', 'oooooooo'],
 }
 
@@ -166,6 +168,7 @@ section>:last-child,section>:last-child>:last-child{margin-bottom:0}
 .icon .px{width:30px;height:auto}
 .head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
 .head h2{margin:0}
+.head .sub{margin:4px 0 0;color:var(--muted);font-size:16px}
 
 /* Home hero */
 .hero{display:grid;grid-template-columns:1.15fr .85fr;gap:40px;align-items:center;margin:44px 0 18px}
@@ -193,25 +196,22 @@ section>:last-child,section>:last-child>:last-child{margin-bottom:0}
 .screens li:nth-child(even) .label{margin-top:28px}
 
 /* Features */
-.features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:0;padding:0;list-style:none}
-.features li{margin:0;border:2.5px solid var(--edge);border-radius:22px;box-shadow:0 5px 0 var(--shadow);padding:20px;transition:transform .15s}
+.features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.features li{margin:0;border:2px solid var(--edge);border-radius:18px;padding:18px;transition:transform .15s}
 .features li:nth-child(4n+1){background:var(--mint)}.features li:nth-child(4n+2){background:var(--sun)}
 .features li:nth-child(4n+3){background:var(--rose)}.features li:nth-child(4n+4){background:var(--sky)}
 .features li:nth-child(odd):hover{transform:rotate(-1.2deg) translateY(-3px)}.features li:nth-child(even):hover{transform:rotate(1.2deg) translateY(-3px)}
 .features h3{margin:14px 0 6px;font-size:20px}
 .features p{margin:0;font-size:16px;line-height:1.5}
-.section-title{text-align:center;margin:64px 0 24px}
-.section-title p{color:var(--muted);margin:0}
 
 /* Plans */
-.plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
-.plan{position:relative;border:2.5px solid var(--edge);border-radius:24px;box-shadow:0 6px 0 var(--shadow);padding:26px 24px}
+.plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:6px}
+.plan{position:relative;border:2px solid var(--edge);border-radius:18px;padding:22px 20px}
 .plan.free{background:var(--mint)}.plan.pro{background:var(--sun)}
 .plan h3{margin:0 0 10px;font-size:24px}
 .plan p{margin:0}
 .sticker{position:absolute;top:-16px;right:18px;transform:rotate(5deg);background:var(--teal);color:var(--bg);border:2.5px solid var(--edge);
  border-radius:10px;padding:3px 12px;font-weight:800;font-size:14px;letter-spacing:.08em;box-shadow:0 3px 0 var(--shadow)}
-.private{display:flex;gap:20px;align-items:center}
 
 /* Pages */
 .pagehead{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:40px auto 8px}
@@ -249,7 +249,7 @@ footer{margin-top:72px}
 .legal a{color:var(--muted);white-space:nowrap}
 
 @media (max-width:820px){
- .screens{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:18px;padding:8px 4px 16px;margin:0 -16px;padding-left:16px;padding-right:16px}
+ .screens{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:18px;padding:8px 18px 16px;margin:0 -18px}
  .screens li{flex:0 0 min(62vw,240px);scroll-snap-align:center}
  .hero{grid-template-columns:1fr;gap:28px;margin-top:28px}
  .stage{max-width:380px;width:100%;margin:0 auto}
@@ -263,7 +263,6 @@ footer{margin-top:72px}
  .card,section{padding:22px 18px;border-radius:20px}
  .pagehead .px{width:72px}
  nav.toc ol{columns:1}
- .private{flex-direction:column;align-items:flex-start}
  thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
  table,tbody,tr,td{display:block;width:100%}
  tr{border-top:2px dashed var(--line);padding:12px 0}tr:first-child{border-top:0;padding-top:0}tr:last-child{padding-bottom:0}
@@ -338,13 +337,13 @@ HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay y
  </div>
 </div>
 
-<section class="bare" aria-labelledby="inside">
- <div class="section-title"><h2 id="inside">Take a look inside</h2><p>Real screens from the app, with demo data.</p></div>
+<section aria-labelledby="inside">
+ <div class="head">{icon('phone')}<div><h2 id="inside">Take a look inside</h2><p class="sub">Real screens from the app, with demo data.</p></div></div>
  <ul class="screens">{SCREEN_ITEMS}</ul>
 </section>
 
-<section class="bare" aria-labelledby="what">
- <div class="section-title"><h2 id="what">What it does</h2><p>Everything between &ldquo;you&rsquo;re hired&rdquo; and &ldquo;you&rsquo;ve been paid&rdquo;.</p></div>
+<section aria-labelledby="what">
+ <div class="head">{icon('star')}<div><h2 id="what">What it does</h2><p class="sub">Everything between &ldquo;you&rsquo;re hired&rdquo; and &ldquo;you&rsquo;ve been paid&rdquo;.</p></div></div>
  <ul class="features">
   <li>{icon('paste')}<h3>Add jobs in seconds</h3><p>Paste a job message from WhatsApp or Telegram, and the dates, times, venue and pay are filled in for you to check.</p></li>
   <li>{icon('earned')}<h3>See what you&rsquo;ve earned</h3><p>Earnings by day, week, month and event, plus what&rsquo;s still booked and what&rsquo;s waiting to be paid.</p></li>
@@ -355,18 +354,17 @@ HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay y
  </ul>
 </section>
 
-<section class="bare" aria-labelledby="plans">
- <div class="section-title"><h2 id="plans">Free, with HowMuch Pro for more</h2></div>
+<section aria-labelledby="plans">
+ <div class="head">{icon('coin')}<h2 id="plans">Free, with HowMuch Pro for more</h2></div>
  <div class="plans">
   <div class="plan free"><h3>Free</h3><p>Tracking shifts in up to 5 events, your earnings, the work calendar and Penny are free.</p></div>
   <div class="plan pro"><span class="sticker">PRO</span><h3>HowMuch Pro</h3><p>HowMuch Pro adds unlimited events, Pay-in tracking, reminders and the live shift on the Lock Screen, calendar sync and exports, and insights and widgets. Choose monthly or yearly, each with a free first week for new subscribers, or a one-time lifetime purchase. Prices for your region are shown in the app.</p></div>
  </div>
 </section>
 
-<section aria-labelledby="private" class="private">
- {icon('shield')}
- <div><h2 id="private">Private by design</h2>
- <p>You sign in with Apple, and your records sync across your devices. There are no ads and no tracking, and your data is never sold. Friends only ever see your pet, never your shifts or pay. Read the <a href="/privacy">privacy policy</a>.</p></div>
+<section aria-labelledby="private">
+ <div class="head">{icon('shield')}<h2 id="private">Private by design</h2></div>
+ <p>You sign in with Apple, and your records sync across your devices. There are no ads and no tracking, and your data is never sold. Friends only ever see your pet, never your shifts or pay. Read the <a href="/privacy">privacy policy</a>.</p>
 </section>
 """)
 
