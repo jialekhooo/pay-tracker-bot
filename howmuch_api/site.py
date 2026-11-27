@@ -15,6 +15,8 @@ TERMS = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
 
 # App screenshots on the home page (demo data from build 81), served from static/screens at /screens/<name>.jpg.
 SCREENS_DIR = Path(__file__).with_name('static') / 'screens'
+# The tab icon (Penny on mint, rendered from favicon_svg) and the app icon for iPhone home screens.
+ICONS_DIR = Path(__file__).with_name('static') / 'icons'
 SCREENS = (('overview', 'Overview', 'The Overview screen: Penny, all-time earnings, and what is paid, pending and booked'),
            ('paste-job', 'Paste a job', 'Adding a shift by pasting a job message: the dates, venue and pay are filled in'),
            ('calendar', 'Calendar', 'The work calendar for November with booked shifts'),
@@ -92,6 +94,17 @@ def pixels(rows: list[str], cls: str = '', label: str | None = None) -> str:
     a11y = f'role="img" aria-label="{escape(label)}"' if label else 'aria-hidden="true"'
     return (f'<svg class="px {cls}" viewBox="0 0 {len(rows[0])} {len(rows)}" shape-rendering="crispEdges" {a11y}>'
             + ''.join(rects) + '</svg>')
+
+
+def favicon_svg() -> str:
+    """The browser-tab icon: Penny on the app icon's mint square, as crisp pixel art."""
+    rects = []
+    for y, row in enumerate(PENNY):
+        for x, ch in enumerate(row):
+            if ch != '.':
+                rects.append(f'<rect x="{x + 6}" y="{y + 5}" width="1" height="1" fill="{ART[ch]}"/>')
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges">'
+            '<rect width="24" height="24" rx="5" fill="#c4e1d5"/>' + ''.join(rects) + '</svg>')
 
 
 def penny(cls: str = '', label: str | None = None) -> str:
@@ -306,6 +319,9 @@ def page(path: str, title: str, description: str, body: str) -> str:
 <meta name="theme-color" content="#fff7e6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#10231f" media="(prefers-color-scheme: dark)">
 <meta name="apple-itunes-app" content="app-id=6830079731">
+<link rel="icon" href="/favicon.ico" sizes="96x96">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>{escape(title)}</title>
 <meta name="description" content="{escape(description)}">
 <style>{STYLE}</style>

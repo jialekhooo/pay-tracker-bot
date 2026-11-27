@@ -14,7 +14,8 @@ def test_policy_keeps_the_required_statements():
 
 def test_page_is_self_contained_and_its_links_work():
     page = privacy.PAGE
-    assert not re.search(r'<script|<link |<img |@import|url\(', page)
+    assert not re.search(r'<script|<img |@import|url\(', page)
+    assert all(re.search(r'href="/(favicon\.ico|favicon\.svg|apple-touch-icon\.png)"', tag) for tag in re.findall(r'<link [^>]*>', page))
     assert re.findall(r'src="', page) == []
     contents = re.search(r'<nav class="toc".*?</nav>', page, re.S).group(0)
     assert len(re.findall(r'href="#', contents)) == 10  # the ten sections in "On this page"

@@ -21,7 +21,10 @@ def test_pages_are_served_as_html_and_terms_go_to_apples_licence():
 
 def test_every_page_is_self_contained_and_links_to_the_others():
     for path, html in PAGES.items():
-        assert not re.search(r'<script|<link |@import|url\(', html), path
+        assert not re.search(r'<script|@import|url\(', html), path
+        # The only links are to HowMuch's own icons.
+        assert re.findall(r'<link [^>]*>', html) and all(re.search(r'href="/(favicon\.ico|favicon\.svg|apple-touch-icon\.png)"', tag)
+                                                         for tag in re.findall(r'<link [^>]*>', html)), path
         # The only images are the home page's own screenshots, served by HowMuch.
         assert all(src.startswith('/screens/') for src in re.findall(r'src="([^"]+)"', html)), path
         assert html.count('<h1') == 1, path
@@ -50,3 +53,13 @@ def test_home_page_screenshots_are_served_and_described():
         assert response.content[:3] == b'\xff\xd8\xff' and alt, src
     assert client.get('/screens/nope.jpg').status_code == 404
     assert client.get('/screens/..%2Fmain.jpg').status_code == 404
+
+
+def test_the_browser_tab_and_home_screen_show_penny():
+    client = TestClient(app)
+    svg = client.get('/favicon.svg')
+    assert svg.status_code == 200 and svg.headers['content-type'].startswith('image/svg+xml') and svg.text.startswith('<svg')
+    for path in ('/favicon.ico', '/apple-touch-icon.png'):
+        response = client.get(path)
+        assert response.status_code == 200 and response.headers['content-type'] == 'image/png', path
+        assert response.content[:8] == b'\x89PNG\r\n\x1a\n', path

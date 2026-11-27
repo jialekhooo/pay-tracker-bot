@@ -70,6 +70,24 @@ async def screen(name:str):
     if name not in _SCREENS:raise HTTPException(404)
     return Response(_SCREENS[name],media_type='image/jpeg',headers={'Cache-Control':'public, max-age=86400'})
 
+_FAVICON_SVG=site.favicon_svg()
+_FAVICON_PNG=(site.ICONS_DIR/'favicon-96.png').read_bytes()
+_TOUCH_ICON=(site.ICONS_DIR/'apple-touch-icon.png').read_bytes()
+_ICON_CACHE={'Cache-Control':'public, max-age=604800'}
+
+@app.get('/favicon.svg')
+async def favicon_svg():
+    return Response(_FAVICON_SVG,media_type='image/svg+xml',headers=_ICON_CACHE)
+
+@app.get('/favicon.ico')
+async def favicon_ico():
+    # A PNG under the name browsers ask for by default; every current browser reads it.
+    return Response(_FAVICON_PNG,media_type='image/png',headers=_ICON_CACHE)
+
+@app.get('/apple-touch-icon.png')
+async def touch_icon():
+    return Response(_TOUCH_ICON,media_type='image/png',headers=_ICON_CACHE)
+
 @app.get('/terms')
 async def terms():
     # HowMuch uses Apple's standard licence agreement for apps (the EULA linked from the plans screen).
