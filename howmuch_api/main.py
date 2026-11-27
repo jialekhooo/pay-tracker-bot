@@ -5,7 +5,8 @@ import logging
 import os
 from contextlib import asynccontextmanager,suppress
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse,RedirectResponse
+from fastapi import HTTPException
+from fastapi.responses import HTMLResponse,RedirectResponse,Response
 from .database import AppStorage
 from . import privacy as privacy_policy
 from . import site
@@ -60,6 +61,14 @@ async def privacy():
 @app.get('/support',response_class=HTMLResponse)
 async def support():
     return site.SUPPORT
+
+_SCREENS={name:(site.SCREENS_DIR/f'{name}.jpg').read_bytes() for name,_,_ in site.SCREENS}
+
+@app.get('/screens/{name}.jpg')
+async def screen(name:str):
+    # Only the home page's own screenshots, read once at start-up.
+    if name not in _SCREENS:raise HTTPException(404)
+    return Response(_SCREENS[name],media_type='image/jpeg',headers={'Cache-Control':'public, max-age=86400'})
 
 @app.get('/terms')
 async def terms():

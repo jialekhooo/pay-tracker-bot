@@ -21,7 +21,9 @@ def test_pages_are_served_as_html_and_terms_go_to_apples_licence():
 
 def test_every_page_is_self_contained_and_links_to_the_others():
     for path, html in PAGES.items():
-        assert not re.search(r'<script|<link |<img |@import|url\(|src="', html), path
+        assert not re.search(r'<script|<link |@import|url\(', html), path
+        # The only images are the home page's own screenshots, served by HowMuch.
+        assert all(src.startswith('/screens/') for src in re.findall(r'src="([^"]+)"', html)), path
         assert html.count('<h1') == 1, path
         assert f'href="{path}" aria-current=page' in html, path
         for href in ('/', '/support', '/privacy', '/terms'):
@@ -36,3 +38,15 @@ def test_support_answers_the_questions_app_review_and_people_ask():
                  'Data &amp; backups', 'never send passwords'):
         assert text in page, text
     assert site.APP_STORE in site.HOME and 'up to 5 events' in site.HOME
+
+
+def test_home_page_screenshots_are_served_and_described():
+    client = TestClient(app)
+    images = re.findall(r'<img src="(/screens/[^"]+)"[^>]*alt="([^"]+)"', site.HOME)
+    assert len(images) == len(site.SCREENS) == 5
+    for src, alt in images:
+        response = client.get(src)
+        assert response.status_code == 200 and response.headers['content-type'] == 'image/jpeg', src
+        assert response.content[:3] == b'\xff\xd8\xff' and alt, src
+    assert client.get('/screens/nope.jpg').status_code == 404
+    assert client.get('/screens/..%2Fmain.jpg').status_code == 404

@@ -6,11 +6,20 @@ drawn as inline SVG, and every page works in light and dark mode.
 from __future__ import annotations
 
 from html import escape
+from pathlib import Path
 
 CONTACT = 'jialexkhoo@gmail.com'
 TELEGRAM = 'jiale'
 APP_STORE = 'https://apps.apple.com/app/id6830079731'
 TERMS = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
+
+# App screenshots on the home page (demo data from build 81), served from static/screens at /screens/<name>.jpg.
+SCREENS_DIR = Path(__file__).with_name('static') / 'screens'
+SCREENS = (('overview', 'Overview', 'The Overview screen: Penny, all-time earnings, and what is paid, pending and booked'),
+           ('paste-job', 'Paste a job', 'Adding a shift by pasting a job message: the dates, venue and pay are filled in'),
+           ('calendar', 'Calendar', 'The work calendar for November with booked shifts'),
+           ('earnings', 'Earnings', 'Earnings by event, with paid, pending and booked totals'),
+           ('penny', 'Penny', 'Penny the pay pet, with a 3-week streak and this week\'s missions'))
 
 # ---------------------------------------------------------------------------------------------------------------
 # Pixel art. Each letter is one pixel of a colour from the palette; "." is empty.
@@ -164,7 +173,17 @@ section>:last-child,section>:last-child>:last-child{margin-bottom:0}
  border-radius:999px;padding:6px 16px;font-weight:800;font-size:clamp(15px,2vw,19px);white-space:nowrap;box-shadow:0 3px 0 #1d3833}
 @keyframes hop{0%,70%,100%{transform:translateY(0)}80%{transform:translateY(-9%)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14%)}}
-@media (prefers-reduced-motion:reduce){.stage .penny,.stage .coin{animation:none}.btn,.links a{transition:none}html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){.stage .penny,.stage .coin{animation:none}.btn,.links a,.phone{transition:none}html{scroll-behavior:auto}}
+
+/* Screenshots */
+.screens{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:22px;margin:0;padding:6px 2px 10px;list-style:none}
+.screens li{margin:0;text-align:center}
+.phone{display:block;background:#1d3833;border:3px solid var(--edge);border-radius:30px;padding:6px;box-shadow:0 6px 0 var(--shadow);transition:transform .15s}
+.phone img{display:block;width:100%;height:auto;border-radius:23px}
+.screens li:nth-child(odd) .phone{transform:rotate(-2deg)}.screens li:nth-child(even) .phone{transform:rotate(2deg) translateY(10px)}
+.screens li:hover .phone{transform:rotate(0) translateY(-4px)}
+.screens .label{display:inline-block;margin-top:18px;padding:4px 14px;border:2px solid var(--edge);border-radius:999px;background:var(--panel);font-weight:800;font-size:15px}
+.screens li:nth-child(even) .label{margin-top:28px}
 
 /* Features */
 .features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:0;padding:0;list-style:none}
@@ -224,6 +243,8 @@ footer .px{width:44px;height:auto;margin:0 auto 10px}
 footer a{color:var(--muted);white-space:nowrap}
 
 @media (max-width:820px){
+ .screens{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:18px;padding:8px 4px 16px;margin:0 -16px;padding-left:16px;padding-right:16px}
+ .screens li{flex:0 0 min(62vw,240px);scroll-snap-align:center}
  .hero{grid-template-columns:1fr;gap:28px;margin-top:28px}
  .stage{max-width:380px;width:100%;margin:0 auto}
  .features{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -286,6 +307,10 @@ def page_head(title: str, lede: str, extra: str = '') -> str:
 </header>"""
 
 
+SCREEN_ITEMS = ''.join(
+    f'<li><span class="phone"><img src="/screens/{name}.jpg" width="552" height="1200" loading="lazy" decoding="async" alt="{escape(alt)}"></span>'
+    f'<span class="label">{title}</span></li>' for name, title, alt in SCREENS)
+
 HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay you are owed. Built for event crew, promoters and anyone paid by the shift.', f"""
 <div class="hero">
  <div>
@@ -301,6 +326,11 @@ HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay y
   {penny('penny')}
  </div>
 </div>
+
+<section class="bare" aria-labelledby="inside">
+ <div class="section-title"><h2 id="inside">Take a look inside</h2><p>Real screens from the app, with demo data.</p></div>
+ <ul class="screens">{SCREEN_ITEMS}</ul>
+</section>
 
 <section class="bare" aria-labelledby="what">
  <div class="section-title"><h2 id="what">What it does</h2><p>Everything between &ldquo;you&rsquo;re hired&rdquo; and &ldquo;you&rsquo;ve been paid&rdquo;.</p></div>
