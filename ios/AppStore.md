@@ -41,7 +41,7 @@ Everything App Store Connect asks for, ready to paste. App record: `6830079731`
 **Keywords** (100): `shift,pay,tracker,timesheet,part time,gig,event crew,earnings,hours,wage,overtime,payslip,freelance` (98)
 
 **Support URL**: https://howmuch-ios.fly.dev/support
-**Marketing URL**: (optional, leave blank)
+**Marketing URL**: https://howmuch-ios.fly.dev/ (the home page; shows as "Developer Website" on the App Store, set from 1.5)
 **Privacy Policy URL**: https://howmuch-ios.fly.dev/privacy
 **Copyright**: `2026 Jia Le Khoo`
 **Category**: Primary *Productivity*, secondary *Finance*
