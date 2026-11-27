@@ -1,60 +1,12 @@
-"""The public privacy policy at /privacy. Self-contained: no scripts, fonts or images from anywhere else."""
+"""The public privacy policy at /privacy, in the website's shared look (site.py)."""
+from .site import CONTACT, page
 
-UPDATED = '24 November 2026'
-CONTACT = 'jialexkhoo@gmail.com'
-
-STYLE = """
-:root{color-scheme:light dark;--bg:#e8f3ee;--panel:#fff;--soft:#eff7f3;--ink:#183b37;--muted:#50706a;--line:#d5e5dd;--teal:#126b5e;--gold:#d9a521;--gold-dark:#a87912}
-@media (prefers-color-scheme:dark){:root{--bg:#0e2622;--panel:#17352f;--soft:#1e413a;--ink:#ecf6f1;--muted:#a4c9bd;--line:#2c524a;--teal:#7fd6c3;--gold:#e8bd4a;--gold-dark:#b98b1c}}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
-a{color:var(--teal);text-underline-offset:2px}
-.wrap{max-width:760px;margin:0 auto;padding:40px 16px 64px}
-.brand{display:flex;align-items:center;gap:10px;font:700 19px/1 ui-rounded,-apple-system,system-ui,sans-serif}
-h1,h2,h3{font-family:ui-rounded,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.2;text-wrap:balance}
-h1{font-size:clamp(36px,8vw,52px);margin:28px 0 8px;letter-spacing:-.02em}
-h2{font-size:26px;margin:0 0 12px;scroll-margin-top:16px}
-h3{font-size:18px;margin:26px 0 4px;scroll-margin-top:16px}
-p{margin:0 0 12px}
-ul{margin:0 0 12px;padding-left:20px}
-li{margin-bottom:6px}
-.lede{font-size:20px;line-height:1.45;color:var(--muted);margin:0}
-.date{font-size:15px;color:var(--muted);margin:12px 0 28px}
-section{background:var(--panel);border-radius:22px;padding:26px 24px;margin-top:16px}
-section>:last-child,section>:last-child>:last-child{margin-bottom:0}
-.short{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
-.short li{background:var(--soft);border-radius:16px;padding:16px;margin:0;font-size:16px;line-height:1.4}
-.short strong{display:block;font-family:ui-rounded,-apple-system,system-ui,sans-serif;font-size:17px;margin-bottom:3px}
-nav ol{columns:2;column-gap:28px;margin:0;padding-left:22px;font-size:16px}
-nav li{break-inside:avoid}
-table{width:100%;border-collapse:collapse;font-size:16px;line-height:1.45}
-th{text-align:left;font-size:14px;font-weight:600;color:var(--muted);padding:0 12px 8px 0}
-td{vertical-align:top;padding:12px 12px 12px 0;border-top:1px solid var(--line)}
-td:first-child{font-weight:600;width:27%}
-th:last-child,td:last-child{padding-right:0}
-.note{background:var(--soft);border-radius:14px;padding:14px 16px;font-size:16px;line-height:1.5;margin:14px 0 0}
-footer{color:var(--muted);font-size:15px;text-align:center;margin-top:28px}
-@media (max-width:620px){
- body{font-size:16px}.wrap{padding-top:28px}.lede{font-size:18px}section{padding:22px 18px;border-radius:20px}
- h2{font-size:23px}.short{grid-template-columns:1fr}nav ol{columns:1}
- thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
- table,tbody,tr,td{display:block;width:100%}
- tr{border-top:1px solid var(--line);padding:12px 0}tr:first-child{border-top:0;padding-top:0}tr:last-child{padding-bottom:0}
- td,td:first-child{border:0;padding:0;width:100%}td:first-child{margin-bottom:2px}td+td{color:var(--muted)}td+td+td{margin-top:4px}
-}
-@media print{:root{--bg:#fff;--panel:#fff;--soft:#fff}section{padding:0;margin-top:24px;border-radius:0}nav{display:none}a{color:inherit}}
-"""
+UPDATED = '27 November 2026'
 
 BODY = f"""
 <header>
- <div class="brand">
-  <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="var(--gold)"/><circle cx="15" cy="15" r="10" fill="none" stroke="var(--gold-dark)" stroke-width="2"/></svg>
-  HowMuch
- </div>
  <h1>Privacy policy</h1>
- <p class="lede">HowMuch keeps track of your shifts and pay. This page explains what that involves, in plain language.</p>
+ <p class="lede">HowMuch keeps track of your shifts and pay. This page explains what that involves, in plain language: what we store, why, who else handles it, and how to get a copy or delete it.</p>
  <p class="date">Last updated {UPDATED}</p>
 </header>
 
@@ -68,7 +20,7 @@ BODY = f"""
  </ul>
 </section>
 
-<nav aria-label="On this page">
+<nav class="toc" aria-label="On this page">
 <section>
  <h2>On this page</h2>
  <ol>
@@ -80,7 +32,7 @@ BODY = f"""
   <li><a href="#never">What we never do</a></li>
   <li><a href="#security">How data is protected</a></li>
   <li><a href="#keep">How long we keep it</a></li>
-  <li><a href="#choices">Your choices</a></li>
+  <li><a href="#choices">Your choices and rights</a></li>
   <li><a href="#contact">Changes and contact</a></li>
  </ol>
 </section>
@@ -199,36 +151,22 @@ BODY = f"""
 </section>
 
 <section aria-labelledby="choices">
- <h2 id="choices">9. Your choices</h2>
+ <h2 id="choices">9. Your choices and rights</h2>
  <ul>
   <li><strong>See and correct</strong> your records in the app at any time.</li>
   <li><strong>Export</strong> them from Settings &rarr; Data &amp; backups.</li>
   <li><strong>Turn off</strong> notifications, Time to leave, Pay-in tracking and calendar links whenever you like.</li>
-  <li><strong>Delete your account</strong> in Settings &rarr; Account &amp; sync &rarr; Delete account. This removes your account and its work, payment, friends and notification records from the active service and this device. Exported files and copies on other devices stay under your control.</li>
+  <li><strong>Delete your account</strong> in Settings &rarr; Account &amp; sync &rarr; Delete account. This removes your account and its work, payment, friends and notification records from the active service and this device, and withdraws HowMuch's Sign in with Apple access. Exported files and copies on other devices stay under your control.</li>
  </ul>
- <p>You can also email us to ask for a copy of your data, a correction or deletion.</p>
+ <p>Wherever you live, you can email us to ask for a copy of your data, to correct or delete it, or to stop using it for an optional feature. Turning a feature off withdraws your consent for it. Depending on where you live, for example under Singapore's Personal Data Protection Act or the GDPR in the EU and UK, you may also have the right to receive your data in a portable format, to object to how it is used, and to complain to your data protection authority. We won't treat you differently for asking.</p>
 </section>
 
 <section aria-labelledby="contact">
  <h2 id="contact">10. Changes and contact</h2>
- <p>HowMuch is a tool for people who work shifts and is not directed at children. If this policy changes, we will update this page and the date at the top.</p>
+ <p>HowMuch is a tool for people who work shifts and is not directed at children under 13. We don't knowingly collect their data, and if we learn we have, we delete it. If this policy changes, we will update this page and the date at the top.</p>
  <p>HowMuch is run by Jia Le Khoo. For questions or requests about your data, email <a href="mailto:{CONTACT}">{CONTACT}</a>. We will reply within 7 days.</p>
 </section>
 
-<footer>HowMuch &middot; <a href="/support">Support</a></footer>
 """
 
-PAGE = f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#e8f3ee" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0e2622" media="(prefers-color-scheme: dark)">
-<title>Privacy policy | HowMuch</title>
-<meta name="description" content="What HowMuch stores, why, who handles it, and how to export or delete it.">
-<style>{STYLE}</style>
-</head>
-<body><main class="wrap">{BODY}</main></body>
-</html>
-"""
+PAGE = page('/privacy', 'Privacy policy | HowMuch', 'What HowMuch stores, why, who handles it, and how to export or delete it.', BODY)

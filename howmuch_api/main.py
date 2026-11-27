@@ -5,9 +5,10 @@ import logging
 import os
 from contextlib import asynccontextmanager,suppress
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse,PlainTextResponse
+from fastapi.responses import HTMLResponse,RedirectResponse
 from .database import AppStorage
 from . import privacy as privacy_policy
+from . import site
 from . import friends,telegram_link,schedule_link,pet_codes,auth,documents,push,accounts,calendar_feed,gmail_payments,travel,receipts,email_providers,live_activity,pay_in,store
 
 logging.getLogger('httpx').setLevel(logging.WARNING)
@@ -48,16 +49,19 @@ app.include_router(calendar_feed.router)
 @app.get('/healthz')
 async def health():return {'status':'ok','service':'howmuch-ios','appleBundleID':auth.bundle_id(),'pushReady':push.configured(),'travelReady':travel.configured()}
 
+@app.get('/',response_class=HTMLResponse)
+async def home():
+    return site.HOME
+
 @app.get('/privacy',response_class=HTMLResponse)
 async def privacy():
     return privacy_policy.PAGE
 
-@app.get('/support',response_class=PlainTextResponse)
+@app.get('/support',response_class=HTMLResponse)
 async def support():
-    return '''HowMuch support
+    return site.SUPPORT
 
-Email jialexkhoo@gmail.com with your question or problem. Include the app version (shown at the bottom of Settings) and the steps that led to the issue. Please do not send passwords or private receipt contents.
-
-Account: sign in with Apple. To delete your account and its records, open Settings → Account & sync → Delete account.
-
-Privacy policy: https://howmuch-ios.fly.dev/privacy'''
+@app.get('/terms')
+async def terms():
+    # HowMuch uses Apple's standard licence agreement for apps (the EULA linked from the plans screen).
+    return RedirectResponse(site.TERMS,status_code=307)
