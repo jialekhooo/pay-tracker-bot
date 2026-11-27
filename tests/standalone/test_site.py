@@ -34,7 +34,7 @@ def test_every_page_is_self_contained_and_links_to_the_others():
 
 def test_support_answers_the_questions_app_review_and_people_ask():
     page = site.SUPPORT
-    for text in (site.CONTACT, 'https://t.me/jiale', '@jiale', 'Restore purchases', 'Manage subscription', 'reportaproblem.apple.com', 'Delete account',
+    for text in (site.CONTACT, 'https://t.me/jialekhooo', '@jialekhooo', 'Restore purchases', 'Manage subscription', 'reportaproblem.apple.com', 'Delete account',
                  'Data &amp; backups', 'never send passwords'):
         assert text in page, text
     assert site.APP_STORE in site.HOME and 'up to 5 events' in site.HOME
