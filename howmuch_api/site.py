@@ -7,6 +7,7 @@ from __future__ import annotations
 from html import escape
 
 CONTACT = 'jialexkhoo@gmail.com'
+TELEGRAM = 'jiale'
 APP_STORE = 'https://apps.apple.com/app/id6830079731'
 TERMS = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
 
@@ -133,15 +134,15 @@ HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay y
 """)
 
 
-SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: getting started, syncing, HowMuch Pro, Pay-in tracking, and deleting your account.', f"""
+SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us on Telegram or by email, and answers about getting started, syncing, HowMuch Pro, Pay-in tracking and deleting your account.', f"""
 <header>
  <h1>Support</h1>
- <p class="lede">Answers to common questions, and how to reach us.</p>
+ <p class="lede">Message us on Telegram or by email, or find answers to common questions below.</p>
 </header>
 
 <section aria-labelledby="contact">
  <h2 id="contact">Contact us</h2>
- <p>Email <a href="mailto:{CONTACT}?subject=HowMuch%20support">{CONTACT}</a>. We reply within 7 days, usually sooner.</p>
+ <p>For any issue, message <a href="https://t.me/{TELEGRAM}">@{TELEGRAM}</a> on Telegram or email <a href="mailto:{CONTACT}?subject=HowMuch%20support">{CONTACT}</a>. We reply within 7 days, usually sooner.</p>
  <p>It helps to include the app version (at the bottom of Settings), your iPhone model and iOS version, and the steps that led to the problem. A screenshot helps too.</p>
  <p class="note">Please never send passwords, app passwords or full bank statements. We will never ask for them.</p>
 </section>
