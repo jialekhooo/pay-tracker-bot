@@ -44,9 +44,9 @@ Everything App Store Connect asks for, ready to paste. App record: `6830079731`
 **Marketing URL**: https://howmuch.jialekhoo.com/ (the home page; shows as "Developer Website" on the App Store)
 **Privacy Policy URL**: https://howmuch.jialekhoo.com/privacy
 
-The website moved to howmuch.jialekhoo.com on 27 Nov 2026. Version 1.5 was submitted with the howmuch-ios.fly.dev
-addresses, which now 301 to the same pages, so nothing breaks; switch App Store Connect to the addresses above with
-the next version.
+The website moved to howmuch.jialekhoo.com on 27 Nov 2026. On 28 Nov 2026 App Store Connect was switched to the
+addresses above (Support and Marketing URL on version 1.5, Privacy Policy URL in App Privacy); they go live with 1.5.
+The old howmuch-ios.fly.dev pages still 301 to the same pages.
 **Copyright**: `2026 Jia Le Khoo`
 **Category**: Primary *Productivity*, secondary *Finance*
 **Price**: Free. **Availability**: Singapore first (the copy, currency and DBS alerts are Singapore-focused), or all regions.
