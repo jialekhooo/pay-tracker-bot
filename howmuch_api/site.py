@@ -118,15 +118,15 @@ a{color:var(--link);text-underline-offset:3px;text-decoration-thickness:2px}
 .narrow{max-width:780px;margin:0 auto}
 
 /* Header */
-.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--ink);text-decoration:none;letter-spacing:-.01em}
-.brand .px{width:30px;height:30px}
-@media (prefers-color-scheme:dark){.brand .px,.btn:not(.primary) .px{filter:drop-shadow(0 0 1.5px #fff7e6)}footer>.px,.pagehead .px{filter:drop-shadow(0 0 2px #fff7e6)}}
-.links{display:flex;gap:8px;margin:0;padding:0;list-style:none}
-.links a{display:block;padding:8px 16px;border:2.5px solid var(--edge);border-radius:999px;background:var(--panel);color:var(--ink);
- font-weight:800;font-size:15px;text-decoration:none;box-shadow:0 3px 0 var(--shadow);transition:transform .12s,box-shadow .12s}
-.links a:hover{transform:translateY(-2px);box-shadow:0 5px 0 var(--shadow)}
-.links a[aria-current=page]{background:var(--gold);color:#1d3833}
+.top{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--ink);text-decoration:none;letter-spacing:-.01em;margin-right:auto}
+.brand .px{width:auto;height:36px}
+.links{display:flex;gap:4px;margin:0;padding:0;list-style:none}
+.links a{display:block;padding:8px 12px;border-radius:12px;color:var(--muted);font-weight:800;font-size:16px;text-decoration:none}
+.links a:hover{color:var(--ink);background:var(--panel)}
+.links a[aria-current=page]{color:var(--ink);text-decoration:underline;text-decoration-color:var(--gold);text-decoration-thickness:4px;text-underline-offset:8px}
+.btn.cta{padding:9px 16px;font-size:15px;border-radius:14px;box-shadow:0 4px 0 var(--shadow)}
+.btn.cta:hover{box-shadow:0 6px 0 var(--shadow)}
 
 /* Type */
 h1,h2,h3{line-height:1.1;text-wrap:balance;letter-spacing:-.02em;font-weight:800}
@@ -251,7 +251,8 @@ footer a{color:var(--muted);white-space:nowrap}
 }
 @media (max-width:620px){
  body{font-size:16px}.wrap{padding:14px 16px 32px}
- .brand{font-size:20px}.links{gap:6px}.links a{padding:7px 12px;font-size:14px}
+ .brand{font-size:20px}
+ .top nav{order:3;width:100%}.links{justify-content:space-between;gap:0}.links a{padding:6px 8px;font-size:15px}
  .features,.plans,.short,.contact{grid-template-columns:1fr}
  .card,section{padding:22px 18px;border-radius:20px}
  .pagehead .px{width:72px}
@@ -265,7 +266,8 @@ footer a{color:var(--muted);white-space:nowrap}
 @media print{body{background:#fff}.card,section,.features li,.plan{box-shadow:none;border-width:1px}nav,.actions,.stage,.pagehead .px,.ground{display:none}a{color:inherit}}
 """
 
-PAGES = (('/', 'Home'), ('/support', 'Support'), ('/privacy', 'Privacy'))
+# The logo is the way home. The tabs go from learning about the app, to getting help, to the legal page.
+PAGES = (('/#what', 'Features'), ('/#plans', 'Pricing'), ('/support', 'Support'), ('/privacy', 'Privacy'))
 
 
 def page(path: str, title: str, description: str, body: str) -> str:
@@ -285,8 +287,9 @@ def page(path: str, title: str, description: str, body: str) -> str:
 </head>
 <body><main class="wrap">
 <header class="top">
- <a class="brand" href="/">{coin()} HowMuch</a>
+ <a class="brand" href="/"{" aria-current=page" if path == "/" else ""}>{penny()} HowMuch</a>
  <nav aria-label="Site"><ul class="links">{links}</ul></nav>
+ <a class="btn primary cta" href="{APP_STORE}">Get the app</a>
 </header>
 {body}
 <footer>
