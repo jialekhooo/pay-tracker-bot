@@ -8,7 +8,7 @@ def test_policy_keeps_the_required_statements():
     page = privacy.PAGE
     for text in ('Google API Services User Data Policy', 'Limited Use requirements', 'not used to train AI models',
                  'Delete account', 'advertising or analytics', 'App Store purchases', 'signed record of the purchase', 'Friends never see your shifts', 'Job briefs', 'Cloudflare',
-                 privacy.CONTACT, privacy.UPDATED):
+                 privacy.CONTACT, 'https://t.me/jialekhoo', '@jialekhoo', privacy.UPDATED):
         assert text in page, text
 
 
@@ -17,7 +17,7 @@ def test_page_is_self_contained_and_its_links_work():
     assert not re.search(r'<script|<link |<img |@import|url\(', page)
     assert re.findall(r'src="', page) == []
     targets = re.findall(r'href="#([^"]+)"', page)
-    assert len(targets) == 10
+    assert len(set(targets)) == 10  # the ten sections in "On this page"
     for target in targets:
         assert f'id="{target}"' in page, target
 

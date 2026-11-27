@@ -1,5 +1,5 @@
 """The public privacy policy at /privacy, in the website's shared look (site.py)."""
-from .site import CONTACT, page, page_head
+from .site import CONTACT, TELEGRAM, page, page_head
 
 UPDATED = '27 November 2026'
 
@@ -154,13 +154,13 @@ BODY = page_head('Privacy policy', 'HowMuch keeps track of your shifts and pay. 
   <li><strong>Turn off</strong> notifications, Time to leave, Pay-in tracking and calendar links whenever you like.</li>
   <li><strong>Delete your account</strong> in Settings &rarr; Account &amp; sync &rarr; Delete account. This removes your account and its work, payment, friends and notification records from the active service and this device, and withdraws HowMuch's Sign in with Apple access. Exported files and copies on other devices stay under your control.</li>
  </ul>
- <p>Wherever you live, you can email us to ask for a copy of your data, to correct or delete it, or to stop using it for an optional feature. Turning a feature off withdraws your consent for it. Depending on where you live, for example under Singapore's Personal Data Protection Act or the GDPR in the EU and UK, you may also have the right to receive your data in a portable format, to object to how it is used, and to complain to your data protection authority. We won't treat you differently for asking.</p>
+ <p>Wherever you live, you can contact us (see <a href="#contact">Changes and contact</a>) to ask for a copy of your data, to correct or delete it, or to stop using it for an optional feature. Turning a feature off withdraws your consent for it. Depending on where you live, for example under Singapore's Personal Data Protection Act or the GDPR in the EU and UK, you may also have the right to receive your data in a portable format, to object to how it is used, and to complain to your data protection authority. We won't treat you differently for asking.</p>
 </section>
 
 <section aria-labelledby="contact">
  <h2 id="contact">10. Changes and contact</h2>
  <p>HowMuch is a tool for people who work shifts and is not directed at children under 13. We don't knowingly collect their data, and if we learn we have, we delete it. If this policy changes, we will update this page and the date at the top.</p>
- <p>HowMuch is run by Jia Le Khoo. For questions or requests about your data, email <a href="mailto:{CONTACT}">{CONTACT}</a>. We will reply within 7 days.</p>
+ <p>HowMuch is run by Jia Le Khoo. For questions or requests about your data, email <a href="mailto:{CONTACT}">{CONTACT}</a> or message <a href="https://t.me/{TELEGRAM}">@{TELEGRAM}</a> on Telegram. We will reply within 7 days.</p>
 </section>
 
 </div>

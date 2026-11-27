@@ -9,7 +9,7 @@ from html import escape
 from pathlib import Path
 
 CONTACT = 'jialexkhoo@gmail.com'
-TELEGRAM = 'jialekhooo'
+TELEGRAM = 'jialekhoo'
 APP_STORE = 'https://apps.apple.com/app/id6830079731'
 TERMS = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
 
