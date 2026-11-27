@@ -1,10 +1,14 @@
 """HowMuch's public website: the home page, support and the privacy policy share one playful, Penny-led look.
 
 Every page is self-contained: no scripts, fonts or images from anywhere else. Penny and the icons are pixel art
-drawn as inline SVG, and every page works in light and dark mode.
+drawn as inline SVG, and every page works in light and dark mode. The only script is the home page's JSON-LD,
+which is data for search engines, not code.
+
+The site's address is SITE. howmuch-ios.fly.dev still answers (the app's API lives there) but sends the pages to SITE.
 """
 from __future__ import annotations
 
+import json
 from html import escape
 from pathlib import Path
 
@@ -12,6 +16,12 @@ CONTACT = 'support@jialekhoo.com'
 TELEGRAM = 'jialekhoo'
 APP_STORE = 'https://apps.apple.com/app/id6830079731'
 TERMS = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
+SITE = 'https://howmuch.jialekhoo.com'
+LEGACY_HOST = 'howmuch-ios.fly.dev'
+APP_NAME = 'HowMuch: Work & Pay'
+# The picture shown when a page is shared (WhatsApp, iMessage, Telegram, X) and in some search results.
+OG_IMAGE = Path(__file__).with_name('static') / 'og-image.png'
+OG_IMAGE_ALT = 'HowMuch: know how much you are owed. Penny, the app pet, beside the Overview and Earnings screens.'
 
 # App screenshots on the home page (demo data from build 81), served from static/screens at /screens/<name>.jpg.
 SCREENS_DIR = Path(__file__).with_name('static') / 'screens'
@@ -302,7 +312,7 @@ footer{margin-top:72px}
 PAGES = (('/#what', 'Features'), ('/#plans', 'Pricing'), ('/support', 'Support'), ('/privacy', 'Privacy'))
 
 
-def page(path: str, title: str, description: str, body: str) -> str:
+def page(path: str, title: str, description: str, body: str, head: str = '') -> str:
     """A full HTML page with the shared header, links and footer."""
     links = ''.join(f'<li><a href="{href}"{" aria-current=page" if href == path else ""}>{name}</a></li>' for href, name in PAGES)
 
@@ -324,7 +334,18 @@ def page(path: str, title: str, description: str, body: str) -> str:
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>{escape(title)}</title>
 <meta name="description" content="{escape(description)}">
-<style>{STYLE}</style>
+<link rel="canonical" href="{SITE}{path}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="HowMuch">
+<meta property="og:title" content="{escape(title)}">
+<meta property="og:description" content="{escape(description)}">
+<meta property="og:url" content="{SITE}{path}">
+<meta property="og:image" content="{SITE}/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{escape(OG_IMAGE_ALT)}">
+<meta name="twitter:card" content="summary_large_image">
+{head}<style>{STYLE}</style>
 </head>
 <body><main class="wrap">
 <header class="top">{bar("Site")}</header>
@@ -353,7 +374,21 @@ SCREEN_ITEMS = ''.join(
     f'<li><span class="phone"><img src="/screens/{name}.jpg" width="552" height="1200" loading="lazy" decoding="async" alt="{escape(alt)}"></span>'
     f'<span class="label">{title}</span></li>' for name, title, alt in SCREENS)
 
-HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay you are owed. Built for event crew, promoters and anyone paid by the shift.', f"""
+HOME_DESCRIPTION = ('Free iPhone app to track the shifts you work and the pay you are owed. '
+                    'Built for event crew, promoters, part-timers and anyone paid by the shift.')
+
+# What search engines read about the app and the site. Data only: no ratings are claimed.
+_APP_DATA = {'@context': 'https://schema.org', '@graph': [
+    {'@type': 'WebSite', 'name': 'HowMuch', 'alternateName': APP_NAME, 'url': f'{SITE}/'},
+    {'@type': 'MobileApplication', 'name': APP_NAME, 'operatingSystem': 'iOS', 'applicationCategory': 'FinanceApplication',
+     'description': HOME_DESCRIPTION, 'url': f'{SITE}/', 'installUrl': APP_STORE, 'image': f'{SITE}/og-image.png',
+     'offers': {'@type': 'Offer', 'price': '0', 'priceCurrency': 'SGD'},
+     'author': {'@type': 'Person', 'name': 'Jia Le Khoo'}},
+]}
+APP_JSON_LD = ('<script type="application/ld+json">' + json.dumps(_APP_DATA, ensure_ascii=False).replace('</', '<\\/')
+               + '</script>\n')
+
+HOME = page('/', 'HowMuch: Work & Pay – shift and pay tracker for iPhone', HOME_DESCRIPTION, f"""
 <div class="hero">
  <div>
   <span class="kicker">For anyone paid by the shift</span>
@@ -393,7 +428,7 @@ HOME = page('/', 'HowMuch: Work & Pay', 'Track the shifts you work and the pay y
  <div class="head">{icon('shield')}<h2 id="private">Private by design</h2></div>
  <p>You sign in with Apple, and your records sync across your devices. There are no ads and no tracking, and your data is never sold. Friends only ever see your pet, never your shifts or pay. Read the <a href="/privacy">privacy policy</a>.</p>
 </section>
-""")
+""", head=APP_JSON_LD)
 
 
 SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us on Telegram or by email, and answers about getting started, syncing, HowMuch Pro, Pay-in tracking and deleting your account.', f"""
@@ -458,3 +493,12 @@ SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us o
 </section>
 </div>
 """)
+
+
+# Search engines: everything may be crawled, and the sitemap lists the three pages.
+PAGE_PATHS = ('/', '/support', '/privacy')
+UPDATED = '2026-11-27'
+ROBOTS = f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n'
+SITEMAP = ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+           + ''.join(f'  <url><loc>{SITE}{path}</loc><lastmod>{UPDATED}</lastmod></url>\n' for path in PAGE_PATHS)
+           + '</urlset>\n')

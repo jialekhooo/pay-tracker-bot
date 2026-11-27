@@ -4,6 +4,8 @@ Live setup (5 Nov 2026): domain `howmuch.jialekhoo.com`, Worker `howmuch-inbound
 
 Support mail (27 Nov 2026): `support@jialekhoo.com` is a real mailbox on iCloud+ Custom Email Domain (alongside `jiale@jialekhoo.com`). The apex `jialekhoo.com` has iCloud's MX (`mx01`/`mx02.mail.icloud.com`), its `apple-domain=` TXT, `sig1._domainkey` DKIM CNAME, and an SPF that includes both `icloud.com` and Cloudflare. Cloudflare Email Routing still owns the `howmuch.` and `smartspend.` subdomains, which have their own MX records. Its Settings page will show the apex MX as "Missing" and iCloud's as "Conflicting": leave that alone. Don't click "Add missing records", don't delete iCloud's MX, and never press Disable, because disabling the apex domain disables the subdomains too, which would stop Pay-in. The website (`howmuch_api/site.py` CONTACT) lists this address.
 
+DMARC (27 Nov 2026): `_dmarc.jialekhoo.com` is `p=quarantine; sp=reject` (only iCloud sends as @jialekhoo.com, DKIM-signed by `sig1`), and `_dmarc.howmuch.` / `_dmarc.smartspend.` are `p=reject` because those subdomains only receive. If HowMuch ever sends mail from `howmuch.jialekhoo.com`, give that sender SPF/DKIM first or its mail will be rejected.
+
 Each HowMuch account gets a private address, `pay+<16 hex>@<inbound domain>`, shown in
 Settings → Pay-in tracking once forwarding is switched on. People forward DBS
 "You've received a transfer" alerts there by hand or with a Gmail filter. The server reads the

@@ -5,7 +5,7 @@ import logging
 import os
 from contextlib import asynccontextmanager,suppress
 from fastapi import FastAPI
-from fastapi import HTTPException
+from fastapi import HTTPException,Request
 from fastapi.responses import HTMLResponse,RedirectResponse,Response
 from .database import AppStorage
 from . import privacy as privacy_policy
@@ -50,17 +50,38 @@ app.include_router(calendar_feed.router)
 @app.get('/healthz')
 async def health():return {'status':'ok','service':'howmuch-ios','appleBundleID':auth.bundle_id(),'pushReady':push.configured(),'travelReady':travel.configured()}
 
+def _page(request:Request,html:str):
+    # The website lives at site.SITE. The old fly.dev address still serves the app's API, so only its pages move.
+    if request.url.hostname==site.LEGACY_HOST:
+        query=f'?{request.url.query}' if request.url.query else ''
+        return RedirectResponse(f'{site.SITE}{request.url.path}{query}',status_code=301)
+    return HTMLResponse(html)
+
 @app.get('/',response_class=HTMLResponse)
-async def home():
-    return site.HOME
+async def home(request:Request):
+    return _page(request,site.HOME)
 
 @app.get('/privacy',response_class=HTMLResponse)
-async def privacy():
-    return privacy_policy.PAGE
+async def privacy(request:Request):
+    return _page(request,privacy_policy.PAGE)
 
 @app.get('/support',response_class=HTMLResponse)
-async def support():
-    return site.SUPPORT
+async def support(request:Request):
+    return _page(request,site.SUPPORT)
+
+@app.get('/robots.txt')
+async def robots():
+    return Response(site.ROBOTS,media_type='text/plain')
+
+@app.get('/sitemap.xml')
+async def sitemap():
+    return Response(site.SITEMAP,media_type='application/xml')
+
+_OG_IMAGE=site.OG_IMAGE.read_bytes()
+
+@app.get('/og-image.png')
+async def og_image():
+    return Response(_OG_IMAGE,media_type='image/png',headers={'Cache-Control':'public, max-age=86400'})
 
 _SCREENS={name:(site.SCREENS_DIR/f'{name}.jpg').read_bytes() for name,_,_ in site.SCREENS}
 

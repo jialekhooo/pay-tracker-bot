@@ -37,7 +37,7 @@ enum ProFeature: String, CaseIterable, Identifiable {
 
 enum ProLinks {
     static let terms = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
-    static let privacy = URL(string: "https://howmuch-ios.fly.dev/privacy")!
+    static let privacy = URL(string: "https://howmuch.jialekhoo.com/privacy")!
 }
 
 /// A small "PRO" tag beside things that need Pro.

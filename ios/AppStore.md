@@ -40,9 +40,13 @@ Everything App Store Connect asks for, ready to paste. App record: `6830079731`
 
 **Keywords** (100): `shift,pay,tracker,timesheet,part time,gig,event crew,earnings,hours,wage,overtime,payslip,freelance` (98)
 
-**Support URL**: https://howmuch-ios.fly.dev/support
-**Marketing URL**: https://howmuch-ios.fly.dev/ (the home page; shows as "Developer Website" on the App Store, set from 1.5)
-**Privacy Policy URL**: https://howmuch-ios.fly.dev/privacy
+**Support URL**: https://howmuch.jialekhoo.com/support
+**Marketing URL**: https://howmuch.jialekhoo.com/ (the home page; shows as "Developer Website" on the App Store)
+**Privacy Policy URL**: https://howmuch.jialekhoo.com/privacy
+
+The website moved to howmuch.jialekhoo.com on 27 Nov 2026. Version 1.5 was submitted with the howmuch-ios.fly.dev
+addresses, which now 301 to the same pages, so nothing breaks; switch App Store Connect to the addresses above with
+the next version.
 **Copyright**: `2026 Jia Le Khoo`
 **Category**: Primary *Productivity*, secondary *Finance*
 **Price**: Free. **Availability**: Singapore first (the copy, currency and DBS alerts are Singapore-focused), or all regions.
