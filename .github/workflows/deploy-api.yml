@@ -16,7 +16,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with: { python-version: "3.12", cache: pip }
       - run: pip install -r requirements.txt -r howmuch_api/requirements.txt pytest pip-audit
@@ -27,7 +27,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy . --config howmuch_api/fly.staging.toml --remote-only
         env: { FLY_API_TOKEN: "${{ secrets.FLY_STAGING_API_TOKEN }}" }
@@ -42,7 +42,7 @@ jobs:
     environment: production
     env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Snapshot the database and note the running image
         run: |
