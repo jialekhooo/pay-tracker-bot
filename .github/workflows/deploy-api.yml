@@ -1,0 +1,58 @@
+name: Deploy API
+
+# Staging first, then production after an approval, with a smoke test after each and an automatic
+# rollback if production fails it. Needs the FLY_API_TOKEN secret (a Fly deploy token), and a
+# "production" environment with you as required reviewer (Settings → Environments).
+on:
+  push:
+    branches: [main]
+    paths: ['howmuch_api/**', 'paybot/parsing.py', 'paybot/howmuch_link.py', 'scripts/smoke.py', '.github/workflows/deploy-api.yml']
+  workflow_dispatch:
+
+concurrency: deploy-api
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt -r howmuch_api/requirements.txt pytest pip-audit
+      - run: python -m pytest -q
+      - run: pip-audit -r howmuch_api/requirements.txt
+
+  staging:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy . --config howmuch_api/fly.staging.toml --remote-only
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      # Staging sleeps when idle: wake it before timing it.
+      - run: |
+          curl -s --retry 5 --retry-delay 3 -o /dev/null https://howmuch-ios-staging.fly.dev/healthz
+          python3 scripts/smoke.py https://howmuch-ios-staging.fly.dev
+
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production
+    env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Snapshot the database and note the running image
+        run: |
+          flyctl volumes snapshots create vol_rnzl6mezdwqxxmkr --app howmuch-ios
+          echo "PREVIOUS_IMAGE=$(flyctl machines list --app howmuch-ios --json | jq -r '.[0].config.image')" >> "$GITHUB_ENV"
+      - run: flyctl deploy . --config howmuch_api/fly.toml --app howmuch-ios --remote-only
+      - name: Smoke test, and roll back if it fails
+        run: |
+          sleep 10
+          if ! python3 scripts/smoke.py https://howmuch.jialekhoo.com https://howmuch-ios.fly.dev; then
+            echo "Smoke test failed: rolling back to $PREVIOUS_IMAGE"
+            flyctl deploy . --config howmuch_api/fly.toml --app howmuch-ios --image "$PREVIOUS_IMAGE"
+            exit 1
+          fi

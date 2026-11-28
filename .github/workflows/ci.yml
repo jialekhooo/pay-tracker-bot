@@ -18,8 +18,13 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             howmuch_api/requirements.txt
-      - run: pip install -r requirements.txt -r howmuch_api/requirements.txt pytest
+      - run: pip install -r requirements.txt -r howmuch_api/requirements.txt pytest pip-audit
       - run: python -m pytest -q
+      # Fails the build when a pinned dependency has a known vulnerability.
+      - name: Dependency audit
+        run: |
+          pip-audit -r howmuch_api/requirements.txt
+          pip-audit -r requirements.txt
 
   swift:
     name: HowMuch iOS core tests

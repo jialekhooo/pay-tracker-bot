@@ -100,6 +100,12 @@ Not collected in 1.0: Emails or Text Messages (Payment detection was left out of
 **From 1.1** add *User Content → Emails or Text Messages* (linked, App Functionality, no tracking): Pay-in tracking reads DBS alert emails from a connected Gmail/Outlook/iCloud mailbox or forwarded to the private address, and bank notification text. Before submitting 1.1, note in App Review that Gmail connection only works for accounts added as Google test users until Google verifies the restricted Gmail scope (Outlook and iCloud work for everyone).
 This matches `HowMuch/PrivacyInfo.xcprivacy` and the privacy policy at /privacy.
 
+**Before submitting the next version after 1.5 (the first build with the crash reporter):** App Privacy
+→ add *Diagnostics → Crash Data* and *Diagnostics → Performance Data*: collected, used for App
+Functionality, **not linked** to the user, not used for tracking. The app sends Apple's MetricKit crash,
+hang and slow-launch reports to HowMuch's own server without the account (`CrashReporter` in
+`HowMuchApp.swift`; see `docs/operations.md`).
+
 ## App Review information
 
 **Sign-in required**: Yes, Sign in with Apple only. No demo account is needed —

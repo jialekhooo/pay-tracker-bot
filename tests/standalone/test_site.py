@@ -22,10 +22,10 @@ def test_pages_are_served_as_html_and_terms_go_to_apples_licence():
 
 def test_every_page_is_self_contained_and_links_to_the_others():
     for path, html in PAGES.items():
-        # The only script is the home page's JSON-LD, which is data for search engines, not code.
+        # The only scripts are JSON-LD on home (the app) and support (the FAQ): data for search engines, not code.
         code = re.sub(r'<script type="application/ld\+json">.*?</script>', '', html, flags=re.S)
         assert not re.search(r'<script|@import|url\(', code), path
-        assert (code != html) == (path == '/'), path
+        assert (code != html) == (path in ('/', '/support')), path
         # The only links are to HowMuch's own icons and the page's canonical address.
         assert re.findall(r'<link [^>]*>', html) and all(
             re.search(r'href="/(favicon\.ico|favicon\.svg|apple-touch-icon\.png)"', tag) or tag == f'<link rel="canonical" href="{site.SITE}{path}">'

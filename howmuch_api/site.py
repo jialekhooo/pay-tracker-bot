@@ -9,7 +9,8 @@ The site's address is SITE. howmuch-ios.fly.dev still answers (the app's API liv
 from __future__ import annotations
 
 import json
-from html import escape
+import re
+from html import escape, unescape
 from pathlib import Path
 
 CONTACT = 'support@jialekhoo.com'
@@ -312,8 +313,8 @@ footer{margin-top:72px}
 PAGES = (('/#what', 'Features'), ('/#plans', 'Pricing'), ('/support', 'Support'), ('/privacy', 'Privacy'))
 
 
-def page(path: str, title: str, description: str, body: str, head: str = '') -> str:
-    """A full HTML page with the shared header, links and footer."""
+def page(path: str, title: str, description: str, body: str, head: str = '', canonical: bool = True) -> str:
+    """A full HTML page with the shared header, links and footer. Error pages pass canonical=False."""
     links = ''.join(f'<li><a href="{href}"{" aria-current=page" if href == path else ""}>{name}</a></li>' for href, name in PAGES)
 
     def bar(label: str) -> str:
@@ -334,7 +335,7 @@ def page(path: str, title: str, description: str, body: str, head: str = '') -> 
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>{escape(title)}</title>
 <meta name="description" content="{escape(description)}">
-<link rel="canonical" href="{SITE}{path}">
+{f'<link rel="canonical" href="{SITE}{path}">' if canonical else '<meta name="robots" content="noindex">'}
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="HowMuch">
 <meta property="og:title" content="{escape(title)}">
@@ -431,7 +432,7 @@ HOME = page('/', 'HowMuch: Work & Pay – shift and pay tracker for iPhone', HOM
 """, head=APP_JSON_LD)
 
 
-SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us on Telegram or by email, and answers about getting started, syncing, HowMuch Pro, Pay-in tracking and deleting your account.', f"""
+SUPPORT_BODY = f"""
 <div class="hero">
  <div>
   <span class="kicker">We&rsquo;re here to help</span>
@@ -492,13 +493,75 @@ SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us o
   <p>Only what&rsquo;s needed to run the app. No ads, no tracking, and your data is never sold. The <a href="/privacy">privacy policy</a> has the details.</p></details>
 </section>
 </div>
-""")
+"""
+
+
+def faq_json_ld(body: str) -> str:
+    """FAQPage data for search and answer engines, read from the page's own questions so the two never differ."""
+    def text(fragment: str) -> str:
+        return unescape(re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', fragment))).strip()
+    questions = [{'@type': 'Question', 'name': text(q), 'acceptedAnswer': {'@type': 'Answer', 'text': text(a)}}
+                 for q, a in re.findall(r'<details><summary>(.*?)</summary>(.*?)</details>', body, flags=re.S)]
+    data = {'@context': 'https://schema.org', '@type': 'FAQPage', 'mainEntity': questions}
+    return ('<script type="application/ld+json">' + json.dumps(data, ensure_ascii=False).replace('</', '<\\/')
+            + '</script>\n')
+
+
+SUPPORT = page('/support', 'Support | HowMuch', 'Help with HowMuch: contact us on Telegram or by email, and answers about getting started, syncing, HowMuch Pro, Pay-in tracking and deleting your account.',
+               SUPPORT_BODY, head=faq_json_ld(SUPPORT_BODY))
+
+
+def error_page(status: int) -> str:
+    """The site's own page for a missing address (404) or a fault on our side (500)."""
+    if status == 404:
+        title, heading, bubble, lede = ('Page not found | HowMuch', 'Page not found', 'Hmm, nothing here!',
+                                        'This page doesn&rsquo;t exist, or it has moved. Try the home page or Support.')
+    else:
+        title, heading, bubble, lede = ('Something went wrong | HowMuch', 'Something went wrong', 'Oops, give me a minute!',
+                                        'That&rsquo;s on our side, not yours. Please try again in a moment. If it keeps happening, let us know.')
+    return page(f'/{status}', title, heading, f"""
+<div class="hero">
+ <div>
+  <span class="kicker">Error {status}</span>
+  <h1>{heading}</h1>
+  <p class="lede">{lede}</p>
+  <div class="actions"><a class="btn primary" href="/">Go to the home page</a><a class="btn" href="/support">Get help</a></div>
+ </div>
+ {stage(bubble, f'Penny, the HowMuch pet, saying {bubble}')}
+</div>
+""", canonical=False)
+
+
+NOT_FOUND = error_page(404)
+SERVER_ERROR = error_page(500)
+
+
+# For AI answer engines (llmstxt.org): what HowMuch is, in plain text, with links to the full pages.
+LLMS_TXT = f"""# HowMuch: Work & Pay
+
+> A free iPhone app for people paid by the shift (event crew, promoters, part-timers) to track the shifts they work and the pay they are owed. Made in Singapore by Jia Le Khoo.
+
+- Paste a job message from WhatsApp or Telegram and the dates, times, venue and pay are filled in.
+- Earnings by day, week, month and event; what is paid, pending and still booked.
+- Payment due dates and late-pay reminders; Pay-in tracking matches bank alerts to jobs after you confirm.
+- Lock Screen shift card, reminders and time-to-leave alerts; cab and meal claims with receipt photos.
+- Penny, a pixel pet that grows as you work and get paid; friends can visit and say hi.
+- Free for up to 5 events; HowMuch Pro (monthly, yearly or lifetime) adds unlimited events and more.
+- Sign in with Apple; no ads, no tracking, data never sold.
+
+## Links
+
+- [Home]({SITE}/): features and pricing
+- [Support]({SITE}/support): contact and answers to common questions
+- [Privacy policy]({SITE}/privacy)
+- [App Store]({APP_STORE})
+"""
 
 
 # Search engines: everything may be crawled, and the sitemap lists the three pages.
 PAGE_PATHS = ('/', '/support', '/privacy')
 UPDATED = '2026-11-27'
-ROBOTS = f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n'
+ROBOTS = f'User-agent: *\nAllow: /\nDisallow: /v1/\n\nSitemap: {SITE}/sitemap.xml\n'
 SITEMAP = ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
            + ''.join(f'  <url><loc>{SITE}{path}</loc><lastmod>{UPDATED}</lastmod></url>\n' for path in PAGE_PATHS)
            + '</urlset>\n')

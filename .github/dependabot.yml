@@ -1,0 +1,12 @@
+# Weekly pull requests for dependency updates, so security fixes don't wait for someone to notice.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /howmuch_api
+    schedule: { interval: weekly }
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

@@ -8,3 +8,5 @@ ios/
 .venv/
 .pytest_cache/
 .agents/
+output/
+HANDOVER.md
