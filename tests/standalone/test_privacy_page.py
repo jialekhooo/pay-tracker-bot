@@ -1,0 +1,31 @@
+"""The public privacy policy: a readable page that keeps the statements stores and Google check for."""
+import re
+
+from howmuch_api import privacy
+
+
+def test_policy_keeps_the_required_statements():
+    page = privacy.PAGE
+    for text in ('Google API Services User Data Policy', 'Limited Use requirements', 'not used to train AI models',
+                 'Delete account', 'advertising or analytics', 'App Store purchases', 'signed record of the purchase', 'Friends never see your shifts', 'Job briefs', 'Cloudflare',
+                 privacy.CONTACT, 'https://t.me/jialekhoo', '@jialekhoo', privacy.UPDATED):
+        assert text in page, text
+
+
+def test_page_is_self_contained_and_its_links_work():
+    page = privacy.PAGE
+    assert not re.search(r'<script|<img |@import|url\(', page)
+    assert all(re.search(r'href="/(favicon\.ico|favicon\.svg|apple-touch-icon\.png)"', tag) or 'rel="canonical"' in tag
+               for tag in re.findall(r'<link [^>]*>', page))
+    assert re.findall(r'src="', page) == []
+    contents = re.search(r'<nav class="toc".*?</nav>', page, re.S).group(0)
+    assert len(re.findall(r'href="#', contents)) == 10  # the ten sections in "On this page"
+    for target in re.findall(r'href="#([^"]+)"', page):
+        assert f'id="{target}"' in page, target
+
+
+def test_every_table_row_has_cells_for_each_heading():
+    for table in re.findall(r'<table>.*?</table>', privacy.PAGE, re.S):
+        headings = len(re.findall(r'<th ', table))
+        rows = re.findall(r'<tr>(.*?)</tr>', table.split('<tbody>')[1], re.S)
+        assert rows and all(len(re.findall(r'<td>', row)) == headings for row in rows)

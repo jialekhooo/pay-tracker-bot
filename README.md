@@ -1,5 +1,11 @@
 # Pay tracker Telegram bot
 
+An independent native iPhone beta is available in [`ios/`](ios/README.md), with
+SwiftUI screens, mandatory Apple accounts, independent account sync, job alerts,
+optional Telegram CSV import and a TestFlight release guide. Its standalone API
+is documented in [`howmuch_api/`](howmuch_api/README.md).
+Open `ios/HowMuch.xcodeproj` in Xcode to run it in the simulator.
+
 Log a shift in Telegram and the bot calculates the pay and stores it in SQLite.
 
 To log, key in the event name, the date and time, and (optionally) the location

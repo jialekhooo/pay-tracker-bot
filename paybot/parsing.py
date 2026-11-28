@@ -34,6 +34,10 @@ class Shift:
     break_specified: bool = False
     rate_override: Decimal | None = None
     pay_is_fixed: bool = False
+    # The job brief, from a pasted job post. Only shifts sent to the HowMuch app keep it.
+    call_minute: int | None = None
+    dress_code: str | None = None
+    contact: str | None = None
 
     @property
     def gross_hours(self) -> float:
@@ -89,12 +93,12 @@ def parse_date(token: str, today: date) -> date:
     if lowered == "tomorrow":
         return today + timedelta(days=1)
     for fmt in _DATE_FORMATS:
+        yearless = "%y" not in fmt.lower()
         try:
-            parsed = datetime.strptime(token, fmt)
+            # Year-less formats default to 1900, which rejects 29 Feb; parse with this year instead.
+            parsed = datetime.strptime(f"{token} {today.year}" if yearless else token, fmt + " %Y" if yearless else fmt)
         except ValueError:
             continue
-        if "%y" not in fmt.lower():
-            return parsed.date().replace(year=today.year)
         return parsed.date()
     raise ParseError(f"Could not read a date from {token!r}.")
 
@@ -123,6 +127,47 @@ def parse_time(token: str) -> time:
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ParseError(f"{token!r} is not a valid time.")
     return time(hour, minute)
+
+
+def _is_ambiguous_hour(token: str) -> bool:
+    """True for a bare clock like "9" or "5:30" that could be morning or afternoon."""
+    token = token.strip()
+    if _MILITARY_TIME_RE.match(token):
+        return False
+    match = _TIME_RE.match(token)
+    if not match or match.group("ampm"):
+        return False
+    hour = int(match.group("hour"))
+    return hour <= 12 and not (token.startswith("0") and len(token) > 1)
+
+
+def _has_meridiem(token: str) -> bool:
+    match = _TIME_RE.match(token.strip())
+    return bool(match and match.group("ampm"))
+
+
+def _with_meridiem(clock: time, pm: bool) -> time:
+    return clock.replace(hour=clock.hour % 12 + (12 if pm else 0))
+
+
+def parse_time_range(start_token: str, end_token: str) -> tuple[time, time]:
+    """Parse a start and end clock, moving a bare end like the 5 in "9-5" to after the start.
+
+    A bare end borrows the start's am/pm when that keeps it after the start ("6pm-11"),
+    otherwise it takes the opposite ("9am-5" is 09:00-17:00); likewise for a bare start.
+    """
+    start, end = parse_time(start_token), parse_time(end_token)
+    start_bare, end_bare = _is_ambiguous_hour(start_token), _is_ambiguous_hour(end_token)
+    if start_bare and end_bare:
+        if end <= start and end.hour + 12 < 24 and end.replace(hour=end.hour + 12) > start:
+            end = end.replace(hour=end.hour + 12)
+    elif end_bare and _has_meridiem(start_token):
+        same = _with_meridiem(end, start.hour >= 12)
+        end = same if same > start else _with_meridiem(end, start.hour < 12)
+    elif start_bare and _has_meridiem(end_token):
+        same = _with_meridiem(start, end.hour >= 12)
+        start = same if same < end else _with_meridiem(start, end.hour < 12)
+    return start, end
 
 
 def _split_tokens(text: str) -> list[str]:
@@ -287,8 +332,7 @@ def _parse_anywhere(text: str, today: date) -> tuple[date, time, time, str]:
         remainder = text[: date_match.start()] + "\x00" + text[date_match.end() :]
         for time_match in _TIME_RANGE_RE.finditer(remainder):
             try:
-                start = parse_time(time_match.group("start"))
-                end = parse_time(time_match.group("end"))
+                start, end = parse_time_range(time_match.group("start"), time_match.group("end"))
             except ParseError:
                 continue
             event = remainder[: time_match.start()] + " " + remainder[time_match.end() :]
@@ -343,8 +387,7 @@ def parse_shift(
     if len(tokens) >= 4:
         try:
             day = parse_date(tokens[0], today)
-            start = parse_time(tokens[1])
-            end = parse_time(tokens[2])
+            start, end = parse_time_range(tokens[1], tokens[2])
             event = _TRAILING_AT_RE.sub("", " ".join(tokens[3:]).strip(" ,;-"))
         except ParseError:
             day = None

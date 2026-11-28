@@ -1,0 +1,246 @@
+import asyncio
+import json
+from types import SimpleNamespace
+
+import httpx
+
+from howmuch_api import live_activity, push
+from tests.standalone.test_accounts import document, headers, login, setup, write  # noqa: F401 (fixture)
+
+
+def configure(monkeypatch):
+    monkeypatch.setattr(push, 'configured', lambda *args: True)
+    monkeypatch.setattr(push, 'provider_token', lambda *args: 'provider-test-token')
+
+
+def run(setup, now, responses=None):
+    sent = []
+
+    def transport(request):
+        sent.append((str(request.url), dict(request.headers), json.loads(request.content)))
+        return httpx.Response((responses or {}).get(len(sent), 200), json={})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+            return await live_activity.deliver(setup.storage, client=client, now=now)
+    count = asyncio.run(go())
+    return count, sent
+
+
+def plan(setup):
+    return setup.storage._conn.execute('SELECT * FROM live_plans').fetchone()
+
+
+def test_card_starts_at_shift_start_and_is_not_repeated(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    assert write(setup, session, data).status_code == 200
+    assert setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'},
+                            headers=headers(session)).json() == {'registered': True}
+    row = plan(setup)
+    assert run(setup, row['start_at'] - live_activity.LEAD - 60)[0] == 0      # too early
+    count, sent = run(setup, row['start_at'] - 60)
+    assert count == 1
+    url, request_headers, payload = sent[0]
+    assert url.endswith('/3/device/' + 'c' * 64)
+    assert request_headers['apns-push-type'] == 'liveactivity'
+    assert request_headers['apns-topic'].endswith('.push-type.liveactivity')
+    aps = payload['aps']
+    assert aps['event'] == 'start' and aps['attributes-type'] == 'LiveShiftAttributes'
+    assert aps['attributes'] == {'shiftID': data['shifts'][0]['id'].upper(), 'accountID': session['account']['id'].lower()}
+    # Started before the shift: it counts down to the start, and iOS redraws it then.
+    assert aps['content-state']['endTime'] == row['end_at'] and aps['stale-date'] == row['start_at']
+    assert aps['alert']['body'] == 'Starts in 1 min.'
+    # Privacy default: no job name or venue on the Lock Screen.
+    assert aps['content-state']['event'] == 'Your shift' and aps['content-state']['location'] == ''
+    assert 'Roadshow' not in json.dumps(payload)
+    assert run(setup, row['start_at'] + 600)[0] == 0                         # already running
+
+
+def test_names_shown_when_notification_details_are_allowed(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    data['preferences']['notifications']['showDetails'] = True
+    write(setup, session, data)
+    state = json.loads(plan(setup)['state'])
+    assert state['event'] == 'Roadshow' and state['location'] == 'Marina Bay'
+
+
+def test_card_started_by_the_app_is_not_duplicated(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    row = plan(setup)
+    # The app starts its own card 20 minutes before the shift and reports it.
+    monkeypatch.setattr(live_activity, 'time', SimpleNamespace(time=lambda: row['start_at'] - 20 * 60))
+    assert setup.client.put('/v1/devices/live-activity', json={'token': 'd' * 64, 'environment': 'production',
+                            'shiftID': data['shifts'][0]['id']}, headers=headers(session)).status_code == 200
+    assert run(setup, row['start_at'])[0] == 0
+
+
+def test_long_shift_is_renewed_before_eight_hours_and_old_card_ended(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    data['shifts'][0]['startMinute'], data['shifts'][0]['endMinute'] = 7 * 60, 21 * 60   # 14 hours
+    data['shifts'][0]['pay'] = 195
+    write(setup, session, data)
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    row = plan(setup)
+    assert run(setup, row['start_at'])[0] == 1
+    # The phone reports the started card's update token.
+    db = setup.storage._conn
+    db.execute("UPDATE live_segments SET token=?, environment='production'", ('e' * 64,)); db.commit()
+    assert run(setup, row['start_at'] + 6 * 3600)[0] == 0
+    count, sent = run(setup, row['start_at'] + live_activity.RENEW + 1)
+    assert count == 1
+    events = [(url.rsplit('/', 1)[1][:1], payload['aps']['event']) for url, _, payload in sent]
+    assert ('c', 'start') in events and ('e', 'end') in events
+
+
+def test_deleted_shift_ends_its_card_and_logout_stops_starts(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    setup.client.put('/v1/devices/live-activity', json={'token': 'd' * 64, 'environment': 'production',
+                     'shiftID': data['shifts'][0]['id']}, headers=headers(session))
+    data['shifts'] = []
+    write(setup, session, data, 1)
+    count, sent = run(setup, int(live_activity.time.time()) + 60)
+    assert count == 0 and [payload['aps']['event'] for _, _, payload in sent] == ['end']
+    assert setup.client.post('/v1/auth/logout', headers=headers(session)).status_code == 204
+    assert setup.storage._conn.execute('SELECT count(*) FROM live_start_tokens').fetchone()[0] == 0
+
+
+def test_invalid_start_token_is_dropped_and_other_accounts_are_untouched(setup, monkeypatch):
+    configure(monkeypatch)
+    a, _ = login(setup)
+    b, _ = login(setup, 'apple-user-B')
+    write(setup, a, document())
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(a))
+    setup.client.put('/v1/devices/live-start', json={'token': 'f' * 64, 'environment': 'production'}, headers=headers(b))
+    row = plan(setup)
+    count, sent = run(setup, row['start_at'], responses={1: 410})
+    assert count == 0 and all('f' * 64 not in url for url, _, _ in sent)
+    tokens = [r[0] for r in setup.storage._conn.execute('SELECT token FROM live_start_tokens')]
+    assert tokens == ['f' * 64]
+
+
+def test_editing_a_shift_updates_its_running_card_once(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    row = plan(setup)
+    monkeypatch.setattr(live_activity, 'time', SimpleNamespace(time=lambda: row['start_at'] + 60))
+    setup.client.put('/v1/devices/live-activity', json={'token': 'd' * 64, 'environment': 'production',
+                     'shiftID': data['shifts'][0]['id']}, headers=headers(session))
+    # Unchanged shift: nothing to push.
+    assert [p['aps']['event'] for _, _, p in run(setup, row['start_at'] + 120)[1]] == []
+    # Staying an hour later: the running card gets the new end time and pay.
+    data['shifts'][0]['endMinute'] += 60
+    data['shifts'][0]['pay'] = 135
+    assert write(setup, session, data, 1).status_code == 200
+    sent = run(setup, row['start_at'] + 180)[1]
+    assert [p['aps']['event'] for _, _, p in sent] == ['update']
+    url, headers_sent, payload = sent[0]
+    assert url.endswith('/3/device/' + 'd' * 64) and headers_sent['apns-push-type'] == 'liveactivity'
+    state = payload['aps']['content-state']
+    assert state['endTime'] == row['end_at'] + 3600 and state['pay'] == 135.0
+    assert payload['aps']['stale-date'] == row['end_at'] + 3600
+    # Sent once only.
+    assert run(setup, row['start_at'] + 240)[1] == []
+
+
+def test_older_database_gains_the_pushed_state_column(tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / 'old.sqlite3')
+    db.executescript('CREATE TABLE live_segments (session_id TEXT, account_id TEXT, shift_id TEXT, started INTEGER, '
+                     'token TEXT, environment TEXT, ended INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(session_id, shift_id, started));')
+    live_activity.ensure_schema(db)
+    assert 'pushed_state' in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}
+
+
+def test_card_appears_thirty_minutes_early_and_switches_to_time_left_at_start(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    row = plan(setup)
+    assert live_activity.LEAD == 30 * 60
+    assert run(setup, row['start_at'] - 31 * 60)[0] == 0
+    count, sent = run(setup, row['start_at'] - 30 * 60)
+    assert count == 1 and sent[0][2]['aps']['alert']['body'] == 'Starts in 30 min.'
+    assert sent[0][2]['aps']['stale-date'] == row['start_at']
+    # The app reports the started card's own push token.
+    monkeypatch.setattr(live_activity, 'time', SimpleNamespace(time=lambda: row['start_at'] - 29 * 60))
+    setup.client.put('/v1/devices/live-activity', json={'token': 'd' * 64, 'environment': 'production',
+                     'shiftID': data['shifts'][0]['id']}, headers=headers(session))
+    assert run(setup, row['start_at'] - 60)[1] == [], 'nothing new before the start'
+    # At the start: one update, which now redraws at the end ("Shift over").
+    sent = run(setup, row['start_at'] + 30)[1]
+    assert [(u.rsplit('/', 1)[1], p['aps']['event']) for u, _, p in sent] == [('d' * 64, 'update')]
+    assert sent[0][2]['aps']['stale-date'] == row['end_at']
+    assert run(setup, row['start_at'] + 90)[1] == [], 'only once'
+
+
+def test_older_database_gains_the_went_live_column(tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / 'old.db')
+    db.row_factory = sqlite3.Row
+    db.executescript(live_activity.SCHEMA.replace(',\n ended INTEGER NOT NULL DEFAULT 0', ',\n ended INTEGER NOT NULL DEFAULT 0'))
+    live_activity.ensure_schema(db)
+    assert 'went_live' in {row[1] for row in db.execute('PRAGMA table_info(live_segments)')}
+
+
+def test_a_stray_unregister_keeps_the_start_token(setup, monkeypatch):
+    """Older builds sent DELETE whenever iOS woke them before handing over the token; the card must still start."""
+    configure(monkeypatch)
+    session, _ = login(setup)
+    write(setup, session, document())
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    assert setup.client.delete('/v1/devices/live-start', headers=headers(session)).status_code == 204
+    row = plan(setup)
+    assert run(setup, row['start_at'] - 60)[0] == 1
+
+
+def test_lock_screen_setting_off_means_no_cards(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    data.setdefault('preferences', {})['liveShift'] = {'lockScreen': False}
+    write(setup, session, data)
+    setup.client.put('/v1/devices/live-start', json={'token': 'c' * 64, 'environment': 'production'}, headers=headers(session))
+    assert plan(setup) is None
+    data['preferences']['liveShift'] = {'lockScreen': True}
+    write(setup, session, data, 1)
+    assert plan(setup) is not None
+
+
+
+def test_a_new_token_for_a_card_already_showing_updates_it_instead_of_ending_it(setup, monkeypatch):
+    configure(monkeypatch)
+    session, _ = login(setup)
+    data = document()
+    write(setup, session, data)
+    shift = data['shifts'][0]['id']
+    for token in ('d' * 64, 'e' * 64):
+        assert setup.client.put('/v1/devices/live-activity', headers=headers(session), json={
+            'token': token, 'environment': 'production', 'shiftID': shift, 'activityID': 'A1B2C3D4-card'}).status_code == 200
+    rows = setup.storage._conn.execute('SELECT token, activity_id FROM live_segments').fetchall()
+    assert [(r['token'], r['activity_id']) for r in rows] == [('e' * 64, 'A1B2C3D4-card')]
+    count, sent = run(setup, int(live_activity.time.time()) + 60)
+    assert all(payload['aps']['event'] != 'end' for _, _, payload in sent)
+    # A different card for the same shift (a few seconds later) is still a new card, and the old one is ended.
+    later = live_activity.time.time() + 5
+    monkeypatch.setattr(live_activity.time, 'time', lambda: later)
+    setup.client.put('/v1/devices/live-activity', headers=headers(session), json={
+        'token': 'f' * 64, 'environment': 'production', 'shiftID': shift, 'activityID': 'OTHER-card'})
+    assert setup.storage._conn.execute('SELECT count(*) FROM live_segments').fetchone()[0] == 2

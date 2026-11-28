@@ -1,0 +1,19 @@
+name: Uptime
+
+# Every 15 minutes, check that the website and API answer. A failed run is the alert: GitHub emails
+# the repository owner (Settings → Notifications → Actions: "Send notifications for failed workflows").
+# Scheduled workflows only run from the default branch, so this starts once it is on main.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: scripts }
+      # One retry, so a single dropped request doesn't page you.
+      - run: python3 scripts/smoke.py https://howmuch.jialekhoo.com https://howmuch-ios.fly.dev || (sleep 60 && python3 scripts/smoke.py https://howmuch.jialekhoo.com https://howmuch-ios.fly.dev)

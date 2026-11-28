@@ -1,0 +1,10 @@
+import Foundation
+
+/// The widget extension only shows intent buttons. iOS runs live-card and Control Center intents in the app,
+/// so these are never called here.
+enum IntentActions {
+    static func finishOnTime(shiftID: UUID, accountID: String) async {}
+    static func stayLate(shiftID: UUID) async {}
+    static func finishNow(shiftID: UUID, accountID: String, at finish: Date) async throws {}
+    @MainActor static func addJob() {}
+}
