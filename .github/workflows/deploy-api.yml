@@ -1,8 +1,9 @@
 name: Deploy API
 
 # Staging first, then production after an approval, with a smoke test after each and an automatic
-# rollback if production fails it. Needs the FLY_API_TOKEN secret (a Fly deploy token), and a
-# "production" environment with you as required reviewer (Settings → Environments).
+# rollback if production fails it. Secrets are Fly deploy tokens, each limited to one app:
+# FLY_STAGING_API_TOKEN (repository secret) and FLY_API_TOKEN (only in the "production" environment,
+# which needs your approval and only accepts main). Both expire 28 Nov 2027; see docs/operations.md.
 on:
   push:
     branches: [main]
@@ -29,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy . --config howmuch_api/fly.staging.toml --remote-only
-        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_STAGING_API_TOKEN }}" }
       # Staging sleeps when idle: wake it before timing it.
       - run: |
           curl -s --retry 5 --retry-delay 3 -o /dev/null https://howmuch-ios-staging.fly.dev/healthz

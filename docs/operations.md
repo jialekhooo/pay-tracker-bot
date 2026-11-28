@@ -14,9 +14,17 @@ against the launch checklist (CI/CD, tests, monitoring, backups, secrets, rate l
 
 ## Deploying the API
 
-Automatic (once `FLY_API_TOKEN` is set in GitHub → Settings → Secrets, and a `production` environment
-with you as required reviewer exists): every push to `main` that touches the API runs
-`.github/workflows/deploy-api.yml`:
+Automatic: every push to `main` that touches the API runs `.github/workflows/deploy-api.yml`. It uses
+two Fly deploy tokens, each able to deploy only one app: `FLY_STAGING_API_TOKEN` (repository secret,
+`howmuch-ios-staging`) and `FLY_API_TOKEN` (secret of the GitHub `production` environment, `howmuch-ios`;
+the environment needs your approval and only accepts `main`). **Both expire 28 Nov 2027.** To renew one:
+
+```bash
+flyctl tokens create deploy --app howmuch-ios --name "github-actions production" --expiry 8760h | gh secret set FLY_API_TOKEN --env production
+flyctl tokens create deploy --app howmuch-ios-staging --name "github-actions staging" --expiry 8760h | gh secret set FLY_STAGING_API_TOKEN
+```
+
+then revoke the old one (`flyctl tokens list --app …`, `flyctl tokens revoke <id>`). The workflow:
 
 1. tests and `pip-audit`;
 2. deploy to **staging**, then `scripts/smoke.py` against it;
