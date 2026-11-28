@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { sparse-checkout: scripts }
       # One retry, so a single dropped request doesn't page you.
       - run: python3 scripts/smoke.py https://howmuch.jialekhoo.com https://howmuch-ios.fly.dev || (sleep 60 && python3 scripts/smoke.py https://howmuch.jialekhoo.com https://howmuch-ios.fly.dev)
