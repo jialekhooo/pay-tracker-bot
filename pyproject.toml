@@ -3,10 +3,12 @@ name = "paybot"
 version = "0.1.0"
 description = "Telegram bot that logs work shifts, calculates pay and syncs them to your calendar"
 readme = "README.md"
-requires-python = ">=3.10"
+# Matches the Docker images and CI. Dependabot reads this: with an older minimum it offers only versions
+# that still support it, and proposed downgrading FastAPI (#32).
+requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot[job-queue]==22.8",
-    "fastapi==0.115.0",
+    "fastapi==0.165.0",
     "uvicorn==0.54.0",
     "httpx==0.28.1",
     "cryptography==50.0.2",
